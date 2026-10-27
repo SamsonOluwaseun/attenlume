@@ -215,9 +215,9 @@ class LicenceAudit {
       ..writeln()
       ..writeln(
         'Attenlume is built with the open-source software listed below. '
-        'Each component stays under its own licence. The project\'s own '
-        'licence is in `LICENSE` once the owner confirms the choice '
-        '(ADR-007 in `docs/DECISIONS.md`).',
+        'Each component stays under its own licence. Attenlume\'s own code '
+        'is under the MIT licence in `LICENSE` (ADR-007 in '
+        '`docs/DECISIONS.md`).',
       )
       ..writeln()
       ..writeln('## Summary')
