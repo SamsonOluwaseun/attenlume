@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../domain/models/media.dart';
+import '../../domain/services/cut_range_math.dart';
 import '../../domain/services/review_timeline.dart';
 import '../../platform/audio_playback/audio_playback_engine.dart';
 import '../../shared/utilities/serial_lock.dart';
@@ -12,7 +13,9 @@ import '../../shared/utilities/serial_lock.dart';
 /// Positions are timeline offsets (BUILD_GUIDE 9.4). Gaps hold no audio:
 /// playback runs from one segment straight into the next, scrubbing into
 /// a gap lands on the next segment, and skipping counts audio time only,
-/// so "back 15 s" always replays the last 15 seconds heard.
+/// so "back 15 s" always replays the last 15 seconds heard. Cut ranges
+/// are skipped while playing (FR-REV-04, ADR-003) [P1-18], but the
+/// playhead can still be put inside one to check or change it.
 class ReviewPlayerController extends ChangeNotifier {
   ReviewPlayerController({
     required this.timeline,
@@ -42,6 +45,8 @@ class ReviewPlayerController extends ChangeNotifier {
   bool _disposed = false;
   double _speed = 1.0;
   String? _error;
+  List<TimeRange> _cuts = const [];
+  bool _skipping = false;
 
   bool get canPlay => timeline.hasAudio;
   bool get isPlaying => _playing;
@@ -49,6 +54,50 @@ class ReviewPlayerController extends ChangeNotifier {
 
   /// Plain message when a segment could not be opened.
   String? get error => _error;
+
+  /// Merged cut ranges in timeline offsets.
+  List<TimeRange> get cuts => _cuts;
+
+  /// Playable audio once cuts are skipped.
+  int get keptAudioMs => timeline.keptAudioMs(_cuts);
+
+  /// Replaces the cut ranges playback skips.
+  set cutRanges(Iterable<CutRange> ranges) {
+    _cuts = CutRangeMath.mergeOverlappingCutRanges(ranges);
+    _notify();
+  }
+
+  TimeRange? _cutAt(int offsetMs) {
+    for (final c in _cuts) {
+      if (c.contains(offsetMs)) return c;
+    }
+    return null;
+  }
+
+  /// Moves past the cut under the playhead. Returns false when the cut
+  /// runs to the end, leaving the playhead there and playback stopped.
+  Future<bool> _leaveCut() async {
+    var cut = _cutAt(positionMs);
+    while (cut != null) {
+      final target = timeline.locate(cut.endMs);
+      if (target == null ||
+          timeline.offsetOf(target) <= positionMs ||
+          timeline.audioOf(target) >= timeline.audioDurationMs) {
+        if (_playing) await engine.pause();
+        _playing = false;
+        final last = _lastPosition;
+        if (last != null) await _goTo(last);
+        _notify();
+        return false;
+      }
+      await _goTo(target);
+      cut = _cutAt(positionMs);
+    }
+    return true;
+  }
+
+  TimelinePosition? get _lastPosition =>
+      timeline.locateAudio(timeline.audioDurationMs);
 
   /// The playhead as a timeline offset.
   int get positionMs {
@@ -69,6 +118,18 @@ class ReviewPlayerController extends ChangeNotifier {
     final ms = position.inMilliseconds.clamp(0, duration);
     _position = TimelinePosition(segmentIndex: index, inSegmentMs: ms);
     notifyListeners();
+    if (_playing && !_skipping && _cutAt(positionMs) != null) {
+      _skipping = true;
+      unawaited(
+        _lock.run(() async {
+          try {
+            if (_playing) await _leaveCut();
+          } finally {
+            _skipping = false;
+          }
+        }),
+      );
+    }
   }
 
   Future<void> _advance() async {
@@ -86,6 +147,7 @@ class ReviewPlayerController extends ChangeNotifier {
     }
     if (!await _open(next)) return;
     _position = TimelinePosition(segmentIndex: next, inSegmentMs: 0);
+    if (_cutAt(positionMs) != null && !await _leaveCut()) return;
     if (_playing) await engine.play();
     _notify();
   }
@@ -123,14 +185,21 @@ class ReviewPlayerController extends ChangeNotifier {
             p.inSegmentMs >= timeline.segments[p.segmentIndex].durationMs);
   }
 
+  /// The playhead sits in a cut that reaches the end of the audio.
+  bool get _cutRunsToEnd {
+    final cut = _cutAt(positionMs);
+    return cut != null && cut.endMs >= timeline.audioEndMs;
+  }
+
   Future<void> play() => _lock.run(() async {
     if (!canPlay || _playing) return;
-    if (_atEnd) {
+    if (_atEnd || _cutRunsToEnd) {
       await _goTo(timeline.locateAudio(0));
     } else if (_openIndex != _position!.segmentIndex) {
       await _goTo(_position);
     }
     if (_openIndex == null) return;
+    if (!await _leaveCut()) return;
     await engine.play();
     _playing = true;
     _notify();

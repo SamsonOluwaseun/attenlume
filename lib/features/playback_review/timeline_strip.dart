@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/tokens.dart';
+import '../../domain/services/cut_range_math.dart';
 import '../../domain/services/review_timeline.dart';
 
 /// The whole activity at a glance: segments as blocks, gaps as a thin
 /// line, interruptions, photos and bookmarks at their offsets, and the
 /// playhead. Tap or drag to scrub (FR-REV-01, FR-REV-02) [P1-17].
+/// Cut ranges show as hatched, faded spans (FR-REV-04) [P1-18].
 class TimelineStrip extends StatelessWidget {
   const TimelineStrip({
     super.key,
     required this.timeline,
     required this.positionMs,
     required this.onSeek,
+    this.cuts = const [],
   });
 
   final ReviewTimeline timeline;
   final int positionMs;
   final ValueChanged<int> onSeek;
+
+  /// Merged cut ranges in timeline offsets.
+  final List<TimeRange> cuts;
 
   static const _markerRow = 20.0;
   static const _barHeight = 28.0;
@@ -57,6 +63,8 @@ class TimelineStrip extends StatelessWidget {
                       painter: _StripPainter(
                         timeline: timeline,
                         positionMs: positionMs,
+                        cuts: cuts,
+                        cut: scheme.surface,
                         segment: scheme.primary,
                         unplayable: scheme.outline,
                         gap: scheme.outlineVariant,
@@ -102,7 +110,8 @@ class TimelineStrip extends StatelessWidget {
         '${count(timeline.gaps.length, 'gap')}, '
         '${count(timeline.markersOf(TimelineMarkerKind.bookmark).length, 'bookmark')}, '
         '${count(timeline.markersOf(TimelineMarkerKind.photo).length, 'photo')}, '
-        '${count(timeline.markersOf(TimelineMarkerKind.interruption).length, 'interruption')}';
+        '${count(timeline.markersOf(TimelineMarkerKind.interruption).length, 'interruption')}'
+        '${cuts.isEmpty ? '' : ', ${count(cuts.length, 'cut')}'}';
   }
 }
 
@@ -110,6 +119,8 @@ class _StripPainter extends CustomPainter {
   _StripPainter({
     required this.timeline,
     required this.positionMs,
+    required this.cuts,
+    required this.cut,
     required this.segment,
     required this.unplayable,
     required this.gap,
@@ -118,6 +129,8 @@ class _StripPainter extends CustomPainter {
 
   final ReviewTimeline timeline;
   final int positionMs;
+  final List<TimeRange> cuts;
+  final Color cut;
   final Color segment;
   final Color unplayable;
   final Color gap;
@@ -158,6 +171,30 @@ class _StripPainter extends CustomPainter {
                 ..strokeWidth = 1.5),
       );
     }
+    for (final c in cuts) {
+      final rect = Rect.fromLTRB(
+        xOf(c.startMs),
+        0,
+        xOf(c.endMs).clamp(xOf(c.startMs) + 2, size.width),
+        size.height,
+      );
+      canvas
+        ..save()
+        ..clipRect(rect)
+        ..drawRect(rect, Paint()..color = cut.withValues(alpha: 0.7));
+      // Diagonal hatching so a cut reads without relying on colour alone.
+      final hatch = Paint()
+        ..color = playhead.withValues(alpha: 0.5)
+        ..strokeWidth = 1;
+      for (var hx = rect.left - size.height; hx < rect.right; hx += 6) {
+        canvas.drawLine(
+          Offset(hx, size.height),
+          Offset(hx + size.height, 0),
+          hatch,
+        );
+      }
+      canvas.restore();
+    }
     final x = xOf(positionMs);
     canvas.drawLine(
       Offset(x, -4),
@@ -172,5 +209,6 @@ class _StripPainter extends CustomPainter {
   bool shouldRepaint(_StripPainter old) =>
       old.positionMs != positionMs ||
       old.timeline != timeline ||
+      old.cuts != cuts ||
       old.segment != segment;
 }

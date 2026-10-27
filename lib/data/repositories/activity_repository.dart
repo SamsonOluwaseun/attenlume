@@ -2,13 +2,34 @@ import 'package:drift/drift.dart';
 
 import '../../domain/models/activity.dart';
 import '../../domain/models/enums.dart';
+import '../../domain/models/media.dart';
+import '../../domain/services/activity_split_service.dart';
 import '../../domain/services/activity_title.dart';
 import '../../domain/services/recording_profile_rules.dart';
+import '../../domain/services/review_timeline.dart';
+import '../../domain/services/timeline_offset.dart';
 import '../local_database/app_database.dart';
 import 'repository_support.dart';
 
+/// The two activities after [ActivityRepository.split] (FR-REV-05)
+/// [P1-18].
+class ActivitySplitResult {
+  const ActivitySplitResult({
+    required this.part1,
+    required this.part2,
+    required this.segmentMoves,
+  });
+
+  final Activity part1;
+  final Activity part2;
+
+  /// Segment id in the first part to its id in the second part, for each
+  /// segment that moved or was shared. Waveform summaries follow these.
+  final Map<String, String> segmentMoves;
+}
+
 /// Activity and activity type storage (BUILD_GUIDE 9.3
-/// `ActivityRepository`) [P0-09]. Split and merge arrive with P1-18.
+/// `ActivityRepository`) [P0-09]. Split arrives with P1-18.
 class ActivityRepository {
   ActivityRepository(
     this._db, {
@@ -423,6 +444,272 @@ class ActivityRepository {
       activityOverride: activity.recordingProfileOverride,
     );
   }
+
+  /// Splits an activity at [splitOffsetMs] on its timeline into two
+  /// activities (FR-REV-05, ADR-036) [P1-18].
+  ///
+  /// The original keeps everything before the split; a new activity,
+  /// [part2Title] or "{title} (Part 2)", gets the rest. Segments wholly
+  /// after the split move; bookmarks, photos and interruptions move by
+  /// time; cut ranges are divided at the split. No audio is written: a
+  /// segment the split falls inside stays with the first part and a second
+  /// row for the same file goes to the new activity, each with a cut range
+  /// hiding the other part's audio. Offsets in the new activity are
+  /// measured from its first segment's start (BUILD_GUIDE 9.4).
+  Future<ActivitySplitResult> split(
+    String activityId, {
+    required int splitOffsetMs,
+    String? part2Title,
+  }) => _db.transaction(() async {
+    final activity = (await get(activityId))!;
+    final segments = await (_db.select(
+      _db.recordingSegments,
+    )..where((s) => s.activityId.equals(activityId))).get();
+    if (segments.any((s) => s.state == SegmentState.writing)) {
+      throw StateError('Stop the recording before splitting it');
+    }
+    final timeline = ReviewTimeline.build(segments: segments);
+    final cuts = await (_db.select(
+      _db.cutRanges,
+    )..where((c) => c.activityId.equals(activityId))).get();
+    final title = part2Title?.trim();
+    final plan = ActivitySplitService.planSplit(
+      activity: activity,
+      splitOffsetMs: splitOffsetMs,
+      totalDurationMs: timeline.endMs,
+      newActivityId: _newId(),
+      segments: segments,
+      bookmarks: const [],
+      photos: const [],
+      cutRanges: cuts,
+      activity2TitleOverride: title == null || title.isEmpty ? null : title,
+    );
+    final now = _clock();
+    final part2Id = plan.activity2Id;
+    final firstStart = timeline.segments.first.segment.startUtc;
+    int startOf(RecordingSegment s) =>
+        s.startUtc.difference(firstStart).inMilliseconds;
+
+    // The new activity's timeline starts at its first segment.
+    final shared = plan.segmentToSplit;
+    final originMs = shared != null
+        ? startOf(shared.originalSegment)
+        : plan.activity2Segments.isEmpty
+        ? splitOffsetMs
+        : startOf(plan.activity2Segments.first.segment);
+
+    await _db
+        .into(_db.activities)
+        .insert(
+          ActivitiesCompanion.insert(
+            id: part2Id,
+            conferenceId: activity.conferenceId,
+            typeId: activity.typeId,
+            title: plan.activity2Title,
+            speakerNames: const [],
+            organisation: Value(activity.organisation),
+            room: Value(activity.room),
+            tags: activity.tags,
+            actualStart: Value(plan.splitUtc),
+            actualEnd: Value(activity.actualEnd),
+            status: activity.status,
+            recordingPermissionStatus: activity.recordingPermissionStatus,
+            recordingProfileOverride: Value(activity.recordingProfileOverride),
+            isPrivate: activity.isPrivate,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+    await update(
+      activityId,
+      ActivitiesCompanion(actualEnd: Value(plan.splitUtc)),
+    );
+
+    final moved = <String, String>{};
+    var sequence = 1;
+    if (shared != null) {
+      final s = shared.originalSegment;
+      final copyId = _newId();
+      await _db
+          .into(_db.recordingSegments)
+          .insert(
+            RecordingSegmentsCompanion.insert(
+              id: copyId,
+              activityId: part2Id,
+              sequence: sequence++,
+              filePath: s.filePath,
+              state: s.state,
+              requestedProfile: s.requestedProfile,
+              codec: s.codec,
+              container: s.container,
+              channelCount: s.channelCount,
+              sampleRateHz: s.sampleRateHz,
+              requestedBitrateBps: s.requestedBitrateBps,
+              observedBitrateBps: Value(s.observedBitrateBps),
+              inputRoute: Value(s.inputRoute),
+              startUtc: s.startUtc,
+              endUtc: Value(s.endUtc),
+              durationMs: Value(s.durationMs),
+              bytes: Value(s.bytes),
+              sha256: Value(s.sha256),
+              endReason: Value(s.endReason),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      moved[s.id] = copyId;
+      final splitInSegment = shared.splitOffsetWithinSegmentMs;
+      final segmentEnd = splitInSegment + shared.part2DurationMs;
+      await _addCut(
+        activityId,
+        splitOffsetMs,
+        originMs + segmentEnd,
+        'Split: the rest is in "${plan.activity2Title}"',
+        now,
+      );
+      await _addCut(
+        part2Id,
+        0,
+        splitInSegment,
+        'Split: the start is in "${plan.activity1Title}"',
+        now,
+      );
+    }
+    for (final a in plan.activity2Segments) {
+      await (_db.update(
+        _db.recordingSegments,
+      )..where((s) => s.id.equals(a.segment.id))).write(
+        RecordingSegmentsCompanion(
+          activityId: Value(part2Id),
+          sequence: Value(sequence++),
+          updatedAt: Value(now),
+        ),
+      );
+      moved[a.segment.id] = a.segment.id;
+    }
+
+    for (final c in plan.cutRanges) {
+      if (c.targetActivityId != part2Id) {
+        await (_db.update(
+          _db.cutRanges,
+        )..where((r) => r.id.equals(c.sourceCutRangeId))).write(
+          CutRangesCompanion(
+            endOffsetMs: Value(c.endOffsetMs),
+            updatedAt: Value(now),
+          ),
+        );
+        continue;
+      }
+      // Planned offsets count from the split; move them to the origin.
+      final start = c.startOffsetMs + splitOffsetMs - originMs;
+      final end = c.endOffsetMs + splitOffsetMs - originMs;
+      final crosses = plan.cutRanges.any(
+        (o) =>
+            o.sourceCutRangeId == c.sourceCutRangeId &&
+            o.targetActivityId != part2Id,
+      );
+      if (end <= 0) {
+        if (!crosses) await _deleteCut(c.sourceCutRangeId, now);
+        continue;
+      }
+      if (crosses) {
+        await _addCut(part2Id, start < 0 ? 0 : start, end, c.reason, now);
+      } else {
+        await (_db.update(
+          _db.cutRanges,
+        )..where((r) => r.id.equals(c.sourceCutRangeId))).write(
+          CutRangesCompanion(
+            activityId: Value(part2Id),
+            startOffsetMs: Value(start < 0 ? 0 : start),
+            endOffsetMs: Value(end),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+    }
+
+    int? effectiveOffset(int? stored, DateTime utc) =>
+        stored ??
+        timelineOffsetMs(eventUtc: utc, firstSegmentStartUtc: firstStart);
+    final bookmarks = await (_db.select(
+      _db.bookmarks,
+    )..where((b) => b.activityId.equals(activityId))).get();
+    for (final b in bookmarks) {
+      final offset = effectiveOffset(b.offsetMs, b.atUtc);
+      if (offset == null || offset < splitOffsetMs) continue;
+      await (_db.update(_db.bookmarks)..where((r) => r.id.equals(b.id))).write(
+        BookmarksCompanion(
+          activityId: Value(part2Id),
+          offsetMs: Value(offset - originMs),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+    final photos = await (_db.select(
+      _db.photos,
+    )..where((p) => p.activityId.equals(activityId))).get();
+    for (final p in photos) {
+      final offset = effectiveOffset(p.offsetMs, p.takenUtc);
+      if (offset == null || offset < splitOffsetMs) continue;
+      await (_db.update(_db.photos)..where((r) => r.id.equals(p.id))).write(
+        PhotosCompanion(
+          activityId: Value(part2Id),
+          offsetMs: Value(offset - originMs),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+    final interruptions = await (_db.select(
+      _db.interruptions,
+    )..where((i) => i.activityId.equals(activityId))).get();
+    for (final i in interruptions) {
+      if (i.startUtc.isBefore(plan.splitUtc)) continue;
+      await (_db.update(
+        _db.interruptions,
+      )..where((r) => r.id.equals(i.id))).write(
+        InterruptionsCompanion(
+          activityId: Value(part2Id),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+
+    return ActivitySplitResult(
+      part1: (await get(activityId))!,
+      part2: (await get(part2Id))!,
+      segmentMoves: moved,
+    );
+  });
+
+  Future<void> _addCut(
+    String activityId,
+    int start,
+    int end,
+    String? reason,
+    DateTime now,
+  ) async {
+    if (end <= start) return;
+    await _db
+        .into(_db.cutRanges)
+        .insert(
+          CutRangesCompanion.insert(
+            id: _newId(),
+            activityId: activityId,
+            startOffsetMs: start,
+            endOffsetMs: end,
+            reason: Value(reason),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+  }
+
+  /// A cut wholly inside the gap before the new activity's first segment
+  /// hides nothing, so it is soft-deleted rather than moved.
+  Future<void> _deleteCut(String id, DateTime now) =>
+      (_db.update(_db.cutRanges)..where((c) => c.id.equals(id))).write(
+        CutRangesCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+      );
 
   /// Deletes the activity and, by cascade, its media rows. Files on disk
   /// are not touched here.

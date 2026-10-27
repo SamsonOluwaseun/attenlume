@@ -154,4 +154,78 @@ void main() {
       expect(otherEngine.disposed, isTrue);
     });
   });
+
+  group('FR-REV-04 cut ranges while playing [P1-18]', () {
+    CutRange cut(String id, int startMs, int endMs) => CutRange(
+      id: id,
+      activityId: 'act',
+      startOffsetMs: startMs,
+      endOffsetMs: endMs,
+      createdAt: _t0,
+      updatedAt: _t0,
+    );
+
+    test('FR-REV-04 play starts after a trimmed start', () async {
+      player.cutRanges = [cut('c1', 0, 30000)];
+      await player.play();
+      expect(engine.seekedTo, const Duration(seconds: 30));
+      expect(player.positionMs, 30000);
+      expect(player.isPlaying, isTrue);
+    });
+
+    test('FR-REV-04 reaching a middle cut jumps to its end, across the '
+        'gap when the cut runs into it', () async {
+      player.cutRanges = [cut('c1', 9 * 60000, 14 * 60000)];
+      await player.play();
+      engine.emitPosition(const Duration(minutes: 9, seconds: 1));
+      await settle();
+      await settle();
+      expect(engine.openPath, '/media/seg-2.m4a');
+      expect(engine.seekedTo, const Duration(minutes: 1));
+      expect(player.positionMs, 14 * 60000);
+      expect(player.isPlaying, isTrue);
+    });
+
+    test('FR-REV-04 a trimmed end stops playback', () async {
+      player.cutRanges = [cut('c1', 18 * 60000, 20 * 60000)];
+      await player.seekTo(17 * 60000);
+      await player.play();
+      engine.emitPosition(const Duration(minutes: 5, seconds: 1));
+      await settle();
+      await settle();
+      expect(player.isPlaying, isFalse);
+      expect(engine.playing, isFalse);
+      expect(player.positionMs, 20 * 60000);
+    });
+
+    test('FR-REV-04 overlapping and removed cuts are merged or ignored; '
+        'kept time leaves them out', () {
+      player.cutRanges = [
+        cut('c1', 0, 60000),
+        cut('c2', 30000, 120000),
+        CutRange(
+          id: 'c3',
+          activityId: 'act',
+          startOffsetMs: 300000,
+          endOffsetMs: 400000,
+          deletedAt: _t0,
+          createdAt: _t0,
+          updatedAt: _t0,
+        ),
+      ];
+      expect(player.cuts, hasLength(1));
+      expect(player.keptAudioMs, 17 * 60000 - 120000);
+    });
+
+    test(
+      'FR-REV-04 the playhead can be put inside a cut while paused',
+      () async {
+        player.cutRanges = [cut('c1', 60000, 120000)];
+        await player.seekTo(90000);
+        expect(player.positionMs, 90000);
+        await player.play();
+        expect(player.positionMs, 120000);
+      },
+    );
+  });
 }

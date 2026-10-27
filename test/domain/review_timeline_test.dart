@@ -1,5 +1,6 @@
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/media.dart';
+import 'package:attenlume/domain/services/cut_range_math.dart';
 import 'package:attenlume/domain/services/review_timeline.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -174,6 +175,25 @@ void main() {
       expect(timeline.hasAudio, isFalse);
       expect(timeline.locate(0), isNull);
       expect(timeline.markers, hasLength(1));
+    });
+  });
+
+  group('FR-REV-04 kept audio [P1-18]', () {
+    test('FR-REV-04 cuts over gaps only remove recorded audio', () {
+      final timeline = ReviewTimeline.build(
+        segments: [
+          _segment(1, at: Duration.zero, length: _min(10)),
+          _segment(2, at: _min(13), length: _min(7)),
+        ],
+      );
+      expect(timeline.audioEndMs, 20 * 60000);
+      expect(timeline.keptAudioMs(const []), 17 * 60000);
+      // 9:00 to 14:00 covers 1 min of the first part, the gap and 1 min of
+      // the second.
+      expect(
+        timeline.keptAudioMs(const [TimeRange(9 * 60000, 14 * 60000)]),
+        15 * 60000,
+      );
     });
   });
 }
