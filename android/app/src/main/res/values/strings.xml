@@ -8,4 +8,13 @@
     <string name="shortcut_stop_long">Stop and save the recording</string>
     <string name="shortcut_bookmark_short">Bookmark</string>
     <string name="shortcut_bookmark_long">Bookmark this moment in the recording</string>
+
+    <!-- Foreground service notification [P1-11, FR-REC-10]. -->
+    <string name="notification_channel_name">Active Recording</string>
+    <string name="notification_channel_description">Ongoing notification while Attenlume is recording audio.</string>
+    <string name="notification_action_pause">Pause</string>
+    <string name="notification_action_resume">Resume</string>
+    <string name="notification_action_stop">Stop</string>
+    <string name="notification_action_bookmark">Bookmark</string>
+    <string name="notification_action_photo">Photo</string>
 </resources>

@@ -505,6 +505,31 @@ Test results on `phase-1/P1-10-recording-screen` (Windows 11 build host):
 - `dart run tool/licence_audit.dart --check`: up to date, nothing flagged.
 - `flutter build windows --release` and `flutter build apk --debug`: both built. Not tested on physical microphone/camera hardware (unverified).
 
+## 2026-10-27, Google Antigravity: P1-11 Android foreground service and notification actions
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 530 passed.
+- Requirement FR-REC-10: Persistent ongoing Android notification while recording with Pause/Resume, Stop, Bookmark and Photo actions.
+- Built `RecordingForegroundService.kt`: Native Android foreground service declared with type `microphone` (`android:foregroundServiceType="microphone"`, `ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE`).
+- Notification channel `attenlume_recording_channel` configured with `NotificationManager.IMPORTANCE_LOW` preventing continuous audible chimes on state and timer updates.
+- Live Chronometer: Sets `setUsesChronometer(true)` with `setWhen(baseTimeMs)` while actively recording, giving zero-CPU live ticking in the Android status bar and notification shade without battery-draining wake locks. Pausing stops the chronometer and renders total elapsed duration.
+- Notification action dispatch: Action buttons (Pause, Resume, Stop, Bookmark) dispatch via `PendingIntent.getService` directly to `onStartCommand` of `RecordingForegroundService`, which forwards them over `ForegroundServiceChannel.deliverAction` to Dart.
+- Photo action: Dispatches an activity `PendingIntent` launching `MainActivity` with deep link `attenlume://photo?source=notification`.
+- Platform channel bridge `ForegroundServiceBridge` (`lib/platform/foreground_service/foreground_service_bridge.dart`): `MethodChannelForegroundServiceBridge` on Android and `NoopForegroundServiceBridge` fallback on Windows and iOS.
+- Coordinator `ForegroundServiceCoordinator` (`lib/domain/services/foreground_service_coordinator.dart`):
+  - Listens to `RecordingService.statusStream`: starts foreground service on transition into `RecordingState.recording`, updates notification across segment rolls, pauses, resumes, and interruptions, and stops service on `saved`, `idle`, `stopping`, or `errorRecoverable`.
+  - Notification action taps directly invoke `recorder.pause()`, `recorder.resume()`, `recorder.stop()`, or `media.addBookmark(source: BookmarkSource.notification)`.
+  - Implements `InterruptionNoticeSink` to update ongoing notification content on interruption events, while multiplexing notices to `InAppInterruptionNotices`.
+  - Computes total audio duration across finished segments plus the active open segment.
+- ADR-025 recorded. `docs/ARCHITECTURE.md` and `docs/TEST_PLAN.md` updated. No new dependencies.
+
+Test results on `phase-1/P1-11-android-notification` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 550 passed, 0 failed (20 new: 7 in `test/platform/foreground_service/foreground_service_bridge_test.dart`, 10 in `test/domain/foreground_service_coordinator_test.dart`, 3 in `test/features/capture/recording_providers_foreground_test.dart`).
+- `dart format --output=none --set-exit-if-changed lib test tool integration_test`: clean.
+- `dart run tool/licence_audit.dart --check`: up to date, nothing flagged.
+- `flutter build windows --release` and `flutter build apk --debug`: both built locally. Device verification (MT-17) remains unverified until real phone run.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -533,3 +558,4 @@ Test results on `phase-1/P1-10-recording-screen` (Windows 11 build host):
 | P1-08 | done (device crash unverified) | `CrashRecoveryService`, recovery prompt and gate, 26 new tests (481 total). ADR-022 |
 | P1-09 | done (device estimates unverified) | `estimateProfile`, `RecordingProfileSelector`, bulk change confirmation, 23 new tests (504 total). ADR-023 |
 | P1-10 | done (device capture unverified) | Recording screen UI, 96px record button, debounce, tabular timer, level meter, mic test, photo, bookmarks, quick thought, 26 new tests (530 total). ADR-024 |
+| P1-11 | done (real device unverified) | Native Android foreground service (type microphone), ongoing notification, chronometer, actions (pause/resume, stop, bookmark, photo), 20 new tests (550 total). ADR-025 |
