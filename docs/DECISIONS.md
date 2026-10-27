@@ -199,3 +199,45 @@ Format: context, decision, alternatives, consequences.
 - **Consequences:**
   - P1-03 (Activity CRUD, custom types, consent check) builds directly on `StartActivitySheet` and `ActivityDetailSheet`.
   - P1-04 (RecordingService) can trigger live recording state, which automatically elevates the recording card to the top with `StatusPillStatus.recording`.
+
+
+## ADR-011: Activity CRUD, custom types, awareness consent check, and contact fields (P1-03)
+
+- **Date:** 27 October 2026. **Decided by:** Google Antigravity in unattended mode, task P1-03. Owner to review.
+- **Context:** P1-03 implements full Activity CRUD, custom activity type creation and management, conversation awareness check, and contact details [FR-ACT-04 to 08].
+  1. *FR-ACT-04*: Activity fields: `title`, `type`, `speaker_names`, `organisation`, `room`, `notes`, `tags`, `planned_start`, `actual_start`, `actual_end`, `recording_permission_status`, `recording_profile_override`.
+  2. *FR-ACT-05*: Blank title defaults to "{Type} {n}, {HH:mm}" (e.g. "Session 3, 14:05"). Rename any time.
+  3. *FR-ACT-06*: User-defined custom activity types with unique key generation, icon selection, and delete protection for types in use.
+  4. *FR-ACT-07* & *FR-PRI-01*: Awareness check for business conversations and networking: "Does the other person know you are recording?" with "Yes" (participant aware) and "Not recording audio" (no audio) options.
+  5. *FR-ACT-08*: Manual contact details and follow-up action for conversations without facial recognition or automatic identity extraction.
+- **Decision:**
+  1. **Activity Editor (`ActivityEditorScreen`)**:
+     - Dual-mode support for creating new activities and editing existing ones.
+     - Title field with automatic hint and fallback to default title formula (`{Type} {n}, {HH:mm}` in conference timezone) if left blank.
+     - Type selector with built-in and custom types, inline "+ Custom type" creation button, and deletion option for unused custom types.
+     - Dynamic awareness consent card for conversations and networking (`consentCheckTypeKeys`: `business_conversation`, `networking`).
+     - Manual contact information card with fields: contact name, contact details (email/phone/social), and follow-up action. Explicit etiquette caption: "Manual entry only. No facial recognition or automatic identity extraction."
+     - Session details: speakers, organisation, room, planned start date/time picker, recording profile override dropdown, private activity toggle switch, markdown notes, tags.
+     - Primary "Save activity" button and danger "Delete activity" button with destructive confirmation dialog.
+  2. **Consent Awareness Dialog (`ConsentCheckDialog`)**:
+     - Modal dialog asking: "Does the other person know you are recording?"
+     - Options: "Yes" (`RecordingPermissionStatus.participantAware`), "Not recording audio" (`RecordingPermissionStatus.notPermitted`), and "Cancel".
+     - Hooked into:
+       - `ConferenceHomeScreen` quick-start "Conversation" button: prompts consent before creating activity.
+       - `StartActivitySheet`: prompts consent when selecting Conversation or Networking chips.
+       - `ActivityEditorScreen`: dedicated choice chips and warning banner.
+  3. **Custom Type Dialog (`CustomTypeDialog`)**:
+     - Modal dialog allowing creation of custom types with user-defined label and choice of 12 Lucide/Material icons.
+     - Calls `ActivityRepository.createCustomType(label, icon: icon)`, which derives a unique `custom_<slug>` key and assigns the next sort order.
+     - Custom types in use are protected from deletion (`ON DELETE RESTRICT` and StateError check in repository).
+  4. **Activity Details Inspector Enhancements (`ActivityDetailSheet`)**:
+     - Displays contact person, contact details, and follow-up action in a dedicated card when present.
+     - Displays speakers, organisation, room, tags, recording profile, and permission status.
+     - Added "Edit" button navigating to `ActivityEditorScreen`, auto-refreshing sheet state on save.
+     - Added "Delete activity" action with confirmation.
+- **Alternatives:**
+  - Mandatory contact extraction via business card scanning (rejected: privacy violation, offline simplicity, strict adherence to FR-ACT-08).
+  - Silent default permission for conversations (rejected: violates FR-ACT-07 and UK GDPR / consent etiquette principles).
+- **Consequences:**
+  - All Phase 1 activity management is fully functional and tested.
+  - Recording engine (P1-04+) will check `recording_permission_status`: if `notPermitted`, audio recording is disallowed and only notes/photos are permitted.

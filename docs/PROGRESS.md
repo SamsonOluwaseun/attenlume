@@ -210,6 +210,39 @@ Test results on phase-1/P1-02-conference-home (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
 - flutter build windows --release and flutter build apk --debug: both built successfully.
 
+## 2026-10-27, Google Antigravity: P1-03 activity CRUD, custom types, consent check, contact fields
+
+- P1-03: Activity CRUD, custom types, consent check, contact fields [FR-ACT-04 to 08].
+  - Full Activity CRUD Editor (`lib/features/activities/activity_editor_screen.dart`):
+    - Supports both new activity creation and editing existing activities (FR-ACT-04).
+    - Blank title defaults to "{Type} {n}, {HH:mm}" in conference timezone (FR-ACT-05). Rename any time.
+    - All session fields supported: `title`, `type`, `speaker_names` (comma-separated), `organisation`, `room`, `notes` (Markdown), `tags` (comma-separated), `planned_start` (date/time picker), `recording_permission_status`, `recording_profile_override`, `is_private` (FR-ACT-04).
+    - Save action (`AttenlumeButton` primary) and destructive Delete action (`AttenlumeButton` danger with confirmation dialog).
+  - Custom activity types (FR-ACT-06):
+    - `CustomTypeDialog` (`lib/features/activities/custom_type_dialog.dart`): user-defined type creation with label validation and 12 Lucide/Material icon choices (`tag`, `presentation`, `mic`, `users`, `sparkles`, `coffee`, `school`, `store`, `camera`, `folder`, `book`, `chat`).
+    - Integrated "+ Custom type" chip/button in `StartActivitySheet` and `ActivityEditorScreen`.
+    - Safe custom type deletion in editor; types in use are protected from deletion (`ON DELETE RESTRICT` and StateError handling).
+  - Conversation awareness consent check (FR-ACT-07, FR-PRI-01, J3):
+    - `ConsentCheckDialog` (`lib/features/activities/consent_check_dialog.dart`): "Does the other person know you are recording?" with "Yes" (`RecordingPermissionStatus.participantAware`), "Not recording audio" (`RecordingPermissionStatus.notPermitted`), and Cancel options.
+    - Prominently integrated into quick-start Conversation button on `ConferenceHomeScreen`, Conversation/Networking chips in `StartActivitySheet`, and consent banner in `ActivityEditorScreen`.
+  - Manual contact details and follow-up (FR-ACT-08):
+    - Contact name, contact details (email/phone/social), and follow-up action.
+    - Explicit UK English etiquette note: "Manual entry only. No facial recognition or automatic identity extraction."
+    - Contact & follow-up card displayed in `ActivityDetailSheet` and `ActivityEditorScreen`.
+  - Activity details sheet enhancements (`lib/features/conferences/activity_detail_sheet.dart`):
+    - "Edit" button opens `ActivityEditorScreen` and refreshes details on return.
+    - "Delete activity" button with confirmation dialog.
+    - Displays contact card, speaker names, organisation, room, tags, recording permission status, effective profile.
+  - 19 new tests added across 4 test suites (237 total tests, 0 failed).
+  - Architecture Decision Record: ADR-011 recorded in `docs/DECISIONS.md`.
+
+Test results on phase-1/P1-03-activity-crud (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 237 passed, 0 failed (19 new, P1-03).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool: clean.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -224,3 +257,4 @@ Test results on phase-1/P1-02-conference-home (Windows 11 build host):
 | P0-14 | done | Cut-range maths, split logic, cuts.json manifest, M4A container trimmer, failure rollback pass 29 tests (179 total). ADR-003 |
 | P1-01 | done | Quick start (<30 s, 1 field + 1 button), wizard, role, goals, outputs, profile, policy notice, archive, deletion summary pass 11 tests (190 total). ADR-009 |
 | P1-02 | done | Conference home, stats card, dominant button, 4 quick-start buttons, chronological activity list, ActivityCard, StatusPill, AttenlumeButton, 28 new tests (218 total). ADR-010 |
+| P1-03 | done | Activity CRUD editor, custom types, awareness consent check, contact fields, 19 new tests (237 total). ADR-011 |
