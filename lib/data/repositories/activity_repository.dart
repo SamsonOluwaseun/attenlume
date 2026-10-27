@@ -180,6 +180,12 @@ class ActivityRepository {
     _db.activities,
   )..where((a) => a.id.equals(id))).getSingleOrNull();
 
+  /// Activities in [status] across all conferences, for crash recovery
+  /// (FR-REC-08) [P1-08].
+  Future<List<Activity>> listByStatus(ActivityStatus status) => (_db.select(
+    _db.activities,
+  )..where((a) => a.status.equalsValue(status))).get();
+
   /// Gets the [ActivitySummary] for [activityId], or null if not found.
   Future<ActivitySummary?> getSummary(String activityId) async {
     final activity = await get(activityId);

@@ -46,6 +46,16 @@ abstract final class MediaPaths {
 
   static const partialMarker = '.partial';
 
+  /// The final name of a path made by [partial] (`segment-001.m4a` for
+  /// `segment-001.partial.m4a`). Other paths come back unchanged
+  /// [P1-08, FR-REC-08].
+  static String finalName(String relativePath) {
+    if (!isPartial(relativePath)) return relativePath;
+    final ext = p.posix.extension(relativePath);
+    final stem = relativePath.substring(0, relativePath.length - ext.length);
+    return '${stem.substring(0, stem.length - partialMarker.length)}$ext';
+  }
+
   /// `photos/<photo_id>.jpg` in the activity folder (BUILD_GUIDE 9.5)
   /// [P0-05].
   static String photo(String conferenceId, String activityId, String photoId) =>

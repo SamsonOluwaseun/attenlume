@@ -32,6 +32,12 @@ void main() {
       expect(MediaPaths.isPartial('audio/segment-001.partial.m4a'), isTrue);
       expect(MediaPaths.isPartial('audio/segment-001.m4a'), isFalse);
     });
+
+    test('FR-REC-08 finalName undoes partial and leaves other paths alone', () {
+      const path = 'conferences/c/activities/a/audio/segment-001-2.m4a';
+      expect(MediaPaths.finalName(MediaPaths.partial(path)), path);
+      expect(MediaPaths.finalName(path), path);
+    });
   });
 
   group('FR-REC-03 commitSegmentFile', () {
