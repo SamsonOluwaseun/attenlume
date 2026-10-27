@@ -13,6 +13,7 @@ import '../../domain/services/interruption_coordinator.dart';
 import '../../domain/services/one_active_coordinator.dart';
 import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
+import '../../domain/services/storage_budget_service.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
 import '../../platform/audio_capture/record_capture_engine.dart';
 import '../../platform/audio_route/audio_route_probe.dart';
@@ -104,6 +105,7 @@ final recordingServiceProvider = Provider<RecordingService>((ref) {
     platform: ref.watch(capturePlatformProvider),
     routes: ref.watch(audioRouteProbeProvider),
     session: ref.watch(audioInterruptionSourceProvider),
+    freeSpaceProbe: ref.watch(freeSpaceProbeProvider),
   );
   ref.onDispose(service.dispose);
   return service;
@@ -174,13 +176,37 @@ final interruptionCoordinatorProvider = Provider<InterruptionCoordinator>((
   return coordinator;
 });
 
+/// Tracks disk free space, rolling minutes left from measured file growth,
+/// and enforces the hard stop reserve (FR-STO-01 to 04, FR-UI-07) [P1-12].
+final storageBudgetServiceProvider = Provider<StorageBudgetService>((ref) {
+  final service = StorageBudgetService(
+    recorder: ref.watch(recordingServiceProvider),
+    activities: ref.watch(activityRepositoryProvider),
+    media: ref.watch(mediaAssetRepositoryProvider),
+    mediaRoot: ref.watch(mediaRootProvider),
+    freeSpaceProbe: ref.watch(freeSpaceProbeProvider),
+    platform: ref.watch(capturePlatformProvider),
+  )..start();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final storageBudgetSnapshotProvider = StreamProvider<StorageBudgetSnapshot>((
+  ref,
+) async* {
+  final service = ref.watch(storageBudgetServiceProvider);
+  yield service.currentSnapshot;
+  yield* service.snapshotStream;
+});
+
 /// Every start goes through here so the one-active rule holds for all
 /// triggers (FR-REC-04) [P1-06]. Creating it also starts the
-/// [interruptionCoordinatorProvider] and [foregroundServiceCoordinatorProvider],
-/// so no recording runs unwatched.
+/// [interruptionCoordinatorProvider], [foregroundServiceCoordinatorProvider],
+/// and [storageBudgetServiceProvider], so no recording runs unwatched.
 final oneActiveCoordinatorProvider = Provider<OneActiveCoordinator>((ref) {
   ref.watch(interruptionCoordinatorProvider);
   ref.watch(foregroundServiceCoordinatorProvider);
+  ref.watch(storageBudgetServiceProvider);
   return OneActiveCoordinator(
     recorder: ref.watch(recordingServiceProvider),
     activities: ref.watch(activityRepositoryProvider),

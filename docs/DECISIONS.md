@@ -382,6 +382,53 @@ Format: context, decision, alternatives, consequences.
 - **Alternatives:** keep using `pause()` for interruptions: rejected, the segment end reason and the state the UI shows would be wrong; interruption handling inside `RecordingService`: rejected, the service stays free of platform streams and camera timing; activating the session at app start: rejected, it would stop the user's music on Android; closing the row only when recording restarts: rejected, the row should show when the interruption ended, and any gap before a manual resume is visible anyway.
 - **Consequences:** P1-10 shows `RecordingStatus.interruption` and `errorMessage` as the banner with Resume; P1-11 replaces `InAppInterruptionNotices` with a notification and handles a Resume action; P1-14 must take photos through `duringCameraUse`. The P0-04 and P0-05 spikes still use `pause()` on purpose, so their reports stay comparable. The Android routed-device channel and Windows default-device query proposed in ADR-016 are not built; `input_route` stays null on those platforms. Everything here is unverified on a device until MT-17, MT-20 and MT-21 run.
 
+## ADR-026: Storage budget service, rolling estimates and live StorageMeter (P1-12)
+
+- **Date:** 27 October 2026. **Decided by:** Google Antigravity in unattended mode, task P1-12. Owner to review.
+- **Context:** Requirements FR-STO-01 through FR-STO-04 and FR-UI-07 specify the storage budget system:
+  1. *FR-STO-01*: Track free space and rolling "minutes left" based on measured file growth, not nominal bitrate alone.
+  2. *FR-STO-02*: Default thresholds: warning at < 1 GB / < 60 min, urgent at <= 300 MB, hard stop at <= 100 MB.
+  3. *FR-STO-03*: Check before recording, every 30s while recording, after each photo, before trim/export, and on OS low-space signals.
+  4. *FR-STO-04*: Hard stop at 100 MB reserve: finalise current segment, keep earlier files, record stop reason `storage_low`, notify user clearly, never run disk to zero.
+  5. *FR-UI-07*: Live storage budget UI (`StorageMeter`): free space, conference usage, estimated recording time left, compact single-line under timer on recording screen, staged warning/critical banners.
+- **Decision:**
+  1. **Cross-Platform Free Space Probes (`FreeSpaceProbe`)**:
+     - Windows uses `WindowsFreeSpaceProbe` with Win32 `GetDiskFreeSpaceExW` via `dart:ffi`.
+     - Android: Created `FreeSpaceChannel.kt` querying `StatFs.availableBytes` and `StatFs.totalBytes` over MethodChannel `com.samlytics.attenlume/free_space`. Attached to `MainActivity.kt`.
+     - iOS: Created `FreeSpaceChannel.swift` querying `URLResourceKey.volumeAvailableCapacityForImportantUsageKey` and `volumeTotalCapacityKey` with fallback to `fileSystemAttributes` for `fileSystemFreeSize`. Registered in `AppDelegate.swift`.
+     - `MethodChannelFreeSpaceProbe`: Unified Dart implementation for Android and iOS, falling back gracefully to unknown if the platform channel fails.
+  2. **StorageBudgetService (`lib/domain/services/storage_budget_service.dart`)**:
+     - Periodic 30-second timer (`_startPeriodicCheck` / `_stopPeriodicCheck`) while recording.
+     - Rolling write rate calculation (`_calculateBytesPerSecond`):
+       - If actively recording a segment and elapsed duration $\ge 5$ seconds, reads actual file size on disk divided by elapsed seconds.
+       - Else if prior finalized or recovered segments exist for the activity, computes total audio bytes divided by total segment duration.
+       - Else falls back to nominal profile bitrate from `effectiveCaptureSettings`.
+       - Estimated minutes left = available bytes after deducting the 100 MB hard reserve (`hardStopBytes`), divided by `bytesPerSecond * 60`.
+     - Conference usage: Measured from disk by recursively summing file sizes in `conferences/<id>`.
+     - Hard reserve enforcement: When available bytes $\le 100$ MB (`hardStopBytes`), stops recording safely via `RecordingService.stop(reason: SegmentEndReason.storageLow)` and emits an alert message on `hardStopNoticeStream`.
+     - Protected with a `SerialLock` to eliminate race conditions between 30s timer ticks, status stream triggers, and photo capture checks.
+  3. **RecordingService Storage Preflight & SegmentEndReason**:
+     - Preflight refusal: Injected `FreeSpaceProbe` and `StorageThresholds`. In `_refusal`, if `probe.availableBytes()` $\le$ `thresholds.hardStopBytes`, recording start is refused with `StartOutcome.storageFull`.
+     - Added `SegmentEndReason.storageLow` mapped to `storage_low` in database schema.
+     - Exposes `currentSegmentFile` and `currentSegmentStartUtc` for live rate measurement.
+     - `OneActiveCoordinator` translates `StartOutcome.storageFull` to: "Cannot start recording: storage is nearly full (under 100 MB remaining)."
+  4. **StorageMeter Component (`lib/presentation/components/storage_meter.dart`)**:
+     - Conforms to `docs/design/components/StorageMeter.md`.
+     - Compact mode (for recording screen under timer):
+       - `StorageLevel.ok`: Single muted line (`"9 h 40 min left at Balanced · 24.5 GB free"`).
+       - `StorageLevel.warning`: Staged warning banner with amber warning icon (`"Running low. Export or free space soon."`).
+       - `StorageLevel.urgent` or `hardStop`: Danger banner with red alert icon (`"Storage nearly full. Recording will stop safely."` / `"Storage nearly full. Recording stopped and saved."`).
+     - Expanded mode: Progress bar with used/free of total, conference usage, and optional `onManage` action.
+  5. **RecordingScreen Integration**:
+     - Compact `StorageMeter` embedded in `RecordButton` below timer.
+     - Rechecks storage before recording, after photo capture, and on 30s ticks.
+     - Displays red SnackBar on `hardStopNoticeStream` emission.
+- **Alternatives:**
+  - *Third-party disk space plugin (`disk_space`, `storage_details`)*: Rejected. Most packages on pub.dev are unmaintained or lack Windows/iOS support; lightweight native channels keep the dependency graph clean.
+  - *Sampling file growth on every UI tick (e.g. 100ms)*: Rejected. Reading `File.length()` from disk at high frequencies degrades I/O and battery; 30-second intervals align with FR-STO-03 and minimize battery drain.
+- **Consequences:** All storage budget and safe limit requirements (FR-STO-01 to 04, FR-UI-07) are fulfilled and verified with 28 new tests. Real device free space channel verification on physical Android and iOS devices remains outstanding.
+
+
 ## ADR-022: Crash recovery reconciliation and the recovery prompt (P1-08)
 
 - **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P1-08. Owner to review.

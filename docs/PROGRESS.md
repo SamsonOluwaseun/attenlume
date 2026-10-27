@@ -530,6 +530,44 @@ Test results on `phase-1/P1-11-android-notification` (Windows 11 build host):
 - `dart run tool/licence_audit.dart --check`: up to date, nothing flagged.
 - `flutter build windows --release` and `flutter build apk --debug`: both built locally. Device verification (MT-17) remains unverified until real phone run.
 
+## 2026-10-27, Google Antigravity: P1-12 StorageBudgetService and live budget UI
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 550 passed.
+- Requirements FR-STO-01 through FR-STO-04 and FR-UI-07.
+- Native platform free space channels:
+  - Android: `FreeSpaceChannel.kt` querying `StatFs.availableBytes` and `totalBytes` over `com.samlytics.attenlume/free_space`. Attached to `MainActivity.kt`.
+  - iOS: `FreeSpaceChannel.swift` querying `URLResourceKey.volumeAvailableCapacityForImportantUsageKey` and `volumeTotalCapacityKey` with fallback to `fileSystemFreeSize`. Registered in `AppDelegate.swift`.
+  - `MethodChannelFreeSpaceProbe` (`lib/platform/storage/method_channel_free_space_probe.dart`): Unified Dart implementation for Android and iOS dispatching in `FreeSpaceProbe.forPlatform()`.
+- `RecordingService` storage preflight and stop reason:
+  - Injected `FreeSpaceProbe` and `StorageThresholds`. In `_refusal`, if `probe.availableBytes()` <= `thresholds.hardStopBytes` (100 MB), start is refused with `StartOutcome.storageFull`.
+  - Added `SegmentEndReason.storageLow` (`storage_low` in database schema) for hard reserve stops.
+  - Exposes `currentSegmentFile` and `currentSegmentStartUtc` for live rate measurement.
+  - `OneActiveCoordinator` translates `StartOutcome.storageFull` to: "Cannot start recording: storage is nearly full (under 100 MB remaining)."
+- `StorageBudgetService` (`lib/domain/services/storage_budget_service.dart`):
+  - Periodic 30-second timer (`_startPeriodicCheck` / `_stopPeriodicCheck`) while recording.
+  - Rolling write rate calculation: uses active segment file growth on disk when elapsed >= 5s; else prior segment history; else nominal profile rate.
+  - Computes remaining minutes above 100 MB hard reserve (`hardStopBytes`).
+  - Conference folder disk usage calculation via recursive directory sizing.
+  - Hard stop enforcement: stops recording safely with `SegmentEndReason.storageLow` when space drops <= 100 MB and notifies via `hardStopNoticeStream`.
+  - Protected with `SerialLock` to avoid race conditions.
+- `StorageMeter` component (`lib/presentation/components/storage_meter.dart`):
+  - Compact mode: single muted line under timer on `RecordingScreen` when OK; staged warning banner when <1 GB or <60 min; danger banner when <= 300 MB or <= 100 MB.
+  - Expanded mode: used/free progress bar, conference usage, and optional `onManage` action.
+- `RecordingScreen` integration:
+  - Embedded compact `StorageMeter` inside `RecordButton` below timer.
+  - Storage check pre-record, post-photo, and every 30s.
+  - Alert SnackBar on hard stop reserve trigger.
+- ADR-026 recorded. `docs/ARCHITECTURE.md` and `docs/TEST_PLAN.md` updated. No new dependencies.
+
+Test results on `phase-1/P1-12-storage-budget` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 578 passed, 0 failed (28 new: 3 in `test/platform/storage/method_channel_free_space_probe_test.dart`, 4 in `test/domain/recording_service_storage_test.dart`, 11 in `test/domain/storage_budget_service_test.dart`, 7 in `test/presentation/components/storage_meter_test.dart`, 3 in `test/features/capture/recording_screen_storage_test.dart`).
+- `dart format --output=none --set-exit-if-changed lib test tool integration_test`: clean.
+- `dart run tool/licence_audit.dart --check`: up to date, nothing flagged.
+- `flutter build windows --release` and `flutter build apk --debug`: both built locally. Device free space verification remains unverified on physical phones.
+
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -559,3 +597,5 @@ Test results on `phase-1/P1-11-android-notification` (Windows 11 build host):
 | P1-09 | done (device estimates unverified) | `estimateProfile`, `RecordingProfileSelector`, bulk change confirmation, 23 new tests (504 total). ADR-023 |
 | P1-10 | done (device capture unverified) | Recording screen UI, 96px record button, debounce, tabular timer, level meter, mic test, photo, bookmarks, quick thought, 26 new tests (530 total). ADR-024 |
 | P1-11 | done (real device unverified) | Native Android foreground service (type microphone), ongoing notification, chronometer, actions (pause/resume, stop, bookmark, photo), 20 new tests (550 total). ADR-025 |
+| P1-12 | done (device storage unverified) | StorageBudgetService, rolling write rate, 30s checks, 100 MB hard reserve stop (storage_low), native Android/iOS free space channels, live StorageMeter compact/expanded UI, 28 new tests (578 total). ADR-026 |
+

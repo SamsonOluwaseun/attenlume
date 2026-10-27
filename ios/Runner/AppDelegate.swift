@@ -16,5 +16,9 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AttenlumeShortcuts") {
       ShortcutCommandCenter.register(with: registrar)
     }
+    // Free space queries [P1-12, FR-STO-01].
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AttenlumeFreeSpace") {
+      FreeSpaceChannel.register(with: registrar)
+    }
   }
 }

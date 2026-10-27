@@ -10,6 +10,10 @@ abstract final class MediaPaths {
   /// Folder name of the media root inside the app documents folder.
   static const rootFolderName = 'media';
 
+  /// Relative path to a conference's media root (`conferences/<conferenceId>`).
+  static String conferenceFolder(String conferenceId) =>
+      p.posix.join('conferences', conferenceId);
+
   static String activityFolder(String conferenceId, String activityId) =>
       p.posix.join('conferences', conferenceId, 'activities', activityId);
 

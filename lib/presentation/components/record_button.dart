@@ -24,6 +24,7 @@ class RecordButton extends StatefulWidget {
     required this.elapsed,
     required this.activityTitle,
     this.levelDbfs = -60.0,
+    this.storageMeter,
     this.onRecord,
     this.onPause,
     this.onResume,
@@ -39,6 +40,7 @@ class RecordButton extends StatefulWidget {
   final Duration elapsed;
   final String activityTitle;
   final double levelDbfs;
+  final Widget? storageMeter;
   final VoidCallback? onRecord;
   final VoidCallback? onPause;
   final VoidCallback? onResume;
@@ -175,6 +177,14 @@ class _RecordButtonState extends State<RecordButton>
             style: timerStyle,
           ),
         ),
+
+        if (widget.storageMeter != null) ...[
+          const SizedBox(height: TokenSpace.space2),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TokenSpace.space4),
+            child: widget.storageMeter!,
+          ),
+        ],
 
         const SizedBox(height: TokenSpace.space4),
 

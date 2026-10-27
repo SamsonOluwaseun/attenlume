@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'method_channel_free_space_probe.dart';
 import 'windows_free_space_probe.dart';
 
 /// Free and total space on the volume that holds a path.
@@ -17,22 +18,28 @@ class FreeSpace {
   };
 }
 
-/// Platform-neutral free-space query (ADR-002 item 4, ADR-008) [P0-11,
-/// FR-STO-01, FR-EXP-05].
+/// Platform-neutral free-space query (ADR-002 item 4, ADR-008, ADR-026) [P0-11,
+/// P1-12, FR-STO-01, FR-EXP-05].
 ///
-/// No maintained package covers Android, iOS and Windows, so each platform
-/// gets its own small implementation behind this interface.
+/// Windows uses direct kernel32 Win32 FFI, Android uses `StatFs` over
+/// method channel, and iOS uses `URLResourceValues` over method channel.
 abstract interface class FreeSpaceProbe {
   /// Space on the volume holding [path]. [path] need not exist yet: the
   /// nearest existing parent folder is asked instead. Returns null when the
   /// platform cannot tell.
   Future<FreeSpace?> query(String path);
 
-  /// The probe for the running platform. Android and iOS answer null until
-  /// their method channels land in P1-12.
-  factory FreeSpaceProbe.forPlatform() => Platform.isWindows
-      ? WindowsFreeSpaceProbe()
-      : const UnknownFreeSpaceProbe();
+  /// The probe for the running platform (Windows FFI, Android/iOS method channel,
+  /// or fallback unknown probe).
+  factory FreeSpaceProbe.forPlatform() {
+    if (Platform.isWindows) {
+      return WindowsFreeSpaceProbe();
+    }
+    if (Platform.isAndroid || Platform.isIOS) {
+      return const MethodChannelFreeSpaceProbe();
+    }
+    return const UnknownFreeSpaceProbe();
+  }
 }
 
 /// Used where no native probe exists yet. Callers must treat null as
