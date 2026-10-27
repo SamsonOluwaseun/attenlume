@@ -29,7 +29,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | **pass** (Windows probe, preflight, disk-full cleanup, streaming folder and ZIP exports with bounded RAM; see 2.12) | Real RSS measured: delta 10.3 MB (folder), 5.6 MB (ZIP) on a 1 GiB file |
 | Per-segment profile switch, observed bitrate | P0-12 | unverified | unverified | unverified | |
 | Start recording from App Intent (iOS) or Quick Settings tile (Android) | P0-13 | unverified | unverified | n/a | Phase 2 feasibility only |
-| Passthrough trimming without re-encoding | P0-14 | unverified | unverified | unverified | ADR-003 |
+| Passthrough trimming without re-encoding | P0-14 | unverified (method channel in P1-19) | unverified (method channel in P1-19) | **pass** (pure container M4A trimmer, cut maths, split logic, cuts.json; see 2.11) | ADR-003 |
 
 ---
 
@@ -176,7 +176,13 @@ No single maintained package covers Android, iOS and Windows:
 - `ffmpeg_kit_flutter` is **discontinued** on pub.dev (last release September 2023). Do not use.
 - `ffmpeg_kit_flutter_new` 4.6.7 is an active community fork, LGPL-3.0. LGPL needs dynamic linking and redistribution notices, and adds a large binary. Treat as a last resort, subject to the P0-08 licence review.
 - Native passthrough is preferred: Android `MediaExtractor` plus `MediaMuxer`, iOS `AVAssetExportSession` with passthrough preset, Windows Media Foundation source reader plus sink writer. AAC frames are about 21 ms at 48 kHz, so passthrough cuts land on frame boundaries, close enough for speech.
-- `cuts.json` export is always the fallback.
+- `cuts.json` export is always available as a fallback and for external AI / CLI pipelines (`audio_mode: original_with_cuts`).
+- **P0-14 findings and spike results (Windows 11 build host, 27 October 2026):**
+  - **Non-destructive cut maths (`CutRangeMath`):** consolidates overlapping and contiguous cut ranges into canonical intervals (solving Product Spec edge case: "Cut ranges overlap: Merged for playback and export. Each stays separately undoable"). Derives keep ranges and maps timeline offsets across original and trimmed time.
+  - **Activity splitting (`ActivitySplitService`):** verifies playhead split logic (FR-REV-05). Bookmarks and photos partition by offset; cut ranges spanning the split playhead divide cleanly into two pieces. Splits occurring inside an interruption gap cleanly partition segments without needing audio file slicing.
+  - **Instruction export (`CutsManifest`):** writes `cuts.json` atomically via `.partial` staging, with pre-computed external `ffmpeg` filter complex strings (`atrim`, `asetpts`, `concat`).
+  - **Atomic trimming and failure rollback (`M4aContainerTrimmer`):** writes trimmed container to `.partial` and atomically renames. On injected failure, partial output is deleted and source files remain completely untouched (FR-REV-06, NFR-07). Trimmed file verified via `M4aInspector` (codec, sample rate, exact keep duration). Peak RSS delta negligible (< 1 MB).
+  - Recorded in ADR-003. Mobile platform method channels to be wired in P1-19.
 
 ### 2.12 Export, archive and hashing
 
