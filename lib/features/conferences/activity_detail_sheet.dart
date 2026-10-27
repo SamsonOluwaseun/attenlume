@@ -14,6 +14,8 @@ import '../../presentation/components/attenlume_button.dart';
 import '../../presentation/components/status_pill.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/activity_editor_screen.dart';
+import '../bookmarks/activity_bookmarks_section.dart';
+import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_profile_selector.dart';
 import '../capture/recording_providers.dart';
 import '../capture/recording_screen.dart';
@@ -534,21 +536,21 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                 ),
               ],
 
-              if (act.notesMd != null && act.notesMd!.isNotEmpty) ...[
-                const SizedBox(height: TokenSpace.space3),
-                Text(
-                  'Notes',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: TokenSpace.space1),
-                Text(
-                  act.notesMd!,
-                  key: const Key('detail-notes'),
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
+              const SizedBox(height: TokenSpace.space3),
+              ActivityNotesSection(
+                activityId: act.id,
+                notesMd: act.notesMd,
+                onChanged: _refreshSummary,
+              ),
+
+              const SizedBox(height: TokenSpace.space3),
+              ActivityBookmarksSection(
+                // Reloads when bookmarks were added on the recording screen.
+                key: ValueKey('bookmarks-${_summary.bookmarkCount}'),
+                activityId: act.id,
+                timezone: widget.timezone,
+                onChanged: _refreshSummary,
+              ),
 
               const SizedBox(height: TokenSpace.space3),
               ActivityPhotosSection(

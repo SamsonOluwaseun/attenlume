@@ -19,6 +19,7 @@ import 'package:attenlume/platform/camera/photo_camera.dart';
 import 'package:attenlume/platform/diagnostics/battery_probe.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -375,6 +376,26 @@ void main() {
       expect(bookmarks, hasLength(1));
       expect(bookmarks.first.label, equals('Important moment'));
       expect(find.text('Bookmarked: Important moment'), findsOneWidget);
+    });
+
+    testWidgets('FR-BMK-03 Ctrl+B adds a bookmark with source hotkey', (
+      tester,
+    ) async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Workshop');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await settleAsync(tester);
+
+      final bookmarks = await t.media.bookmarksFor(act.id);
+      expect(bookmarks, hasLength(1));
+      expect(bookmarks.single.source, BookmarkSource.hotkey);
+      expect(find.text('Bookmark added'), findsOneWidget);
     });
   });
 

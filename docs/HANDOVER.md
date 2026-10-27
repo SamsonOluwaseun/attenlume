@@ -1,38 +1,36 @@
 # Handover
 
-Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended session continued while the owner was away
-Branch: main (merged from `phase-1/P1-13-safety-prompts`)
-Current task ID: P1-13 (done). Next: P1-16
+Date and agent: 27 October 2026, Claude Code (Opus 5.5), overnight relay
+Branch: main (merged from `phase-1/P1-16-bookmarks-notes`)
+Current task ID: P1-16 (done). Next: P1-17
 Status: done
 
 ## Done in this session
 
-- ADR-028: microphone permission prompt, quick start opens the recorder, specific refusal messages, Windows data in `%LOCALAPPDATA%\Samlytics\Attenlume`, J2 journey integration test, `tool/build_windows_preview.ps1`.
-- ADR-029: Android 13+ notification permission requested when the recording service starts.
-- ADR-032: safety prompts (2 hours, silence, low battery) on the recording screen, Android battery channel (P1-13 done).
-- ADR-031: photo import with labels, captions, photos section in the activity details (P1-14 done).
-- ADR-030 (P1-14 first slice): camera screen with live viewfinder, `PhotoCaptureService`, `processPhoto` (EXIF rotation, 2048 px, JPEG 85, 320 px thumbnails, SHA-256), access-denied and no-camera messages, new dependency `image` 4.12.0.
-- Working loop agreed with the owner: check on the Windows laptop first, then ship to Android. Windows previews go to `C:\dev\attenlume-release\windows\` with the desktop shortcut "Attenlume (preview)".
+- ADR-033 (P1-16 done): bookmarks section in the activity details (offset into the recording, time of day, label, note; tap to edit or remove), notes section with a plain-Markdown editor (Add notes / Edit notes), Ctrl+B on the recording screen adds a bookmark with source `hotkey`.
+- `MediaAssetRepository.updateBookmarkText` and `deleteBookmark`; `formatOffset` in `lib/shared/utilities/date_formatters.dart`.
+- 8 new tests; `flutter test` 620 passed, analyze and format clean. J2 journey test passes on Windows (no mic or camera here).
 
 ## Left to do on this task
 
-- Nothing in code for P1-13 or P1-14. Thresholds become editable in P1-25 (Settings). iOS battery channel needs a Mac.
+- Nothing in code. FR-BMK-01 "appears on the review timeline and in exports" is delivered when P1-17 and P1-21/22 read `bookmarksFor`. iOS lock screen bookmark is Phase 2. Global Windows hotkey: see ADR-033.
 
 ## Exact next step
 
-Start **P1-16 Bookmarks and notes** on branch `phase-1/P1-16-bookmarks-notes` (`FR-BMK-01 to 03` in `docs/BUILD_GUIDE.md`). Then P1-17 (player, timeline, waveform). Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tool\build_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish; the owner releases Android 0.1.1 after checking Windows.
+Start **P1-17 Player, timeline, waveform summaries** on branch `phase-1/P1-17-player-timeline` (`FR-REV-01 to 03` in `docs/BUILD_GUIDE.md`). The timeline must show segments, gaps, interruptions, photos and bookmarks at their offsets (`MediaAssetRepository.segmentsFor`, `photosFor`, `bookmarksFor`; offset rule in `lib/domain/services/timeline_offset.dart`). Check `just_audio` Windows support before adopting it (ADR needed). P1-15 (gallery import by time window, `photo_manager`) is still todo and can follow. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tooluild_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
 
 ## Files touched
 
-New: `lib/features/capture/camera_screen.dart`, `lib/domain/services/photo_capture_service.dart`, `lib/data/filesystem/photo_processor.dart`, `test/domain/photo_capture_service_test.dart`, `test/data/filesystem/photo_processor_test.dart`.
-Changed: `lib/platform/camera/photo_camera.dart`, `lib/platform/camera/plugin_photo_camera.dart`, `lib/data/filesystem/media_paths.dart`, `lib/features/capture/recording_screen.dart`, `lib/features/capture/recording_providers.dart`, `android/.../ForegroundServiceChannel.kt`, `test/fixtures/fake_photo_camera.dart`, `test/features/capture/recording_screen_test.dart`, `integration_test/app_capture_journey_test.dart`, `pubspec.yaml`, `pubspec.lock`, `THIRD_PARTY_NOTICES.md`, docs.
+New: `lib/features/bookmarks/activity_bookmarks_section.dart`, `lib/features/bookmarks/activity_notes_section.dart`, `test/features/bookmarks/activity_bookmarks_notes_test.dart`.
+Changed: `lib/data/repositories/media_asset_repository.dart`, `lib/shared/utilities/date_formatters.dart`, `lib/features/conferences/activity_detail_sheet.dart`, `lib/features/capture/recording_screen.dart`, `test/data/repositories/media_repositories_test.dart`, `test/shared/date_formatters_test.dart`, `test/features/capture/recording_screen_test.dart`, docs.
 
 ## Failing or skipped tests
 
-None failing: `flutter test` 596 passed. `app_capture_journey_test.dart` passes on this PC up to the microphone and camera checks (none in the Remote Desktop session). The P0 device spikes still need real hardware.
+None failing: `flutter test` 620 passed. The P0 device spikes still need real hardware.
 
 ## Open questions for the owner
 
+- **ADR-033 (new):** Ctrl+B adds a bookmark only while the Attenlume window has focus. A system-wide hotkey needs a new native package (for example `hotkey_manager`) and is left for Phase 2 or P1-27. Notes are shown as plain Markdown text, not rendered. Say if you want either sooner.
 - **ADR-030 (new):** Photo opens a full-screen camera (two taps for the first photo, one for each after). Photos are stored at a 2048 px long edge, JPEG quality 85. Say if you want a different size or a small preview on the recording screen instead.
 - **Overnight relay:** Claude Code blocked me from adding Codex to `tool/overnight.ps1` and from starting the relay, because the relay runs agents with all permission checks switched off (`--dangerously-skip-permissions`, and for Codex `--dangerously-bypass-approvals-and-sandbox`). Your decision: start it yourself, or allow it in Claude Code settings. Codex also needs `npm i -g @openai/codex` and `codex login`.
 - **ADR-026 (new):** Free space calculation for Android queries `StatFs.availableBytes` on `context.filesDir`, and iOS queries `volumeAvailableCapacityForImportantUsageKey` on the documents directory. Measured file growth rate averages over the active segment (after 5s) or prior activity segments, falling back to nominal profile rate. Hard stop reserve is 100 MB (`storage_low`). Confirm this meets expectations.

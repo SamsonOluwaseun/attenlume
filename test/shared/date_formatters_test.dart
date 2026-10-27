@@ -15,6 +15,14 @@ void main() {
       );
     });
 
+    test('FR-BMK-01 formatOffset shows m:ss, h:mm:ss and before start', () {
+      expect(formatOffset(0), '0:00');
+      expect(formatOffset(245000), '4:05');
+      expect(formatOffset(245999), '4:05');
+      expect(formatOffset(3725000), '1:02:05');
+      expect(formatOffset(-12000), '-0:12');
+    });
+
     test('formatStorageBytes formats bytes, KB, MB and GB', () {
       expect(formatStorageBytes(0), '0 B');
       expect(formatStorageBytes(512), '512 B');

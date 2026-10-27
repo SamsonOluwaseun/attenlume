@@ -283,14 +283,17 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     }
   }
 
-  Future<void> _handleAddBookmark([String? label]) async {
+  Future<void> _handleAddBookmark([
+    String? label,
+    BookmarkSource source = BookmarkSource.ui,
+  ]) async {
     await HapticFeedback.lightImpact();
     final mediaRepo = ref.read(mediaAssetRepositoryProvider);
 
     try {
       await mediaRepo.addBookmark(
         activityId: _activity!.id,
-        source: BookmarkSource.ui,
+        source: source,
         label: label ?? 'Bookmark',
       );
 
@@ -398,244 +401,259 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         ref.watch(storageBudgetSnapshotProvider).value ??
         ref.watch(storageBudgetServiceProvider).currentSnapshot;
 
-    return Theme(
-      data: AppTheme.live(),
-      child: Scaffold(
-        key: const Key('recording-screen-scaffold'),
-        backgroundColor: liveSurface,
-        appBar: AppBar(
-          backgroundColor: liveSurface,
-          elevation: 0,
-          leading: IconButton(
-            key: const Key('recording-screen-back'),
-            icon: Icon(Icons.arrow_back_rounded, color: onLiveSurface),
-            onPressed:
-                widget.onBack ??
-                () => unawaited(Navigator.of(context).maybePop()),
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                act.title,
-                key: const Key('recording-screen-title'),
-                style: TextStyle(
-                  fontFamily: TokenType.fontFamily,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: onLiveSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    // Ctrl+B adds a bookmark from a keyboard: the Windows hotkey
+    // (FR-BMK-03) while the window has focus. Global hotkeys: ADR-033.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyB, control: true): () =>
+            unawaited(_handleAddBookmark(null, BookmarkSource.hotkey)),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Theme(
+          data: AppTheme.live(),
+          child: Scaffold(
+            key: const Key('recording-screen-scaffold'),
+            backgroundColor: liveSurface,
+            appBar: AppBar(
+              backgroundColor: liveSurface,
+              elevation: 0,
+              leading: IconButton(
+                key: const Key('recording-screen-back'),
+                icon: Icon(Icons.arrow_back_rounded, color: onLiveSurface),
+                onPressed:
+                    widget.onBack ??
+                    () => unawaited(Navigator.of(context).maybePop()),
               ),
-              if (conf != null)
-                Text(
-                  '${conf.name}${act.room != null && act.room!.isNotEmpty ? " · ${act.room}" : ""}',
-                  key: const Key('recording-screen-subtitle'),
-                  style: TextStyle(
-                    fontFamily: TokenType.fontFamily,
-                    fontSize: 12,
-                    color: onLiveSurfaceMuted,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              key: const Key('recording-screen-mic-test'),
-              icon: Icon(Icons.mic_external_on_rounded, color: onLiveSurface),
-              tooltip: 'Test microphone',
-              onPressed: _handleOpenMicTest,
-            ),
-          ],
-        ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TokenSpace.space4,
-              vertical: TokenSpace.space3,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Input source indicator row (FR-UI-06)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.mic_rounded,
-                      size: 16,
-                      color: onLiveSurfaceMuted,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    act.title,
+                    key: const Key('recording-screen-title'),
+                    style: TextStyle(
+                      fontFamily: TokenType.fontFamily,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: onLiveSurface,
                     ),
-                    const SizedBox(width: TokenSpace.space1),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (conf != null)
                     Text(
-                      _inputDeviceLabel,
-                      key: const Key('input-source-indicator'),
+                      '${conf.name}${act.room != null && act.room!.isNotEmpty ? " · ${act.room}" : ""}',
+                      key: const Key('recording-screen-subtitle'),
                       style: TextStyle(
                         fontFamily: TokenType.fontFamily,
                         fontSize: 12,
                         color: onLiveSurfaceMuted,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
+                ],
+              ),
+              actions: [
+                IconButton(
+                  key: const Key('recording-screen-mic-test'),
+                  icon: Icon(
+                    Icons.mic_external_on_rounded,
+                    color: onLiveSurface,
+                  ),
+                  tooltip: 'Test microphone',
+                  onPressed: _handleOpenMicTest,
                 ),
-
-                const SizedBox(height: TokenSpace.space3),
-
-                // Interruption or Error Banner (FR-REC-05, ADR-021)
-                if (isThisRecording &&
-                    (status.interruption != null ||
-                        status.state == RecordingState.userResumeRequired ||
-                        status.state == RecordingState.errorRecoverable)) ...[
-                  Container(
-                    key: const Key('recording-interruption-banner'),
-                    padding: const EdgeInsets.all(TokenSpace.space3),
-                    decoration: BoxDecoration(
-                      color: warningFill.withValues(alpha: 0.15),
-                      borderRadius: const BorderRadius.all(
-                        Radius.circular(TokenRadius.radiusMd),
-                      ),
-                      border: Border.all(color: warningFill),
-                    ),
-                    child: Row(
+              ],
+            ),
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TokenSpace.space4,
+                  vertical: TokenSpace.space3,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Input source indicator row (FR-UI-06)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.phone_disabled_rounded,
-                          color: warningFill,
-                          size: 24,
+                          Icons.mic_rounded,
+                          size: 16,
+                          color: onLiveSurfaceMuted,
                         ),
-                        const SizedBox(width: TokenSpace.space3),
-                        Expanded(
-                          child: Text(
-                            status.errorMessage ??
-                                'Recording paused for a call or another app.',
-                            style: TextStyle(
-                              fontFamily: TokenType.fontFamily,
-                              fontSize: 14,
-                              color: onLiveSurface,
-                            ),
+                        const SizedBox(width: TokenSpace.space1),
+                        Text(
+                          _inputDeviceLabel,
+                          key: const Key('input-source-indicator'),
+                          style: TextStyle(
+                            fontFamily: TokenType.fontFamily,
+                            fontSize: 12,
+                            color: onLiveSurfaceMuted,
                           ),
-                        ),
-                        const SizedBox(width: TokenSpace.space2),
-                        FilledButton(
-                          key: const Key('recording-resume-banner-button'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor:
-                                attenlume?.surfaceBrand ??
-                                const Color(0xFF4392F1),
-                            foregroundColor:
-                                attenlume?.onBrandLarge ??
-                                const Color(0xFFFEFFF8),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: _handleResume,
-                          child: const Text('Resume'),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: TokenSpace.space3),
-                ],
 
-                // Safety prompt (FR-REC-06) [P1-13]. Never stops recording.
-                if (_safetyPrompt != null &&
-                    isThisRecording &&
-                    status.state.holdsActivity) ...[
-                  _SafetyPromptBanner(
-                    prompt: _safetyPrompt!,
-                    activityTitle: act.title,
-                    warningFill: warningFill,
-                    onLiveSurface: onLiveSurface,
-                    onKeep: () => setState(() => _safetyPrompt = null),
-                    onStop: () {
-                      setState(() => _safetyPrompt = null);
-                      unawaited(_handleStop());
-                    },
-                  ),
-                  const SizedBox(height: TokenSpace.space3),
-                ],
+                    const SizedBox(height: TokenSpace.space3),
 
-                // Main RecordButton Anatomy (Status, Timer, LevelMeter, 96px controls, Secondary row)
-                RecordButton(
-                  key: const Key('main-record-button'),
-                  state: liveState,
-                  elapsed: _elapsed,
-                  activityTitle: act.title,
-                  levelDbfs: _currentLevelDbfs,
-                  storageMeter: StorageMeter(
-                    key: const Key('recording-screen-storage-meter'),
-                    freeBytes: budgetSnapshot.freeBytes,
-                    totalBytes: budgetSnapshot.totalBytes,
-                    minutesLeft: budgetSnapshot.minutesLeft,
-                    profile: profileInUse,
-                    level: budgetSnapshot.level,
-                    conferenceBytes: budgetSnapshot.conferenceBytes,
-                    compact: true,
-                  ),
-                  clock: widget.clock,
-                  onRecord: _handleStartRecord,
-                  onPause: _handlePause,
-                  onResume: _handleResume,
-                  onStop: _handleStop,
-                  onPhoto: _handleTakePhoto,
-                  onBookmark: _handleAddBookmark,
-                  onNote: _handleOpenNote,
-                ),
-
-                const SizedBox(height: TokenSpace.space4),
-
-                // Bookmark Chips Row (FR-UI-04)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        'One-tap bookmarks',
-                        style: TextStyle(
-                          fontFamily: TokenType.fontFamily,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: onLiveSurfaceMuted,
+                    // Interruption or Error Banner (FR-REC-05, ADR-021)
+                    if (isThisRecording &&
+                        (status.interruption != null ||
+                            status.state == RecordingState.userResumeRequired ||
+                            status.state ==
+                                RecordingState.errorRecoverable)) ...[
+                      Container(
+                        key: const Key('recording-interruption-banner'),
+                        padding: const EdgeInsets.all(TokenSpace.space3),
+                        decoration: BoxDecoration(
+                          color: warningFill.withValues(alpha: 0.15),
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(TokenRadius.radiusMd),
+                          ),
+                          border: Border.all(color: warningFill),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: TokenSpace.space2),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final chip in BookmarkChip.standardChips) ...[
-                            BookmarkChip(
-                              key: Key('bookmark-chip-$chip'),
-                              label: chip,
-                              onLiveSurface: true,
-                              onPress: () => _handleAddBookmark(chip),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.phone_disabled_rounded,
+                              color: warningFill,
+                              size: 24,
+                            ),
+                            const SizedBox(width: TokenSpace.space3),
+                            Expanded(
+                              child: Text(
+                                status.errorMessage ?? 'Recording paused for a call or another app.',
+                                style: TextStyle(
+                                  fontFamily: TokenType.fontFamily,
+                                  fontSize: 14,
+                                  color: onLiveSurface,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: TokenSpace.space2),
+                            FilledButton(
+                              key: const Key('recording-resume-banner-button'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    attenlume?.surfaceBrand ??
+                                    const Color(0xFF4392F1),
+                                foregroundColor:
+                                    attenlume?.onBrandLarge ??
+                                    const Color(0xFFFEFFF8),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              onPressed: _handleResume,
+                              child: const Text('Resume'),
+                            ),
                           ],
-                        ],
+                        ),
                       ),
+                      const SizedBox(height: TokenSpace.space3),
+                    ],
+
+                    // Safety prompt (FR-REC-06) [P1-13]. Never stops recording.
+                    if (_safetyPrompt != null &&
+                        isThisRecording &&
+                        status.state.holdsActivity) ...[
+                      _SafetyPromptBanner(
+                        prompt: _safetyPrompt!,
+                        activityTitle: act.title,
+                        warningFill: warningFill,
+                        onLiveSurface: onLiveSurface,
+                        onKeep: () => setState(() => _safetyPrompt = null),
+                        onStop: () {
+                          setState(() => _safetyPrompt = null);
+                          unawaited(_handleStop());
+                        },
+                      ),
+                      const SizedBox(height: TokenSpace.space3),
+                    ],
+
+                    // Main RecordButton Anatomy (Status, Timer, LevelMeter, 96px controls, Secondary row)
+                    RecordButton(
+                      key: const Key('main-record-button'),
+                      state: liveState,
+                      elapsed: _elapsed,
+                      activityTitle: act.title,
+                      levelDbfs: _currentLevelDbfs,
+                      storageMeter: StorageMeter(
+                        key: const Key('recording-screen-storage-meter'),
+                        freeBytes: budgetSnapshot.freeBytes,
+                        totalBytes: budgetSnapshot.totalBytes,
+                        minutesLeft: budgetSnapshot.minutesLeft,
+                        profile: profileInUse,
+                        level: budgetSnapshot.level,
+                        conferenceBytes: budgetSnapshot.conferenceBytes,
+                        compact: true,
+                      ),
+                      clock: widget.clock,
+                      onRecord: _handleStartRecord,
+                      onPause: _handlePause,
+                      onResume: _handleResume,
+                      onStop: _handleStop,
+                      onPhoto: _handleTakePhoto,
+                      onBookmark: _handleAddBookmark,
+                      onNote: _handleOpenNote,
                     ),
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Bookmark Chips Row (FR-UI-04)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            'One-tap bookmarks',
+                            style: TextStyle(
+                              fontFamily: TokenType.fontFamily,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: onLiveSurfaceMuted,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: TokenSpace.space2),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final chip
+                                  in BookmarkChip.standardChips) ...[
+                                BookmarkChip(
+                                  key: Key('bookmark-chip-$chip'),
+                                  label: chip,
+                                  onLiveSurface: true,
+                                  onPress: () => _handleAddBookmark(chip),
+                                ),
+                                const SizedBox(width: TokenSpace.space2),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: TokenSpace.space5),
+
+                    // Quality Profile Selector (FR-UI-08)
+                    RecordingProfileSelector(
+                      key: const Key('recording-screen-profile-selector'),
+                      selected: profileInUse,
+                      live: isHolding,
+                      onChanged: isHolding
+                          ? _changeLiveProfile
+                          : _setProfileOverride,
+                    ),
+
+                    const SizedBox(height: TokenSpace.space4),
                   ],
                 ),
-
-                const SizedBox(height: TokenSpace.space5),
-
-                // Quality Profile Selector (FR-UI-08)
-                RecordingProfileSelector(
-                  key: const Key('recording-screen-profile-selector'),
-                  selected: profileInUse,
-                  live: isHolding,
-                  onChanged: isHolding
-                      ? _changeLiveProfile
-                      : _setProfileOverride,
-                ),
-
-                const SizedBox(height: TokenSpace.space4),
-              ],
+              ),
             ),
           ),
         ),
