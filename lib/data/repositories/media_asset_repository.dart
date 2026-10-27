@@ -42,14 +42,7 @@ class MediaAssetRepository {
     DateTime? startUtc,
   }) => _db.transaction(() async {
     final start = (startUtc ?? _clock()).toUtc();
-    final maxSeq = _db.recordingSegments.sequence.max();
-    final last =
-        await (_db.selectOnly(_db.recordingSegments)
-              ..addColumns([maxSeq])
-              ..where(_db.recordingSegments.activityId.equals(activityId)))
-            .map((r) => r.read(maxSeq))
-            .getSingle();
-    final sequence = (last ?? 0) + 1;
+    final sequence = await nextSegmentSequence(activityId);
     final now = _clock();
     final id = _newId();
     await _db
@@ -119,7 +112,23 @@ class MediaAssetRepository {
     }
   }
 
+  /// The sequence [startSegment] will give the next segment of an
+  /// activity, so callers can name its file first [P1-04].
+  Future<int> nextSegmentSequence(String activityId) async {
+    final maxSeq = _db.recordingSegments.sequence.max();
+    final last =
+        await (_db.selectOnly(_db.recordingSegments)
+              ..addColumns([maxSeq])
+              ..where(_db.recordingSegments.activityId.equals(activityId)))
+            .map((r) => r.read(maxSeq))
+            .getSingle();
+    return (last ?? 0) + 1;
+  }
+
   /// Marks a segment finished with what was actually written.
+  ///
+  /// Format fields left null keep the values requested at start. Pass the
+  /// ones read from the finished file (FR-QUAL-06).
   Future<RecordingSegment> finaliseSegment(
     String id, {
     required DateTime endUtc,
@@ -128,6 +137,10 @@ class MediaAssetRepository {
     int? bytes,
     String? sha256,
     int? observedBitrateBps,
+    String? codec,
+    String? container,
+    int? channelCount,
+    int? sampleRateHz,
     SegmentState state = SegmentState.finalised,
   }) async {
     await (_db.update(
@@ -141,6 +154,10 @@ class MediaAssetRepository {
         bytes: Value(bytes),
         sha256: Value(sha256),
         observedBitrateBps: Value(observedBitrateBps),
+        codec: Value.absentIfNull(codec),
+        container: Value.absentIfNull(container),
+        channelCount: Value.absentIfNull(channelCount),
+        sampleRateHz: Value.absentIfNull(sampleRateHz),
         updatedAt: Value(_clock()),
       ),
     );
