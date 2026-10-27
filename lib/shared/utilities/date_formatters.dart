@@ -127,6 +127,19 @@ String formatStorageBytes(int bytes) {
   return '${gb.toStringAsFixed(1)} GB';
 }
 
+/// Formats a recording offset (FR-BMK-01) [P1-16]: "4:05" under an hour,
+/// "1:02:05" from an hour. Events before the first segment (negative
+/// offsets, BUILD_GUIDE 9.4) get a leading minus: "-0:12".
+String formatOffset(int offsetMs) {
+  if (offsetMs < 0) return '-${formatOffset(-offsetMs)}';
+  final total = offsetMs ~/ 1000;
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = (total % 60).toString().padLeft(2, '0');
+  if (h == 0) return '$m:$s';
+  return '$h:${m.toString().padLeft(2, '0')}:$s';
+}
+
 /// Formats UTC instant as "HH:mm" in conference timezone (FR-ACT-03).
 String formatTimeOfDayInTimezone(DateTime utcTime, String timezone) {
   final local = toConferenceTime(utcTime, timezone);

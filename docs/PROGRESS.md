@@ -617,6 +617,14 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - Tests: 12 new (8 service, 2 battery channel, 2 recording screen). `flutter test` 612 passed, `flutter analyze` clean.
 - Devices unverified (thresholds and battery channel).
 
+## 27 October 2026: P1-16 bookmarks and notes (Claude Code, Opus 5.5, overnight relay)
+
+- Before changes: `flutter analyze` clean, `flutter test` 612 passed.
+- ADR-033: bookmarks section in the activity details (offset, time of day, label, note; edit and remove), notes section with a plain-Markdown editor, Ctrl+B on the recording screen adds a `hotkey` bookmark. `MediaAssetRepository.updateBookmarkText`, `deleteBookmark`; `formatOffset`.
+- Tests: 8 new (2 repository, 1 formatter, 4 widget, 1 recording screen hotkey). `flutter test` 620 passed, `flutter analyze` clean, `dart format` clean, notices up to date.
+- `integration_test/app_capture_journey_test.dart` on Windows passed (no microphone or camera on this PC, so recording, bookmark and shutter steps not run).
+- Devices unverified (notification bookmark, Ctrl+B on a Surface keyboard).
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -653,3 +661,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | Notification permission | done (device unverified) | Android 13+ POST_NOTIFICATIONS requested on first recording. ADR-029 |
 | P1-14 | done (device camera unverified) | Camera screen, compression, thumbnails, SHA-256, import with labels, captions. 19 new tests (600 total). ADR-030, ADR-031 |
 | P1-13 | done (device thresholds unverified) | SafetyPromptService, recording screen banner, Android battery channel, 12 new tests (612 total). ADR-032 |
+| P1-16 | done (devices unverified) | Bookmarks list with edit and remove, notes editor, Ctrl+B hotkey bookmark, 8 new tests (620 total). ADR-033. Timeline and export use come with P1-17 and P1-21/22 |

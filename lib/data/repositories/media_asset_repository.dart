@@ -382,4 +382,31 @@ class MediaAssetRepository {
             ..where((b) => b.activityId.equals(activityId))
             ..orderBy([(b) => OrderingTerm.asc(b.atUtc)]))
           .get();
+
+  /// Sets a bookmark's label and note (FR-BMK-01) [P1-16]. Blank text
+  /// clears the field. Time and offset never change.
+  Future<Bookmark> updateBookmarkText(
+    String bookmarkId, {
+    String? label,
+    String? note,
+  }) async {
+    String? clean(String? s) =>
+        (s == null || s.trim().isEmpty) ? null : s.trim();
+    await (_db.update(
+      _db.bookmarks,
+    )..where((b) => b.id.equals(bookmarkId))).write(
+      BookmarksCompanion(
+        label: Value(clean(label)),
+        note: Value(clean(note)),
+        updatedAt: Value(_clock()),
+      ),
+    );
+    return (_db.select(
+      _db.bookmarks,
+    )..where((b) => b.id.equals(bookmarkId))).getSingle();
+  }
+
+  /// Removes one bookmark [P1-16]. Audio and photos are not touched.
+  Future<void> deleteBookmark(String bookmarkId) =>
+      (_db.delete(_db.bookmarks)..where((b) => b.id.equals(bookmarkId))).go();
 }

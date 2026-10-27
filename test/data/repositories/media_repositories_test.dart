@@ -291,4 +291,55 @@ void main() {
       expect(b.atUtc, local.toUtc());
     });
   });
+
+  group('FR-BMK-01 bookmark editing [P1-16]', () {
+    test('FR-BMK-01 label and note change, time and offset stay', () async {
+      final c = await t.conference();
+      final a = await t.activity(c.id);
+      final start = DateTime.utc(2026, 11, 4, 10);
+      await t.segment(a.id, start: start, length: const Duration(minutes: 10));
+      final b = await t.media.addBookmark(
+        activityId: a.id,
+        source: BookmarkSource.ui,
+        atUtc: start.add(const Duration(minutes: 4, seconds: 5)),
+        label: 'Bookmark',
+      );
+
+      final updated = await t.media.updateBookmarkText(
+        b.id,
+        label: '  Key slide ',
+        note: 'Ask about the replication data',
+      );
+      expect(updated.label, 'Key slide');
+      expect(updated.note, 'Ask about the replication data');
+      expect(updated.atUtc, b.atUtc);
+      expect(updated.offsetMs, 245000);
+
+      final cleared = await t.media.updateBookmarkText(b.id, label: ' ');
+      expect(cleared.label, isNull);
+      expect(cleared.note, isNull);
+    });
+
+    test('FR-BMK-01 deleting a bookmark leaves segments and others', () async {
+      final c = await t.conference();
+      final a = await t.activity(c.id);
+      final start = DateTime.utc(2026, 11, 4, 10);
+      await t.segment(a.id, start: start, length: const Duration(minutes: 10));
+      final first = await t.media.addBookmark(
+        activityId: a.id,
+        source: BookmarkSource.ui,
+        atUtc: start.add(const Duration(minutes: 1)),
+      );
+      final second = await t.media.addBookmark(
+        activityId: a.id,
+        source: BookmarkSource.notification,
+        atUtc: start.add(const Duration(minutes: 2)),
+      );
+
+      await t.media.deleteBookmark(first.id);
+
+      expect((await t.media.bookmarksFor(a.id)).map((b) => b.id), [second.id]);
+      expect(await t.media.segmentsFor(a.id), hasLength(1));
+    });
+  });
 }
