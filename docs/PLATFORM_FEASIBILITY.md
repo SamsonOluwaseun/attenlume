@@ -24,7 +24,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | Microphone capture while minimised | P0-06 | n/a | n/a | **blocked** (no capture device in the build host's Remote Desktop session, see 2.6.1) | Harness ready: `integration_test/p0_06_windows_mic_test.dart`, manual steps MT-16 |
 | AAC-LC at 32, 48, 64 kbps mono | P0-06, P0-12 | unverified | unverified | **not available per docs**, plugin source picks the nearest supported rate (2.6.1). On-device bitrate **blocked** | Windows encoder minimum is 96 kbps. AAC-LC encoder present on build host: `isEncoderSupported(aacLc)` true |
 | Export to user-chosen folder | P0-06 | unverified | unverified | **partial**: streaming copy, SHA-256 verify and no-overwrite pass on the build host (unit tests). Folder picker not built yet (P1-21) | `lib/data/filesystem/folder_export.dart` |
-| Bluetooth mic routing and fallback | P0-07 | unverified | unverified | unverified | Needs headset and lapel mic |
+| Bluetooth mic routing and fallback | P0-07 | **blocked: needs real device and headset** (harness ready; active input not reported, see 2.4.3) | **blocked: needs Mac, iPhone and headset** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.4.3) | `integration_test/p0_07_bluetooth_routing_test.dart`, manual steps MT-20. Routing logic tested with fakes only |
 | 90-minute low-spec recording: memory, size, battery | P0-10 | **blocked: needs real device** (harness ready; locked part expected silent until P1-11) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.4.2) | `integration_test/p0_10_long_run_test.dart`, manual steps MT-19. No figures until measured |
 | Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | **pass** (Windows probe, preflight, disk-full cleanup, streaming folder and ZIP exports with bounded RAM; see 2.12) | Real RSS measured: delta 10.3 MB (folder), 5.6 MB (ZIP) on a 1 GiB file |
 | Per-segment profile switch, observed bitrate | P0-12 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.3.1) | `integration_test/p0_12_profile_switch_test.dart`, manual steps MT-18. Switch logic tested with fakes only |
@@ -136,6 +136,25 @@ Built on the Windows build host. **No audio was captured and no device figures e
 | Android | not run | | | | | | blocked: needs real device |
 | iOS | not run | | | | | | blocked: needs Mac and iPhone |
 | Windows | build host, RDP | 0 | | | | | blocked: no capture device |
+
+### 2.4.3 Spike P0-07 harness (27 October 2026)
+
+Built on the Windows build host. **No headset was connected and no audio was captured.** Everything below about phones is read from package source and docs, not observed.
+
+- Harness: `BluetoothRoutingSpike` (`lib/spikes/bluetooth_routing_spike.dart`) runs the real `RecordingService` with `RecordCaptureEngine` for `P0_07_SECONDS` (default 180). It reads the available and active inputs at the start, after every `devicesChanged` or `becomingNoisy` event and once a second, so the report says whether a change was seen by an event or only by polling. Each change calls `RecordingService.routeChanged`, which ends the segment with `route_change` and starts the next on whatever input the system now gives. A lost input becomes a `route_lost` interruption row (the FR-REC-07 timeline marker). If no mic can start, the recorder waits in `userResumeRequired` and the spike resumes when an input appears, standing in for the user's tap. After the run each file is inspected again and compared with its row (AT-QUAL-03). Observations only.
+- **What each platform tells us** (ADR-016):
+  - iOS: `AVAudioSession.currentRoute.inputs` through `audio_session` names the input in use (`bluetoothHFP`, `builtInMic` and so on). The session already allows Bluetooth input (`allowBluetooth`, ADR-013), so the OS should move to a hands-free headset when it connects. Docs: https://developer.apple.com/documentation/avfaudio/avaudiosession/currentroute
+  - Android: `audio_session` lists input devices (`AudioManager.getDevices`) and sends add and remove events, but nothing in `audio_session` 0.2.4 or `record` 7.1.2 reports which device `AudioRecord` is routed to (`AudioRecord.getRoutedDevice`). The active input is therefore unknown, `input_route` stays empty and every device change cuts a boundary. Android also does not route recording to a Bluetooth SCO mic unless SCO is started or the device is chosen explicitly, so the built-in mic is expected to stay in use after a headset connects (expectation, not observed). Docs: https://developer.android.com/reference/android/media/AudioRecord#getRoutedDevice()
+  - Windows: `record_windows` lists inputs by name but not the system default, and there are no device events (`NoAudioInterruptions`), so changes are only seen by polling and the kind is guessed from the name.
+- Bluetooth hands-free mics usually run at 8 or 16 kHz. The encoder may still write a 48 kHz file, so the file's metadata cannot show a narrowband source. The tester has to listen (MT-20 step 7).
+- Run on the build host (Windows 11 Pro 26200, Remote Desktop session, `-d windows`, `P0_07_SECONDS=10`): start failed with `PlatformException(Record, null, No audio recording device was found., null)`. One `damaged` row, no route changes. **Blocked**, same cause as P0-06, P0-10 and P0-12.
+- Unit tests with fakes: `test/spikes/bluetooth_routing_spike_test.dart` (11), `test/domain/recording_service_route_test.dart` (10), `test/platform/audio_route_probe_test.dart` (5). They prove the routing logic and the report, not the platform.
+
+| Platform | Device, OS and headset | Active input reported | Changes by event / poll only | Segments, route_change | Mislabelled (AT-QUAL-03) | Fallback heard | Result |
+|---|---|---|---|---|---|---|---|
+| Android | not run | | | | | | blocked: needs real device and headset |
+| iOS | not run | | | | | | blocked: needs Mac, iPhone and headset |
+| Windows | build host, RDP | no | 0 / 0 | 1 damaged, 0 | 0 | no audio | blocked: no capture device |
 
 ### 2.5 iOS background recording and interruptions
 

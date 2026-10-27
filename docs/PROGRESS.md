@@ -323,6 +323,27 @@ Test results on phase-0/P0-10-long-run-spike (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-07 Bluetooth mic routing and fallback spike harness
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 309 passed.
+- Picked P0-07 over P1-05 because the agent prompt puts Phase 0 first and P0-07's dependency (P0-04) is blocked-on-device.
+- `lib/platform/audio_route/`: `AudioRouteProbe`, `InputRoute`, `InputRouteKind`, `classifyInputLabel`, `NoAudioRouteProbe`; `AudioSessionRouteProbe` (iOS active input from `AVAudioSession.currentRoute`, Android and iOS device list from `audio_session`); `EngineRouteProbe` (Windows, engine device list). Provider `audioRouteProbeProvider`, wired into `recordingServiceProvider`.
+- `RecordingService`: each segment stores the active input in `input_route` and `RecordingStatus.inputRoute` (null when unknown, never guessed) [FR-QUAL-06]. New `routeChanged({force})` with `RouteChangeResult` [FR-REC-03, FR-REC-07]: rolls through `switchingSegment` with end reason `route_change`; if no mic can start, keeps the written segment and waits in `userResumeRequired`. New transition `switchingSegment -> userResumeRequired`.
+- `BluetoothRoutingSpike` (`lib/spikes/bluetooth_routing_spike.dart`): inputs at start, on device events and once a second; rolls on change; `route_lost` markers; reinspects every file against its row (AT-QUAL-03); per-route max level; JSON and Markdown. Observations only.
+- Device test `integration_test/p0_07_bluetooth_routing_test.dart` (Android, iOS, Windows) and manual steps MT-20 in `TEST_PLAN.md`.
+- `FakeCaptureEngine` gained `deliveredChannels`, `deliveredSampleRateHz` and `inputs`. New `test/fixtures/fake_route_probe.dart`.
+- ADR-016 recorded. `PLATFORM_FEASIBILITY.md` 1 and 2.4.3, `TEST_PLAN.md` (2.1, MT-20, AT-QUAL-03, results log) and `ARCHITECTURE.md` 8.6 and 9 updated. No new packages.
+- **No audio captured, no headset used.** The device test was run on the build host with `-d windows` for 10 s: start failed with "No audio recording device was found." (Remote Desktop session). P0-07 is blocked: needs real devices and Bluetooth headsets on all three platforms.
+
+Test results on phase-0/P0-07-bluetooth-routing-spike (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 335 passed, 0 failed (26 new: 10 in `recording_service_route_test.dart`, 5 in `audio_route_probe_test.dart`, 11 in `bluetooth_routing_spike_test.dart`; 1 path added to `recording_state_test.dart`).
+- `integration_test/p0_07_bluetooth_routing_test.dart -d windows`: failed as expected, no microphone (blocked, not a code fault).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -342,4 +363,5 @@ Test results on phase-0/P0-10-long-run-spike (Windows 11 build host):
 | P0-04 | blocked: needs real device | Harness, device test and MT-17 steps built, 10 unit tests with fakes pass (275 total). ADR-013. Android rerun needed after P1-11 |
 | P0-12 | blocked: needs real device | Harness, `RecordingService.changeProfile`, device test and MT-18 steps built, 16 unit tests with fakes pass (291 total). ADR-014. Windows run on build host blocked (no capture device) |
 | P0-10 | blocked: needs real device | Harness, memory and battery probes, device test and MT-19 steps built, 18 unit tests with fakes pass (309 total). ADR-015. Windows run on build host blocked (no capture device) |
-| P0-05, P0-07, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these |
+| P0-07 | blocked: needs real device and headsets | Route probe, `RecordingService.routeChanged`, harness, device test and MT-20 steps built, 26 unit tests with fakes pass (335 total). ADR-016. Windows run on build host blocked (no capture device) |
+| P0-05, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these |

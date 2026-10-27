@@ -32,6 +32,8 @@ enum RecordingState {
 /// - `recovering` may go to `userResumeRequired` when the OS refuses resume.
 /// - `userResumeRequired` and `errorRecoverable` may go to `stopping`, so
 ///   the user can always save what was written.
+/// - `switchingSegment` may go to `userResumeRequired` when the input is
+///   lost and no other microphone can start (ADR-016, FR-REC-07).
 const Map<RecordingState, Set<RecordingState>> recordingTransitions = {
   RecordingState.idle: {RecordingState.starting},
   RecordingState.starting: {RecordingState.recording},
@@ -43,7 +45,10 @@ const Map<RecordingState, Set<RecordingState>> recordingTransitions = {
     RecordingState.storageStop,
   },
   RecordingState.paused: {RecordingState.recording, RecordingState.stopping},
-  RecordingState.switchingSegment: {RecordingState.recording},
+  RecordingState.switchingSegment: {
+    RecordingState.recording,
+    RecordingState.userResumeRequired,
+  },
   RecordingState.interrupted: {
     RecordingState.recovering,
     RecordingState.userResumeRequired,
@@ -79,6 +84,7 @@ class RecordingStatus {
     this.segmentId,
     this.segmentSequence,
     this.segmentStartUtc,
+    this.inputRoute,
     this.errorMessage,
   });
 
@@ -97,6 +103,10 @@ class RecordingStatus {
   final String? segmentId;
   final int? segmentSequence;
   final DateTime? segmentStartUtc;
+
+  /// The input the open segment records from (FR-REC-07), as stored in
+  /// `input_route`. Null when the platform does not say.
+  final String? inputRoute;
 
   /// Plain description of the last failure, in
   /// [RecordingState.errorRecoverable].

@@ -37,6 +37,12 @@ void main() {
           RecordingState.stopping,
           RecordingState.saved,
         ],
+        // ADR-016: input lost and no other mic could start [FR-REC-07].
+        [
+          RecordingState.switchingSegment,
+          RecordingState.userResumeRequired,
+          RecordingState.recording,
+        ],
         [RecordingState.paused, RecordingState.stopping],
         [RecordingState.interrupted, RecordingState.stopping],
         [

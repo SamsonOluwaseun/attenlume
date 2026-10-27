@@ -11,6 +11,9 @@ import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
 import '../../platform/audio_capture/record_capture_engine.dart';
+import '../../platform/audio_route/audio_route_probe.dart';
+import '../../platform/audio_route/audio_session_route_probe.dart';
+import '../../platform/audio_route/engine_route_probe.dart';
 
 // Recording wiring [P1-04]. Tests override audioCaptureEngineProvider and
 // mediaRootProvider.
@@ -24,6 +27,14 @@ CapturePlatform currentCapturePlatform() {
 
 final audioCaptureEngineProvider = Provider<AudioCaptureEngine>(
   (ref) => RecordCaptureEngine(),
+);
+
+/// Which microphone is in use (ADR-016) [P0-07]. Windows only lists the
+/// engine's inputs.
+final audioRouteProbeProvider = Provider<AudioRouteProbe>(
+  (ref) => Platform.isWindows
+      ? EngineRouteProbe(ref.watch(audioCaptureEngineProvider))
+      : AudioSessionRouteProbe(),
 );
 
 /// `<app documents>/media/` (BUILD_GUIDE 9.5).
@@ -45,6 +56,7 @@ final recordingServiceProvider = Provider<RecordingService>((ref) {
     media: ref.watch(mediaAssetRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
     platform: currentCapturePlatform(),
+    routes: ref.watch(audioRouteProbeProvider),
   );
   ref.onDispose(service.dispose);
   return service;

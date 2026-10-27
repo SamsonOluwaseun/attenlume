@@ -233,6 +233,12 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/platform/diagnostics/`: `MemoryProbe` with `ProcessMemoryProbe` (`ProcessInfo` RSS and peak), `BatteryProbe` with `WindowsBatteryProbe` (`GetSystemPowerStatus` through `dart:ffi`) and `UnknownBatteryProbe` (Android and iOS until P1-13). ADR-015.
 - `lib/spikes/long_run_spike.dart`: records for a fixed time through `RecordingService`, samples RSS, open-file size, level and battery, and reports the RSS trend, file rate, MB per hour and battery drain. Device test `integration_test/p0_10_long_run_test.dart` (MT-19).
 
+### 8.6 Added in P0-07
+
+- `lib/platform/audio_route/`: `AudioRouteProbe` with `InputRoute` and `InputRouteKind`, `AudioSessionRouteProbe` (Android and iOS through `audio_session`; only iOS reports the active input) and `EngineRouteProbe` (Windows, from the engine's device list, kind guessed from the name). Provider `audioRouteProbeProvider`. ADR-016.
+- `RecordingService` stores the active input in `recording_segments.input_route` and `RecordingStatus.inputRoute`, and `routeChanged({force})` rolls the segment with reason `route_change`, or waits in `userResumeRequired` when no mic can start (FR-REC-03, FR-REC-07).
+- `lib/spikes/bluetooth_routing_spike.dart`: logs inputs at start, on device events and once a second, rolls on change, logs `route_lost` markers and checks every row against its file (AT-QUAL-03). Device test `integration_test/p0_07_bluetooth_routing_test.dart` (MT-20).
+
 ## 9. Open risks
 
 | Risk | Where | Mitigation |
@@ -244,3 +250,4 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 | Windows AAC bitrate silently snapped to 96 kbps by `record_windows` | P0-06 | Store bitrate read from the file, never the request (ADR-006) |
 | No Windows playback package from a big publisher | P0-06 | `PlaybackEngine` interface, `audioplayers` fallback |
 | No Windows gallery API | P1-15 | Folder pick plus EXIF time filter |
+| Android and Windows packages do not report which mic is recording | P0-07 | Cut a boundary on every device change (ADR-016); add `AudioRecord.getRoutedDevice` and a Windows default-device query in P1-07 |
