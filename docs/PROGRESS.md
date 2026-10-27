@@ -91,6 +91,23 @@ Test results on `phase-0/P0-06-windows-mic` (Windows 11 build host):
 - `dart format --set-exit-if-changed lib test tool integration_test`: clean.
 - `flutter build apk --debug` and `flutter build windows --release`: both built. APK not installed on a phone.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-08 licence review
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 100 passed.
+- New `tool/licence_audit.dart`: reads `pubspec.lock`, `.dart_tool/package_config.json` and every package's licence file, works out which packages are reachable from the app's `dependencies`, and writes `THIRD_PARTY_NOTICES.md` (tables, native components, fonts, brand assets, deduplicated licence texts). `--check` mode for CI.
+- Result: 115 packages (77 in the app graph, 38 build and test only). In the app: BSD-3 62, MIT 9, Apache-2.0 4, BSD-2 1, Flutter engine bundle 1. **Nothing copyleft or unrecognised.** SQLite (public domain) via the `sqlite3` hook, Kotlin libraries (Apache-2.0) via `jni` on Android, Montserrat OFL 1.1. Brand assets excluded from the open-source licence.
+- ADR-007: recommends Apache 2.0 (patent grant, explicit trademark carve-out). **Status proposed.** No `LICENSE` file added, waiting for the owner.
+- New dev dependency `yaml` 3.1.4 (dart.dev, MIT), already in the lock through `hooks`.
+- Docs updated: README licences section, ARCHITECTURE 6, 7 and 8.2, RELEASE_PLAN 6, TEST_PLAN 2.1.
+
+Test results on `phase-0/P0-08-licences` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 117 passed, 0 failed (17 new, `P0-08`).
+- `dart run tool/licence_audit.dart --check`: up to date, nothing flagged.
+- `dart format --set-exit-if-changed lib test tool integration_test`: clean.
+- `flutter build windows --release` and `flutter build apk --debug`: both built. Not run on a device.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -100,4 +117,5 @@ Test results on `phase-0/P0-06-windows-mic` (Windows 11 build host):
 | P0-03 | done | Four docs created, all 1.6 docs linked from README, `P0-03` docs index tests pass (14 total) |
 | P0-09 | done | Schema v2, migration and repository tests pass (76 total). On-device DB open unverified |
 | P0-06 | blocked: needs real device | Harness, inspector, export and 24 unit tests pass (100 total). Real capture blocked: no mic in the build host's RDP session. Run MT-16 |
-| P0-08 | todo | Next |
+| P0-08 | done (licence choice awaits owner) | `THIRD_PARTY_NOTICES.md` generated and tested (117 total), ADR-007 recommends Apache 2.0 |
+| P0-11 | todo | Next |

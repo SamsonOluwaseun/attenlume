@@ -26,13 +26,14 @@ dart format --output=none --set-exit-if-changed lib test tool
 
 ### 2.1 Current suite
 
-As of P0-06 (27 October 2026, Windows 11 build host): 100 unit and widget tests, all passing. One Windows integration test (`integration_test/`) is a device test: see MT-16.
+As of P0-08 (27 October 2026, Windows 11 build host): 117 unit and widget tests, all passing. One Windows integration test (`integration_test/`) is a device test: see MT-16.
 
 | File | Proves |
 |---|---|
 | `test/app/app_test.dart` | P0-02 app shell starts on the welcome screen, NFR-01 no sign-in offered, P0-02 system theme with Montserrat |
 | `test/app/theme/contrast_test.dart` | NFR-09 contrast of token pairs in light and dark, button label size, navy recording theme |
 | `test/app/theme/tokens_sync_test.dart` | P0-02 generated tokens match `design/tokens.json` |
+| `test/docs/third_party_notices_test.dart` | P0-08 every package in `pubspec.lock` is in `THIRD_PARTY_NOTICES.md`, the file matches `tool/licence_audit.dart` output, no package in the app is copyleft or unrecognised, fonts and brand assets covered, licence classifier cases |
 | `test/data/local_database/app_database_test.dart` | P0-02 settings round trip, UTC ISO 8601 text dates, foreign keys on |
 | `test/drift/app_database/migration_test.dart` | P0-09 current schema matches the latest dump, every version migrates to every later one, v1 to v2 keeps settings and seeds built-in types |
 | `test/domain/domain_rules_test.dart` | FR-QUAL-02 precedence, FR-ACT-05 title format and conference timezone (with summer time), offset rule (gaps, negative, null), stored enum keys |

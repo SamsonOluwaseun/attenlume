@@ -1,51 +1,51 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), unattended run
-Branch: main (P0-06 merged from `phase-0/P0-06-windows-mic`)
-Current task ID: P0-08 (next)
-Status: P0-06 blocked: needs real device (all automated parts done). P0-08 not started.
+Branch: main (P0-08 merged from `phase-0/P0-08-licences`)
+Current task ID: P0-11 (next)
+Status: P0-08 done (the licence choice itself waits for the owner). P0-11 not started.
 
 ## Done in this session
 
-- P0-06: capture interface (`lib/platform/audio_capture/`), effective encoder settings per platform, pure-Dart M4A inspector, streaming folder export with SHA-256 verification, spike harness (`lib/spikes/windows_mic_spike.dart`) and Windows device test (`integration_test/p0_06_windows_mic_test.dart`). ADR-006.
-- 24 new unit tests (100 total), all passing. Analyze and format clean. APK debug and Windows release builds succeed.
-- Real run on this PC: no capture device. The agent runs in a disconnected Remote Desktop session, which does not expose the PC's "Microphone Array". `record` returned no inputs and `start()` threw "No audio recording device was found.". Recorded in `docs/PLATFORM_FEASIBILITY.md` 2.6.1 and the `docs/TEST_PLAN.md` results log.
+- P0-08: `tool/licence_audit.dart` generates `THIRD_PARTY_NOTICES.md` from `pubspec.lock` and each package's licence file. 115 packages, 77 reachable from the app, nothing copyleft or unrecognised. Native code (SQLite public domain, Kotlin libraries Apache-2.0), Montserrat OFL 1.1, brand assets (not open source) and planned Lucide icons covered in a hand-written section of the tool.
+- `test/docs/third_party_notices_test.dart` (17 tests, `P0-08`): every locked package listed, file not stale, no flagged package in the app, classifier cases.
+- ADR-007 (proposed): recommends Apache 2.0. No `LICENSE` file added.
+- 117 tests pass, analyze and format clean, Windows release and APK debug builds succeed.
 
 ## Left to do on this task
 
-Only the device part (manual test MT-16): run the integration test while signed in at the PC's console or on a Surface, listen to the segments, record the actual bitrate for 32/48/64/96 kbps requests and what happens with the microphone privacy switch off. Then set P0-06 to done.
-
-Also carried forward: M4A seeking accuracy with `just_audio_windows` moved to P1-17 (nothing to play yet).
+Only the owner's choice. When confirmed: add `LICENSE` (standard Apache 2.0 text, or MIT), a short `NOTICE` (Apache only), set the licence line in `README.md` and mark ADR-007 accepted. Later, in the P1 About screen: `showLicensePage` plus `LicenseRegistry.addLicense` for `assets/fonts/OFL.txt` (Flutter's automatic `NOTICES` does not include our bundled fonts).
 
 ## Exact next step
 
-Start P0-08 on branch `phase-0/P0-08-licences`: list every direct and transitive dependency from `pubspec.lock` with its licence (pub.dev API or the package's LICENSE file in the pub cache, `tool/pub_audit.py` may help), plus Montserrat (OFL 1.1) and brand assets. Flag anything not permissive (MPL, LGPL, GPL, unknown). Write `THIRD_PARTY_NOTICES.md`, choose MIT or Apache 2.0 in an ADR (the owner asked to choose after P0-08, so recommend one and put the choice under open questions), add a `LICENSE` file only if the ADR decides. Add a test that every package in `pubspec.lock` appears in `THIRD_PARTY_NOTICES.md`.
+Start P0-11 on branch `phase-0/P0-11-storage-export`: spike for low-storage simulation and streaming export with bounded RAM (depends on P0-09, done). `lib/data/filesystem/folder_export.dart` already streams with SHA-256; add a free-space probe interface (`FreeSpaceProbe`, ADR-002 item 4: `GetDiskFreeSpaceExW` on Windows via `win32` or FFI, method channels later for phones), a fake probe for tests, a low-storage pre-check and mid-export failure test (disk full simulated through an injected writer), and a RAM measurement for a large export (generate a multi-GB sparse or synthetic file in a temp folder, record `ProcessInfo.currentRss` peaks, and record the real numbers only). Write the result in `docs/PLATFORM_FEASIBILITY.md`.
 
-After P0-08: P0-11 (streaming export with bounded RAM and low-storage simulation; `exportFolder` is a start), P0-14 (trimming approach, ADR-003, desk research plus harness). P0-04, P0-05, P0-07, P0-10, P0-12 and P0-13 need real devices: build harnesses and manual steps, then mark blocked.
+After P0-11: P0-14 (trimming approach, ADR-003, desk research plus harness). P0-04, P0-05, P0-07, P0-10, P0-12 and P0-13 need real devices: build harnesses and manual steps, then mark blocked.
 
 ## Files touched
 
-New: `lib/platform/audio_capture/{audio_capture_engine,record_capture_engine}.dart`, `lib/domain/services/capture_settings.dart`, `lib/data/filesystem/{m4a_inspector,folder_export}.dart`, `lib/spikes/windows_mic_spike.dart`, `integration_test/p0_06_windows_mic_test.dart`, `test/fixtures/m4a_builder.dart`, `test/data/filesystem/{m4a_inspector,folder_export}_test.dart`, `test/domain/capture_settings_test.dart`, `test/spikes/windows_mic_spike_test.dart`.
-Changed: `pubspec.yaml`, `pubspec.lock`, `windows/flutter/generated_plugin_registrant.cc`, `windows/flutter/generated_plugins.cmake`, `docs/PLATFORM_FEASIBILITY.md`, `docs/ARCHITECTURE.md`, `docs/TEST_PLAN.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`.
+New: `tool/licence_audit.dart`, `THIRD_PARTY_NOTICES.md`, `test/docs/third_party_notices_test.dart`.
+Changed: `pubspec.yaml` and `pubspec.lock` (`yaml` dev dependency), `README.md`, `docs/ARCHITECTURE.md`, `docs/RELEASE_PLAN.md`, `docs/TEST_PLAN.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`.
 
 ## Watch out
 
+- **Any change to `pubspec.lock` now needs `dart run tool/licence_audit.dart`**, otherwise the `P0-08` stale-file test fails. Look at the new licences before committing.
+- The audit reads `.dart_tool/package_config.json`, so run `flutter pub get` first.
 - This PC's agent session is Remote Desktop: no microphone, and probably no camera either. Device spikes cannot run here unattended.
 - `record` on Windows silently picks the nearest supported AAC setting. Always store what `M4aInspector` reads from the file, never the request.
-- Android: `RECORD_AUDIO` is not in the manifest yet (P0-04 / P1-11). The APK builds, but capture would fail.
-- The integration test is not part of `flutter test`. Run it with `-d windows`.
-- Earlier notes still apply: schema changes need `make-migrations` and a migration test, never rename enum keys, commit generated files, write files with the editor tool rather than multi-file bash heredocs, do not build from a path with `~`.
-- Holding a Windows file lock in the same process and then reading the file made a test hang. Do not use locks for failure injection; `exportFolder` has an `onFileDone` callback instead.
+- Android: `RECORD_AUDIO` is not in the manifest yet (P0-04 / P1-11).
+- Earlier notes still apply: schema changes need `make-migrations` and a migration test, never rename enum keys, commit generated files, do not build from a path with `~`, do not use Windows file locks for failure injection in tests.
 
 ## Failing or skipped tests
 
-None failing in `flutter test`. Nothing skipped. `integration_test/p0_06_windows_mic_test.dart` fails on this PC because there is no microphone in the session (blocked, expected). No device tests have been run on any platform.
+None failing in `flutter test`. Nothing skipped. `integration_test/p0_06_windows_mic_test.dart` still fails on this PC (no microphone in the session, blocked, expected). No device tests have been run on any platform.
 
 ## Open questions for the owner
 
-- Please run MT-16 (`docs/TEST_PLAN.md`): sign in at this PC (or a Surface), then `flutter test integration_test/p0_06_windows_mic_test.dart -d windows`. It records about 12 seconds of room audio into your temp folder. Or enable RDP audio recording redirection for the agent's session.
-- Please review ADR-006 (own M4A reader, folder export rules, spike code in `lib/spikes/`).
-- Earlier questions still open: ADR-005 review (private reflections, labels, FR-QUAL-03 pinning); app icon exports; GitHub remote for CI; `com.samlytics.attenlume` and publisher name; MIT or Apache 2.0 after P0-08; real devices for P0-04, P0-05, P0-07, P0-10, P0-12, P0-13 (iOS needs a Mac or macOS CI with signing); Windows 96 kbps (43 MB per hour) acceptable or evaluate a bundled low-bitrate encoder (ADR-002); permission wording in `docs/PRIVACY_AND_SAFETY.md` 6 and release blockers in `docs/RELEASE_PLAN.md` 8.
+- **Project licence:** ADR-007 recommends Apache 2.0 (patent grant, says it grants no trademark rights). MIT is equally compatible with every dependency. Which one? Also confirm the copyright holder name ("Samlytics Data Services") and that brand assets stay all rights reserved.
+- `record`'s LICENSE names "openapi4j authors" (upstream copy error). Permissive either way; report upstream if you wish.
+- Please run MT-16 (`docs/TEST_PLAN.md`) at the PC's console or on a Surface: `flutter test integration_test/p0_06_windows_mic_test.dart -d windows`.
+- Earlier questions still open: ADR-005 and ADR-006 review; app icon exports; GitHub remote for CI; `com.samlytics.attenlume` and publisher name; real devices for P0-04, P0-05, P0-07, P0-10, P0-12, P0-13 (iOS needs a Mac or macOS CI with signing); Windows 96 kbps acceptable (ADR-002); permission wording in `docs/PRIVACY_AND_SAFETY.md` 6 and release blockers in `docs/RELEASE_PLAN.md` 8.
 
 ## Commands to run
 
@@ -56,6 +56,7 @@ dart run build_runner build
 flutter analyze
 flutter test
 dart format --output=none --set-exit-if-changed lib test tool integration_test
+dart run tool/licence_audit.dart --check   # after any dependency change, run without --check to regenerate
 # Device test (needs a microphone in the session):
 flutter test integration_test/p0_06_windows_mic_test.dart -d windows
 ```
