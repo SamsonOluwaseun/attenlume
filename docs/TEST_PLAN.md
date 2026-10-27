@@ -52,6 +52,8 @@ As of P0-13 (27 October 2026, Windows 11 build host): 372 unit and widget tests,
 | `integration_test/p0_10_long_run_test.dart` | P0-10 on a real low-spec phone or Windows PC (MT-19). Fails when no microphone is available |
 | `test/domain/recording_service_roll_test.dart` | P1-05: FR-REC-03 10-minute roll armed on start, roll ends with `roll` and starts the next segment with the same profile and input, 35 minutes give four gapless segments, interval can be set, pause, stop and dispose cancel the roll, quality and route changes restart it, late timers do nothing, failed next segment keeps earlier audio; atomic finalisation: partial file while writing, final names after, hash before rename and row after, failed rename keeps the partial name, damaged files keep the partial name, leftover partial files never overwritten |
 | `test/data/filesystem/segment_commit_test.dart` | P1-05: FR-REC-03 partial names keep the extension last, `commitSegmentFile` renames with bytes kept, never overwrites (NFR-07), missing file fails without creating one |
+| `test/domain/one_active_coordinator_test.dart` | P1-06: FR-REC-04 `switchTo` saves the old activity then starts the new one in one command, a refused new start never stops the old one, refuses when a different activity took over, plain start and same activity, paused old activity saved; AT-REC-04 UI and notification triggers prompt with title and recorded minutes (pauses excluded, paused wording), Stop it and start new switches, Keep it running and Cancel change nothing, no prompt without a conflict, takeover while the prompt is open stops nothing; shortcut and voice switch without asking and confirm, plain shortcut start confirmed, notification with no screen follows the default, refused start says why, failing confirmation never undoes the recording |
+| `test/features/capture/one_active_prompt_test.dart` | P1-06: FR-REC-04 prompt wording and three choices, each button's result, dismiss is cancel, paused wording; AT-REC-04 a second start from the UI shows the prompt and Stop it and start new switches on a real database |
 | `test/domain/recording_service_route_test.dart` | P0-07: FR-QUAL-06 input route stored per segment, left empty when unknown or the probe fails; FR-REC-03 route change ends the segment with `route_change`, same input leaves it, `force` cuts a boundary without an active input, nothing while paused or idle; FR-REC-07 no mic left waits in `userResumeRequired`, resume after reconnect, stop still saves |
 | `test/platform/audio_route_probe_test.dart` | P0-07: Android device types and iOS ports to route kinds, Windows name classification, route key, engine probe never claims an active input |
 | `test/spikes/bluetooth_routing_spike_test.dart` | P0-07 harness with fakes: connect and disconnect by event, loss seen only by polling with a `route_lost` marker, no mic left then resume on reconnect, forced boundaries without an active input, events with no change, AT-QUAL-03 rows match files, other channels and rate reported, damaged segment not claimed as checked, probe failure, JSON and Markdown |
@@ -91,7 +93,7 @@ Fixtures: `test/fixtures/m4a_builder.dart` (synthetic M4A files, zero audio payl
 | Behaviour | Requirement IDs | Task |
 |---|---|---|
 | Start and stop confirmation | FR-UI-01 | P1-10 |
-| One-active prompt when starting a second activity | FR-REC-04 | P1-06 |
+| One-active prompt when starting a second activity | FR-REC-04 | P1-06 (done: `test/features/capture/one_active_prompt_test.dart`) |
 | Permission denial flows | FR-PRI-04 | P1-10, P1-14 |
 | Crash recovery prompt | FR-REC-08 | P1-08 |
 | Deletion confirmation with summary | FR-CONF-08, FR-STO-06 | P1-01, P1-20 |
@@ -149,7 +151,7 @@ Run on each device in section 5. Record results in section 6 with device, OS, da
 | AT-REC-01 | 90 minutes recorded with screen locked and other apps in use. No gaps except logged interruptions. | unverified | unverified | n/a (minimised instead) |
 | AT-REC-02 | Incoming call pauses and resumes (or offers resume). Call audio is never recorded. | unverified | unverified | n/a |
 | AT-REC-03 | Force-kill mid-recording loses at most the current segment. Recovery offered on next launch. | unverified | unverified | unverified |
-| AT-REC-04 | Starting a second recording always triggers the one-active prompt or the documented default for non-visual triggers. | unverified | unverified | unverified |
+| AT-REC-04 | Starting a second recording always triggers the one-active prompt or the documented default for non-visual triggers. | unverified on device (logic passes unit and widget tests, P1-06) | unverified on device (logic passes unit and widget tests, P1-06) | unverified on device (logic passes unit and widget tests, P1-06) |
 | AT-PHO-01 | 20 photos taken during a recording cause no audio loss, or each causes a logged, auto-resumed interruption. | unverified (P0-05 harness ready, MT-21) | unverified (P0-05 harness ready, MT-21) | unverified (P0-05 harness ready, MT-21) |
 | AT-QUAL-01 | Three activities at Economy, Balanced and Enhanced record, play and export correctly with correct metadata. | unverified | unverified | unverified (all map to 96 kbps, ADR-002) |
 | AT-QUAL-02 | Mid-recording quality change creates a new segment or declines safely. Earlier audio intact. | unverified | unverified | unverified |

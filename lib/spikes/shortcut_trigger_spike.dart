@@ -43,8 +43,10 @@ enum TriggerOutcome {
 /// front, in the background, killed and with the phone locked (manual
 /// steps in `TEST_PLAN.md` MT-22). Each command drives the real
 /// [RecordingService] as the Phase 2 handler would: start, stop and
-/// toggle respect the one-active rule (a start for another activity is a
-/// conflict, never a silent switch), bookmarks need a running recording.
+/// toggle respect the one-active rule (a start for another activity is
+/// logged as a conflict, so the spike never stops a test recording; the
+/// app's handler goes through `OneActiveCoordinator`, which switches and
+/// confirms, ADR-020), bookmarks need a running recording.
 ///
 /// For each trigger it logs where it came from, whether it launched the
 /// app, whether an app screen was visible, the Flutter lifecycle state on

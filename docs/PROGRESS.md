@@ -408,6 +408,25 @@ Test results on phase-1/P1-05-rolling-segments (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P1-06 one-active rule across all triggers
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 392 passed.
+- `RecordingService.switchTo(activityId, {replacing})`: checks the new activity first, then stops and saves the old one and starts the new one under one lock hold. `start` and `stop` share the same locked bodies [FR-REC-04, FR-REC-09].
+- `OneActiveCoordinator` (`lib/domain/services/one_active_coordinator.dart`): one entry point for every trigger. `ui` and `notification` ask; `shortcut` and `voice` stop old, start new and confirm through `TriggerConfirmationSink` (`InAppTriggerConfirmations` stream until P1-11). Recorded minutes come from segment spans, pauses excluded [AT-REC-04].
+- `OneActivePromptDialog` and `startRecordingFromUi` (`lib/features/capture/one_active_prompt_dialog.dart`): "'Data Mesh Keynote' is still recording (47 min)." with Stop it and start new / Keep it running / Cancel; paused wording. Providers added. No screen calls it yet (recording screen is P1-10).
+- P0-13 spike comment corrected; it still logs conflicts instead of switching, on purpose (ADR-020).
+- ADR-020 recorded. `ARCHITECTURE.md` (3, 8.10) and `TEST_PLAN.md` (2.1, 2.2, AT-REC-04) updated. No new packages.
+- A widget test that drives the real database hung at first: futures made in the test's fake zone only complete while it is pumped, so the test pumps with real-time ticks and disposes the recorder inside the test body.
+- Not checked on a device: whether a background shortcut is allowed to start the new recording after stopping the old one (MT-22). Unverified.
+
+Test results on phase-1/P1-06-one-active (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 419 passed, 0 failed (27 new: 20 in `test/domain/one_active_coordinator_test.dart`, 7 in `test/features/capture/one_active_prompt_test.dart`).
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -431,3 +450,4 @@ Test results on phase-1/P1-05-rolling-segments (Windows 11 build host):
 | P0-05 | blocked: needs real device | `PhotoCamera` on `camera` 0.12.1, harness, device test and MT-21 steps built, 14 unit tests with fakes pass (349 total). ADR-017. Windows run on build host blocked (no capture device, no camera) |
 | P0-13 | blocked: needs real device | `ShortcutBridge`, `attenlume://` parser, Android tile and launcher shortcuts (APK builds), iOS App Intents (not built, needs Mac), harness, device test and MT-22 steps, 23 unit tests with fakes pass (372 total). ADR-018 |
 | P1-05 | done (device timing unverified) | 10-minute roll timer, partial names, flush then rename, 20 new tests (392 total). ADR-019. Interruption rolls come with P1-07 |
+| P1-06 | done (device triggers unverified) | `switchTo`, `OneActiveCoordinator`, prompt dialog, 27 new tests (419 total). ADR-020 |
