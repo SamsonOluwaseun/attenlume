@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/services/capture_settings.dart';
+import '../../domain/services/one_active_coordinator.dart';
 import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
@@ -67,3 +68,22 @@ final recordingStatusProvider = StreamProvider<RecordingStatus>((ref) async* {
   yield service.status;
   yield* service.statusStream;
 });
+
+/// Confirmations for shortcut and voice starts, shown in the app until
+/// notifications (P1-11) and haptics take over [P1-06].
+final triggerConfirmationsProvider = Provider<InAppTriggerConfirmations>((ref) {
+  final sink = InAppTriggerConfirmations();
+  ref.onDispose(sink.dispose);
+  return sink;
+});
+
+/// Every start goes through here so the one-active rule holds for all
+/// triggers (FR-REC-04) [P1-06].
+final oneActiveCoordinatorProvider = Provider<OneActiveCoordinator>(
+  (ref) => OneActiveCoordinator(
+    recorder: ref.watch(recordingServiceProvider),
+    activities: ref.watch(activityRepositoryProvider),
+    media: ref.watch(mediaAssetRepositoryProvider),
+    confirmations: ref.watch(triggerConfirmationsProvider),
+  ),
+);

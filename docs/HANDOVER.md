@@ -1,44 +1,48 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), unattended run
-Branch: main (P1-05 merged from `phase-1/P1-05-rolling-segments`)
-Current task ID: P1-05 (done). Next: P1-06
+Branch: main (P1-06 merged from `phase-1/P1-06-one-active`)
+Current task ID: P1-06 (done). Next: P1-07
 Status: done
 
 ## Done in this session
 
-- P1-05 rolling segment writer and atomic finalisation [FR-REC-03]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 3 and 8.9, ADR-019.
-  - `RecordingService`: injected `RollTimerFactory`, `segmentMaxDuration` (default 10 minutes), roll through `switchingSegment` with reason `roll`, timer cancelled on every segment end and on dispose, stale timers ignored.
-  - Encoder writes `segment-NNN.partial.m4a`; finalise = inspect, hash, flush, rename to `segment-NNN.m4a`, then row update with the final path. Damaged files keep the partial name.
-  - New `lib/data/filesystem/segment_commit.dart`, `MediaPaths.partial`/`isPartial`, optional `filePath` on `MediaAssetRepository.finaliseSegment`, `test/fixtures/fake_timers.dart`.
-  - 20 new tests, 392 total, all passing. Windows release and debug APK build. No new packages.
+- P1-06 one-active rule across all triggers [FR-REC-04, AT-REC-04]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 3 and 8.10, ADR-020.
+  - `RecordingService.switchTo(activityId, {replacing})`: checks the new activity, stops and saves the old one, starts the new one, under one lock hold.
+  - `OneActiveCoordinator` with `RecordingTrigger` (`ui`, `notification` prompt; `shortcut`, `voice` stop old, start new and confirm via `TriggerConfirmationSink`).
+  - `OneActivePromptDialog` and `startRecordingFromUi`; `oneActiveCoordinatorProvider`, `triggerConfirmationsProvider`.
+  - 27 new tests, 419 total, all passing. Windows release and debug APK build. No new packages.
 
 ## Left to do on this task
 
-- Device check that the roll timer fires on time with the screen locked (iOS background audio; Android once P1-11 adds the foreground service). The P0-04 and P0-10 device runs will show it.
-- Interruption-driven rolls belong to P1-07.
+- Nothing in code. P1-10 (recording screen), P1-11 (notification actions) and P2 shortcut handlers must start recordings through `oneActiveCoordinatorProvider`, never `RecordingService.start` directly.
+- Show `InAppTriggerConfirmations.messages` as a banner once there is a screen for it (P1-10); replace with notification and haptic in P1-11.
+- Device check of a background shortcut switch (MT-22).
 
 ## Exact next step
 
-Start **P1-06 one-active rule across all triggers** [FR-REC-04, AT-REC-04] on branch `phase-1/P1-06-one-active`. `RecordingService.start` already returns `StartOutcome.conflict` for a second activity. Add a `switchTo(activityId)` (stop old, start new under one lock hold) and a trigger source (ui, notification, shortcut, voice); build the prompt "'{title}' is still recording ({n} min). Stop it and start new / Keep it running / Cancel" as a widget with tests; non-visual triggers default to stop old and start new. Then P1-07 InterruptionCoordinator (seed in `lib/platform/interruptions/`) and P1-08 crash recovery, which must handle `writing` rows whose partial file was already renamed to the final name (ADR-019 point 3).
+Start **P1-07 InterruptionCoordinator** [FR-REC-05, FR-PHO-07] on branch `phase-1/P1-07-interruptions`. Seed code is in `lib/platform/interruptions/` and the P0-04 and P0-05 spikes (`lib/spikes/background_recording_spike.dart`, `photo_during_recording_spike.dart`) already map audio session events. Add `RecordingService` commands for `recording -> interrupted -> recovering -> recording` and `interrupted -> userResumeRequired`, finalise the segment with an interruption end reason, log interruption rows (reason, start, end), and never record the call. Then P1-08 crash recovery, which must handle `writing` rows whose partial file was already renamed (ADR-019 point 3).
 
 ## Files touched
 
 New:
-- `lib/data/filesystem/segment_commit.dart`
-- `test/domain/recording_service_roll_test.dart`, `test/data/filesystem/segment_commit_test.dart`, `test/fixtures/fake_timers.dart`
+- `lib/domain/services/one_active_coordinator.dart`
+- `lib/features/capture/one_active_prompt_dialog.dart`
+- `test/domain/one_active_coordinator_test.dart`, `test/features/capture/one_active_prompt_test.dart`
 
 Changed:
-- `lib/domain/services/recording_service.dart`, `lib/data/filesystem/media_paths.dart`, `lib/data/repositories/media_asset_repository.dart`
-- `test/domain/recording_service_test.dart` (row path while writing is now the partial name)
-- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-019), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
+- `lib/domain/services/recording_service.dart`, `lib/features/capture/recording_providers.dart`, `lib/spikes/shortcut_trigger_spike.dart` (comment only)
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-020), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (392 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
+None failing in `flutter test` (419 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
+
+Note for widget tests that use the real database and `RecordingService`: futures made inside `testWidgets` only complete while the fake zone is pumped. Pump with `tester.runAsync` ticks and dispose the recorder inside the test body (see `test/features/capture/one_active_prompt_test.dart`), or `tearDown` hangs.
 
 ## Open questions for the owner
 
+- **ADR-020 (new):** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing. Say if you meant something else by the two options. Notification start actions are treated as able to show the prompt; say if they should switch straight away like shortcuts.
 - **ADR-019 (new):** segments roll every 10 minutes (the build guide minimum). Say if you would rather have shorter segments (less lost on a crash, more files) or longer ones.
 - **Deep-link scheme (ADR-018):** FR-HF-05 names `conferencecompanion://`. This run used `attenlume://` to match the product name. Say if you also want the old scheme registered.
 - **Project licence:** ADR-007 recommends Apache 2.0. Still waiting for your choice between Apache 2.0 and MIT, the copyright holder ("Samlytics Data Services") and whether to exclude the brand assets.

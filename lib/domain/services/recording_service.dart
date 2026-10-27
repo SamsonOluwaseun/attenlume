@@ -115,6 +115,20 @@ class RouteChangeResult {
   String toString() => 'RouteChangeResult(${outcome.name}, $from -> $to)';
 }
 
+/// What [RecordingService.switchTo] did.
+class SwitchResult {
+  const SwitchResult(this.outcome, {this.stoppedActivityId});
+
+  /// How the start of the new activity went.
+  final StartOutcome outcome;
+
+  /// The activity that was stopped and saved first, or null if none was.
+  final String? stoppedActivityId;
+
+  @override
+  String toString() => 'SwitchResult(${outcome.name}, $stoppedActivityId)';
+}
+
 /// Longest a segment runs before it rolls to the next one (FR-REC-03).
 const defaultSegmentMaxDuration = Duration(minutes: 10);
 
@@ -191,7 +205,37 @@ class RecordingService {
 
   /// Starts recording [activityId] in one call (FR-REC-01). After a failed
   /// start, calling it again for the same activity retries.
-  Future<StartOutcome> start(String activityId) => _lock.run(() async {
+  Future<StartOutcome> start(String activityId) =>
+      _lock.run(() => _startLocked(activityId));
+
+  /// Stops whatever is held and starts [activityId], under one lock hold so
+  /// no other command can run in between (FR-REC-04) [P1-06].
+  ///
+  /// When [replacing] is given and a different activity holds the
+  /// recorder, nothing changes and the outcome is [StartOutcome.conflict]:
+  /// the user agreed to stop that one activity, not whichever is running
+  /// now. The new activity is checked first, so a start that would be
+  /// refused never stops the old recording. If capture then fails, the old
+  /// recording is already saved.
+  Future<SwitchResult> switchTo(String activityId, {String? replacing}) =>
+      _lock.run(() async {
+        final heldId = _status.state.holdsActivity ? _status.activityId : null;
+        if (heldId == null || heldId == activityId) {
+          return SwitchResult(await _startLocked(activityId));
+        }
+        if (replacing != null && replacing != heldId) {
+          return const SwitchResult(StartOutcome.conflict);
+        }
+        final refused = await _refusal(activityId);
+        if (refused != null) return SwitchResult(refused);
+        final stopped = await _stopLocked();
+        return SwitchResult(
+          await _startLocked(activityId),
+          stoppedActivityId: stopped,
+        );
+      });
+
+  Future<StartOutcome> _startLocked(String activityId) async {
     final retry =
         _status.state == RecordingState.errorRecoverable &&
         _status.activityId == activityId;
@@ -200,13 +244,9 @@ class RecordingService {
           ? StartOutcome.alreadyRecording
           : StartOutcome.conflict;
     }
-    final activity = await _activities.get(activityId);
-    if (activity == null) return StartOutcome.activityNotFound;
-    if (activity.recordingPermissionStatus ==
-        RecordingPermissionStatus.notPermitted) {
-      return StartOutcome.recordingNotPermitted;
-    }
-    if (!await _engine.hasPermission()) return StartOutcome.microphoneDenied;
+    final refused = await _refusal(activityId);
+    if (refused != null) return refused;
+    final activity = (await _activities.get(activityId))!;
 
     final profile = await _activities.effectiveProfile(activityId);
     _moveTo(
@@ -228,7 +268,19 @@ class RecordingService {
       );
       return began ? StartOutcome.started : StartOutcome.failed;
     });
-  });
+  }
+
+  /// Why [activityId] may not start, or null if it may.
+  Future<StartOutcome?> _refusal(String activityId) async {
+    final activity = await _activities.get(activityId);
+    if (activity == null) return StartOutcome.activityNotFound;
+    if (activity.recordingPermissionStatus ==
+        RecordingPermissionStatus.notPermitted) {
+      return StartOutcome.recordingNotPermitted;
+    }
+    if (!await _engine.hasPermission()) return StartOutcome.microphoneDenied;
+    return null;
+  }
 
   /// Pauses the running recording. The open segment ends with reason
   /// `pause` (FR-REC-03). Returns false if nothing was recording.
@@ -376,7 +428,9 @@ class RecordingService {
 
   /// Stops and saves the current recording. Returns the saved activity ID,
   /// or null if nothing was held (repeat stops are harmless).
-  Future<String?> stop() => _lock.run(() async {
+  Future<String?> stop() => _lock.run(_stopLocked);
+
+  Future<String?> _stopLocked() async {
     if (!_status.state.holdsActivity) return null;
     final activityId = _status.activityId!;
     return _guard(() async {
@@ -396,7 +450,7 @@ class RecordingService {
       );
       return activityId;
     });
-  });
+  }
 
   /// Saves any open recording, then releases the microphone.
   Future<void> dispose() async {
