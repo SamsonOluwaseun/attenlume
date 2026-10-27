@@ -108,6 +108,29 @@ Test results on `phase-0/P0-08-licences` (Windows 11 build host):
 - `dart format --set-exit-if-changed lib test tool integration_test`: clean.
 - `flutter build windows --release` and `flutter build apk --debug`: both built. Not run on a device.
 
+## 2026-10-27, Google Antigravity: P0-11 low storage and streaming export spike
+
+- Start-of-session check on main: lutter analyze no issues, lutter test 117 passed.
+- Free space probing: FreeSpaceProbe interface (lib/platform/storage/free_space_probe.dart) and Win32 GetDiskFreeSpaceExW implementation (windows_free_space_probe.dart) via dart:ffi.
+- Storage thresholds: StorageThresholds and ssessStorage (lib/domain/services/storage_thresholds.dart) implementing FR-STO-01, FR-STO-02, and FR-STO-04 defaults (ok, warning, urgent, hardStop).
+- Export preflight and estimation: preflightExport, estimateFolderExportBytes, and estimateZipExportBytes (lib/data/filesystem/export_space.dart) with defaultExportReserveBytes (256 MB) and InsufficientSpaceException (FR-EXP-05, AT-STO-03).
+- Streaming ZIP export: exportZip (lib/data/filesystem/zip_export.dart) using rchive 4.5.2 with store compression (ZipFileEncoder.store), embedded checksums.sha256 and companion <zipName>.sha256, and atomic rename from .partial (FR-EXP-02, FR-EXP-04, FR-EXP-06).
+- Folder export update: exportFolder now includes preflight free space check and disk-full exception mapping (ExportOutOfSpaceException).
+- Failure injection: tested preflight rejection and mid-export disk full via injected writer (openSink), verifying partial targets are removed and source media is untouched.
+- Spike runner: StorageExportSpike (lib/spikes/storage_export_spike.dart).
+- Benchmarking on Windows 11 host (1 GiB synthetic file):
+  - exportFolder: 18.1 s, peak RSS delta 10.3 MB. Verified checksums clean.
+  - exportZip: 18.8 s, peak RSS delta 5.6 MB. ZIP size 1,073,742,095 bytes (271 bytes overhead).
+- Decisions recorded in ADR-008.
+
+Test results on phase-0/P0-11-storage-export (Windows 11 build host):
+
+- lutter analyze: no issues.
+- lutter test: 150 passed, 0 failed (33 new, P0-11).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool: clean.
+- lutter build windows --release and lutter build apk --debug: both built successfully.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -118,4 +141,5 @@ Test results on `phase-0/P0-08-licences` (Windows 11 build host):
 | P0-09 | done | Schema v2, migration and repository tests pass (76 total). On-device DB open unverified |
 | P0-06 | blocked: needs real device | Harness, inspector, export and 24 unit tests pass (100 total). Real capture blocked: no mic in the build host's RDP session. Run MT-16 |
 | P0-08 | done (licence choice awaits owner) | `THIRD_PARTY_NOTICES.md` generated and tested (117 total), ADR-007 recommends Apache 2.0 |
-| P0-11 | todo | Next |
+| P0-11 | done | Windows probe, thresholds, preflight, folder and ZIP streaming exports pass 33 tests (150 total). 1 GiB RAM benchmark: 10.3 MB / 5.6 MB peak RSS delta. ADR-008 |
+| P0-14 | todo | Next |

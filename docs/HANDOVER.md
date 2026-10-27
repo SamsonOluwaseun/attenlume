@@ -1,51 +1,70 @@
 # Handover
 
-Date and agent: 27 October 2026, Claude Code (Opus 5.5), unattended run
-Branch: main (P0-08 merged from `phase-0/P0-08-licences`)
-Current task ID: P0-11 (next)
-Status: P0-08 done (the licence choice itself waits for the owner). P0-11 not started.
+Date and agent: 27 October 2026, Google Antigravity, unattended run
+Branch: main (P0-11 merged from `phase-0/P0-11-storage-export`)
+Current task ID: P0-14 (next)
+Status: P0-11 done. P0-14 not started.
 
 ## Done in this session
 
-- P0-08: `tool/licence_audit.dart` generates `THIRD_PARTY_NOTICES.md` from `pubspec.lock` and each package's licence file. 115 packages, 77 reachable from the app, nothing copyleft or unrecognised. Native code (SQLite public domain, Kotlin libraries Apache-2.0), Montserrat OFL 1.1, brand assets (not open source) and planned Lucide icons covered in a hand-written section of the tool.
-- `test/docs/third_party_notices_test.dart` (17 tests, `P0-08`): every locked package listed, file not stale, no flagged package in the app, classifier cases.
-- ADR-007 (proposed): recommends Apache 2.0. No `LICENSE` file added.
-- 117 tests pass, analyze and format clean, Windows release and APK debug builds succeed.
+- P0-11: Low-storage simulation and streaming export with bounded RAM [FR-STO-01, FR-STO-02, FR-STO-04, FR-EXP-02, FR-EXP-04, FR-EXP-05, FR-EXP-06, AT-STO-02, AT-STO-03].
+  - `FreeSpaceProbe` interface (`lib/platform/storage/free_space_probe.dart`) and Win32 `GetDiskFreeSpaceExW` implementation (`windows_free_space_probe.dart`) via `dart:ffi`.
+  - Storage threshold service `StorageThresholds` (`lib/domain/services/storage_thresholds.dart`) implementing FR-STO-01/02/04 thresholds (ok, warning, urgent, hardStop).
+  - Preflight checks `preflightExport`, `estimateFolderExportBytes`, and `estimateZipExportBytes` (`lib/data/filesystem/export_space.dart`) with `defaultExportReserveBytes` (256 MB) and `InsufficientSpaceException`.
+  - Streaming ZIP export `exportZip` (`lib/data/filesystem/zip_export.dart`) with store compression (level 0), embedded `checksums.sha256` and companion `<zipName>.sha256`, and atomic rename from `.partial`.
+  - `exportFolder` updated to support preflight free-space checks, injected writers (`openSink`), and mapping of OS disk-full errors (112/39 on Windows, 28 on POSIX) to `ExportOutOfSpaceException`.
+  - Clean failure recovery: verified that both folder and ZIP exports delete partial files and leave sources untouched on preflight failure or mid-export disk-full.
+  - Large-export benchmark on Windows 11 host (1 GiB synthetic file):
+    - `exportFolder`: 18.1 s, peak RSS delta 10.3 MB. Verified checksums clean.
+    - `exportZip`: 18.8 s, peak RSS delta 5.6 MB. ZIP size 1,073,742,095 bytes (271 bytes overhead).
+  - Spike runner `StorageExportSpike` (`lib/spikes/storage_export_spike.dart`).
+  - 33 new tests added (150 total tests, 0 failed).
+  - ADR-008 recorded in `docs/DECISIONS.md`.
+  - Both `flutter build windows --release` and `flutter build apk --debug` succeed on `main`.
 
 ## Left to do on this task
 
-Only the owner's choice. When confirmed: add `LICENSE` (standard Apache 2.0 text, or MIT), a short `NOTICE` (Apache only), set the licence line in `README.md` and mark ADR-007 accepted. Later, in the P1 About screen: `showLicensePage` plus `LicenseRegistry.addLicense` for `assets/fonts/OFL.txt` (Flutter's automatic `NOTICES` does not include our bundled fonts).
+None. P0-11 is complete.
 
 ## Exact next step
 
-Start P0-11 on branch `phase-0/P0-11-storage-export`: spike for low-storage simulation and streaming export with bounded RAM (depends on P0-09, done). `lib/data/filesystem/folder_export.dart` already streams with SHA-256; add a free-space probe interface (`FreeSpaceProbe`, ADR-002 item 4: `GetDiskFreeSpaceExW` on Windows via `win32` or FFI, method channels later for phones), a fake probe for tests, a low-storage pre-check and mid-export failure test (disk full simulated through an injected writer), and a RAM measurement for a large export (generate a multi-GB sparse or synthetic file in a temp folder, record `ProcessInfo.currentRss` peaks, and record the real numbers only). Write the result in `docs/PLATFORM_FEASIBILITY.md`.
-
-After P0-11: P0-14 (trimming approach, ADR-003, desk research plus harness). P0-04, P0-05, P0-07, P0-10, P0-12 and P0-13 need real devices: build harnesses and manual steps, then mark blocked.
+Start P0-14 on branch `phase-0/P0-14-trimming`: spike for trimming approach per platform (passthrough trimming without re-encoding, ADR-003 desk research plus harness).
+Note: Spikes P0-04, P0-05, P0-07, P0-10, P0-12, and P0-13 require real devices (phone/Mac/microphone).
 
 ## Files touched
 
-New: `tool/licence_audit.dart`, `THIRD_PARTY_NOTICES.md`, `test/docs/third_party_notices_test.dart`.
-Changed: `pubspec.yaml` and `pubspec.lock` (`yaml` dev dependency), `README.md`, `docs/ARCHITECTURE.md`, `docs/RELEASE_PLAN.md`, `docs/TEST_PLAN.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`.
+New:
+- `lib/platform/storage/free_space_probe.dart`
+- `lib/platform/storage/windows_free_space_probe.dart`
+- `lib/domain/services/storage_thresholds.dart`
+- `lib/data/filesystem/export_space.dart`
+- `lib/data/filesystem/zip_export.dart`
+- `lib/spikes/storage_export_spike.dart`
+- `test/fixtures/fake_free_space_probe.dart`
+- `test/platform/free_space_probe_test.dart`
+- `test/domain/storage_thresholds_test.dart`
+- `test/data/filesystem/export_space_test.dart`
+- `test/data/filesystem/zip_export_test.dart`
+- `test/spikes/storage_export_spike_test.dart`
 
-## Watch out
-
-- **Any change to `pubspec.lock` now needs `dart run tool/licence_audit.dart`**, otherwise the `P0-08` stale-file test fails. Look at the new licences before committing.
-- The audit reads `.dart_tool/package_config.json`, so run `flutter pub get` first.
-- This PC's agent session is Remote Desktop: no microphone, and probably no camera either. Device spikes cannot run here unattended.
-- `record` on Windows silently picks the nearest supported AAC setting. Always store what `M4aInspector` reads from the file, never the request.
-- Android: `RECORD_AUDIO` is not in the manifest yet (P0-04 / P1-11).
-- Earlier notes still apply: schema changes need `make-migrations` and a migration test, never rename enum keys, commit generated files, do not build from a path with `~`, do not use Windows file locks for failure injection in tests.
+Changed:
+- `pubspec.yaml` and `pubspec.lock` (`archive` 4.5.2, `ffi` 2.2.0)
+- `THIRD_PARTY_NOTICES.md`
+- `lib/data/filesystem/folder_export.dart`
+- `test/data/filesystem/folder_export_test.dart`
+- `docs/PLATFORM_FEASIBILITY.md`
+- `docs/DECISIONS.md`
+- `docs/PROGRESS.md`
+- `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test`. Nothing skipped. `integration_test/p0_06_windows_mic_test.dart` still fails on this PC (no microphone in the session, blocked, expected). No device tests have been run on any platform.
+None failing in `flutter test` (150 passed). Nothing skipped. `integration_test/p0_06_windows_mic_test.dart` still fails on this PC (no microphone in Remote Desktop session, blocked, expected). No device tests run.
 
 ## Open questions for the owner
 
-- **Project licence:** ADR-007 recommends Apache 2.0 (patent grant, says it grants no trademark rights). MIT is equally compatible with every dependency. Which one? Also confirm the copyright holder name ("Samlytics Data Services") and that brand assets stay all rights reserved.
-- `record`'s LICENSE names "openapi4j authors" (upstream copy error). Permissive either way; report upstream if you wish.
-- Please run MT-16 (`docs/TEST_PLAN.md`) at the PC's console or on a Surface: `flutter test integration_test/p0_06_windows_mic_test.dart -d windows`.
-- Earlier questions still open: ADR-005 and ADR-006 review; app icon exports; GitHub remote for CI; `com.samlytics.attenlume` and publisher name; real devices for P0-04, P0-05, P0-07, P0-10, P0-12, P0-13 (iOS needs a Mac or macOS CI with signing); Windows 96 kbps acceptable (ADR-002); permission wording in `docs/PRIVACY_AND_SAFETY.md` 6 and release blockers in `docs/RELEASE_PLAN.md` 8.
+- **Project licence:** ADR-007 recommends Apache 2.0. Awaiting owner choice between Apache 2.0 and MIT, copyright holder confirmation ("Samlytics Data Services"), and brand asset exclusion.
+- Device testing for blocked tasks (P0-04, P0-05, P0-06/MT-16, P0-07, P0-10, P0-12, P0-13).
 
 ## Commands to run
 
@@ -56,7 +75,7 @@ dart run build_runner build
 flutter analyze
 flutter test
 dart format --output=none --set-exit-if-changed lib test tool integration_test
-dart run tool/licence_audit.dart --check   # after any dependency change, run without --check to regenerate
-# Device test (needs a microphone in the session):
-flutter test integration_test/p0_06_windows_mic_test.dart -d windows
+dart run tool/licence_audit.dart --check
+flutter build windows --release
+flutter build apk --debug
 ```

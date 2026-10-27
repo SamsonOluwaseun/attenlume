@@ -28,29 +28,21 @@ void main() {
       expect(await const UnknownFreeSpaceProbe().query(root.path), isNull);
     });
 
-    test(
-      'FR-STO-01 forPlatform picks the Windows probe on Windows',
-      () {
-        expect(FreeSpaceProbe.forPlatform(), isA<WindowsFreeSpaceProbe>());
-      },
-      skip: Platform.isWindows ? false : 'Windows only',
-    );
+    test('FR-STO-01 forPlatform picks the Windows probe on Windows', () {
+      expect(FreeSpaceProbe.forPlatform(), isA<WindowsFreeSpaceProbe>());
+    }, skip: Platform.isWindows ? false : 'Windows only');
 
-    test(
-      'FR-STO-01 Windows probe reports the volume of a folder and of a path '
-      'not created yet',
-      () async {
-        final probe = WindowsFreeSpaceProbe();
-        final here = await probe.query(root.path);
-        final later = await probe.query(p.join(root.path, 'a', 'b'));
-        expect(here, isNotNull);
-        expect(here!.totalBytes, greaterThan(0));
-        expect(here.availableBytes, greaterThan(0));
-        expect(here.availableBytes, lessThanOrEqualTo(here.totalBytes));
-        expect(later!.totalBytes, here.totalBytes);
-      },
-      skip: Platform.isWindows ? false : 'Windows only',
-    );
+    test('FR-STO-01 Windows probe reports the volume of a folder and of a path '
+        'not created yet', () async {
+      final probe = WindowsFreeSpaceProbe();
+      final here = await probe.query(root.path);
+      final later = await probe.query(p.join(root.path, 'a', 'b'));
+      expect(here, isNotNull);
+      expect(here!.totalBytes, greaterThan(0));
+      expect(here.availableBytes, greaterThan(0));
+      expect(here.availableBytes, lessThanOrEqualTo(here.totalBytes));
+      expect(later!.totalBytes, here.totalBytes);
+    }, skip: Platform.isWindows ? false : 'Windows only');
 
     test(
       'FR-STO-01 Windows probe agrees with the OS figure for the drive',

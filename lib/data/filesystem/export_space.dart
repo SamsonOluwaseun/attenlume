@@ -18,6 +18,15 @@ int estimateFolderExportBytes(Iterable<int> sizes) =>
     sizes.fold(0, (sum, s) => sum + s + _perFileOverheadBytes) +
     _perFileOverheadBytes;
 
+/// Bytes a ZIP export of files with these [sizes] needs on the destination.
+/// With store compression (no deflate), the ZIP overhead is local file
+/// headers, central directory records, an optional ZIP64 extra field and
+/// the embedded `checksums.sha256`, plus the companion `<zipName>.sha256`
+/// on disk.
+int estimateZipExportBytes(Iterable<int> sizes) =>
+    sizes.fold(0, (sum, s) => sum + s + _perFileOverheadBytes) +
+    _perFileOverheadBytes;
+
 enum PreflightStatus {
   /// Enough space, with the reserve left over.
   ok,

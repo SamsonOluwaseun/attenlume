@@ -42,45 +42,42 @@ void main() {
       expect(a.minutesLeft, 0);
     });
 
-    test(
-      'AT-STO-02 simulated recording on a filling disk warns, then urges, '
-      'then stops before the disk is empty',
-      () async {
-        // A disk with 10 GiB free, recording at 96 kbps while another app
-        // writes 2 MiB per tick (30 s), checked every 30 seconds (FR-STO-03).
-        // The assessment uses only the recording rate to estimate minutes
-        // left; the other app's drain makes the real decline faster.
-        final probe = FakeFreeSpaceProbe(10240 * mib);
-        const otherAppPerTick = 60 * mib;
-        const recordingPerTick = (windowsRate * 30) ~/ 1;
-        final seen = <StorageLevel>[];
-        var ticks = 0;
-        while (true) {
-          final space = await probe.query('C:\\media');
-          final a = assessStorage(
-            freeBytes: space!.availableBytes,
-            bytesPerSecond: windowsRate,
-          );
-          if (seen.isEmpty || seen.last != a.level) seen.add(a.level);
-          if (a.level == StorageLevel.hardStop) break;
-          probe.availableBytes =
-              probe.availableBytes! - recordingPerTick - otherAppPerTick;
-          ticks++;
-          expect(ticks, lessThan(1000));
-        }
-        expect(seen, [
-          StorageLevel.ok,
-          StorageLevel.warning,
-          StorageLevel.urgent,
-          StorageLevel.hardStop,
-        ]);
-        // The stop happens with space still free, never at zero.
-        expect(probe.availableBytes, greaterThan(0));
-        expect(
-          probe.availableBytes,
-          greaterThan(100 * mib - otherAppPerTick - recordingPerTick),
+    test('AT-STO-02 simulated recording on a filling disk warns, then urges, '
+        'then stops before the disk is empty', () async {
+      // A disk with 10 GiB free, recording at 96 kbps while another app
+      // writes 2 MiB per tick (30 s), checked every 30 seconds (FR-STO-03).
+      // The assessment uses only the recording rate to estimate minutes
+      // left; the other app's drain makes the real decline faster.
+      final probe = FakeFreeSpaceProbe(10240 * mib);
+      const otherAppPerTick = 60 * mib;
+      const recordingPerTick = (windowsRate * 30) ~/ 1;
+      final seen = <StorageLevel>[];
+      var ticks = 0;
+      while (true) {
+        final space = await probe.query('C:\\media');
+        final a = assessStorage(
+          freeBytes: space!.availableBytes,
+          bytesPerSecond: windowsRate,
         );
-      },
-    );
+        if (seen.isEmpty || seen.last != a.level) seen.add(a.level);
+        if (a.level == StorageLevel.hardStop) break;
+        probe.availableBytes =
+            probe.availableBytes! - recordingPerTick - otherAppPerTick;
+        ticks++;
+        expect(ticks, lessThan(1000));
+      }
+      expect(seen, [
+        StorageLevel.ok,
+        StorageLevel.warning,
+        StorageLevel.urgent,
+        StorageLevel.hardStop,
+      ]);
+      // The stop happens with space still free, never at zero.
+      expect(probe.availableBytes, greaterThan(0));
+      expect(
+        probe.availableBytes,
+        greaterThan(100 * mib - otherAppPerTick - recordingPerTick),
+      );
+    });
   });
 }

@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:attenlume/data/filesystem/export_space.dart';
 import 'package:attenlume/data/filesystem/folder_export.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+
+import '../../fixtures/fake_free_space_probe.dart';
 
 void main() {
   late Directory root;
@@ -128,5 +131,70 @@ void main() {
       expect(destination.listSync(), isEmpty);
       expect(snapshot(source), before);
     });
+
+    test(
+      'AT-STO-03 preflight rejects export when space is insufficient',
+      () async {
+        final probe = FakeFreeSpaceProbe(1024);
+        await expectLater(
+          exportFolder(
+            source: source,
+            destinationParent: destination,
+            folderName: 'export-full',
+            freeSpace: probe,
+          ),
+          throwsA(isA<InsufficientSpaceException>()),
+        );
+        expect(
+          !destination.existsSync() || destination.listSync().isEmpty,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'FR-STO-04 mid-export disk full via injected writer cleans up',
+      () async {
+        final before = snapshot(source);
+        await expectLater(
+          exportFolder(
+            source: source,
+            destinationParent: destination,
+            folderName: 'export-fail',
+            openSink: (target) async {
+              final real = await openFileExportSink(target);
+              return _FailingExportSink(real, failAfterBytes: 50000);
+            },
+          ),
+          throwsA(isA<ExportOutOfSpaceException>()),
+        );
+        expect(destination.listSync(), isEmpty);
+        expect(snapshot(source), before);
+      },
+    );
   });
+}
+
+class _FailingExportSink implements ExportSink {
+  _FailingExportSink(this._realSink, {required this.failAfterBytes});
+
+  final ExportSink _realSink;
+  final int failAfterBytes;
+  var _written = 0;
+
+  @override
+  Future<void> add(List<int> chunk) async {
+    _written += chunk.length;
+    if (_written >= failAfterBytes) {
+      throw FileSystemException(
+        'disk full',
+        '',
+        OSError('disk full', Platform.isWindows ? 112 : 28),
+      );
+    }
+    await _realSink.add(chunk);
+  }
+
+  @override
+  Future<void> close() => _realSink.close();
 }

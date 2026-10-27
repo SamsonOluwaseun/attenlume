@@ -4,20 +4,18 @@ import 'package:ffi/ffi.dart';
 
 import 'free_space_probe.dart';
 
-typedef _GetDiskFreeSpaceExWNative =
-    Int32 Function(
-      Pointer<Utf16> directoryName,
-      Pointer<Uint64> freeBytesAvailableToCaller,
-      Pointer<Uint64> totalNumberOfBytes,
-      Pointer<Uint64> totalNumberOfFreeBytes,
-    );
-typedef _GetDiskFreeSpaceExWDart =
-    int Function(
-      Pointer<Utf16> directoryName,
-      Pointer<Uint64> freeBytesAvailableToCaller,
-      Pointer<Uint64> totalNumberOfBytes,
-      Pointer<Uint64> totalNumberOfFreeBytes,
-    );
+typedef _GetDiskFreeSpaceExWNative = Int32 Function(
+  Pointer<Utf16> directoryName,
+  Pointer<Uint64> freeBytesAvailableToCaller,
+  Pointer<Uint64> totalNumberOfBytes,
+  Pointer<Uint64> totalNumberOfFreeBytes,
+);
+typedef _GetDiskFreeSpaceExWDart = int Function(
+  Pointer<Utf16> directoryName,
+  Pointer<Uint64> freeBytesAvailableToCaller,
+  Pointer<Uint64> totalNumberOfBytes,
+  Pointer<Uint64> totalNumberOfFreeBytes,
+);
 
 /// Calls `GetDiskFreeSpaceExW` in kernel32 through `dart:ffi` [P0-11].
 ///
@@ -48,7 +46,10 @@ class WindowsFreeSpaceProbe implements FreeSpaceProbe {
         totalFree,
       );
       if (ok == 0) return null;
-      return FreeSpace(availableBytes: available.value, totalBytes: total.value);
+      return FreeSpace(
+        availableBytes: available.value,
+        totalBytes: total.value,
+      );
     });
   }
 }
