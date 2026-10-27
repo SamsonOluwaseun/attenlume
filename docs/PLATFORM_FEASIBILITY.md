@@ -26,7 +26,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | Export to user-chosen folder | P0-06 | unverified | unverified | **partial**: streaming copy, SHA-256 verify and no-overwrite pass on the build host (unit tests). Folder picker not built yet (P1-21) | `lib/data/filesystem/folder_export.dart` |
 | Bluetooth mic routing and fallback | P0-07 | unverified | unverified | unverified | Needs headset and lapel mic |
 | 90-minute low-spec recording: memory, size, battery | P0-10 | unverified | unverified | unverified | No figures until measured |
-| Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | unverified | Export half can run in automated tests |
+| Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | **pass** (Windows probe, preflight, disk-full cleanup, streaming folder and ZIP exports with bounded RAM; see 2.12) | Real RSS measured: delta 10.3 MB (folder), 5.6 MB (ZIP) on a 1 GiB file |
 | Per-segment profile switch, observed bitrate | P0-12 | unverified | unverified | unverified | |
 | Start recording from App Intent (iOS) or Quick Settings tile (Android) | P0-13 | unverified | unverified | n/a | Phase 2 feasibility only |
 | Passthrough trimming without re-encoding | P0-14 | unverified | unverified | unverified | ADR-003 |
@@ -180,7 +180,14 @@ No single maintained package covers Android, iOS and Windows:
 
 ### 2.12 Export, archive and hashing
 
-- `archive` 4.5.2 (MIT) has file-backed `InputFileStream` and `OutputFileStream`, and its ZIP encoder writes ZIP64 extra fields for entries past 4 GB (checked in the 4.5.2 source). Bounded memory still has to be measured in P0-11.
+- `archive` 4.5.2 (MIT) has file-backed `InputFileStream` and `OutputFileStream`, and its ZIP encoder writes ZIP64 extra fields for entries past 4 GB (checked in the 4.5.2 source).
+- **P0-11 measurements (Windows 11 build host, 27 October 2026):**
+  - Free space probe: Win32 `GetDiskFreeSpaceExW` via `dart:ffi` matches PowerShell `(Get-PSDrive).Free` within 512 MiB drift.
+  - Large export benchmark (1 GiB synthetic file, 1,073,741,824 bytes):
+    - Folder export (`exportFolder`): elapsed 18.1 s (~59 MB/s with dual hash passes: write & re-read), RSS before 201.2 MB, peak RSS 211.5 MB, delta RSS **10.3 MB**. Checksums verified with 0 failures.
+    - ZIP export (`exportZip` with store): elapsed 18.8 s (~57 MB/s), RSS before 211.5 MB, peak RSS 217.1 MB, delta RSS **5.6 MB**. ZIP size 1,073,742,095 bytes (overhead only 271 bytes for headers and embedded `checksums.sha256`).
+  - Memory usage during both operations remains strictly bounded to chunk buffers; no whole file is buffered in RAM (FR-EXP-04).
+  - Out-of-space simulation: Preflight correctly denies exports when space is below required + reserve (`InsufficientSpaceException`). Mid-export disk full via injected writer cleanly deletes `.partial` outputs and throws `ExportOutOfSpaceException`, leaving source files completely untouched (FR-EXP-05, AT-STO-03).
 - Use the "store" method (no compression) for audio and photos. They are already compressed, and storing saves CPU and battery (FR-EXP-09).
 - SHA-256 with `crypto` 3.0.8 using chunked conversion, in an isolate.
 - Windows path limits: classic `MAX_PATH` is 260 characters. Reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`) and trailing dots or spaces are not allowed. FR-EXP-07's 180-character cap keeps exports safe when unzipped into a deep folder.

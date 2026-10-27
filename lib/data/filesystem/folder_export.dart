@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
+import '../../platform/storage/free_space_probe.dart';
+import 'export_space.dart';
+
 /// One file written by [exportFolder].
 class ExportedFile {
   const ExportedFile({
@@ -48,12 +51,22 @@ const checksumFileName = 'checksums.sha256';
 ///   removed: it holds copies, never unique media.
 /// - Each copy is read back and its SHA-256 compared with the source hash.
 ///
+/// - With [freeSpace], checks the destination first and throws
+///   [InsufficientSpaceException] before writing anything if the export and
+///   [reserveBytes] do not fit [P0-11, AT-STO-03].
+/// - If the disk fills mid-export, throws [ExportOutOfSpaceException] after
+///   removing the partial folder.
+///
 /// [onFileDone] is called after each verified copy, for progress reporting.
+/// [openSink] replaces the file writer, for failure tests.
 Future<FolderExportResult> exportFolder({
   required Directory source,
   required Directory destinationParent,
   required String folderName,
   void Function(ExportedFile file)? onFileDone,
+  FreeSpaceProbe? freeSpace,
+  int reserveBytes = defaultExportReserveBytes,
+  ExportSinkOpener openSink = openFileExportSink,
 }) async {
   final finalDir = Directory(p.join(destinationParent.path, folderName));
   final partialDir = Directory('${finalDir.path}.partial');
@@ -67,6 +80,20 @@ Future<FolderExportResult> exportFolder({
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));
 
+  if (freeSpace != null) {
+    final preflight = await preflightExport(
+      requiredBytes: estimateFolderExportBytes(
+        sourceFiles.map((f) => f.lengthSync()),
+      ),
+      destination: destinationParent.path,
+      probe: freeSpace,
+      reserveBytes: reserveBytes,
+    );
+    if (preflight.status == PreflightStatus.insufficient) {
+      throw InsufficientSpaceException(preflight);
+    }
+  }
+
   await partialDir.create(recursive: true);
   try {
     final exported = <ExportedFile>[];
@@ -74,7 +101,7 @@ Future<FolderExportResult> exportFolder({
       final relative = p.relative(file.path, from: source.path);
       final target = File(p.join(partialDir.path, relative));
       await target.parent.create(recursive: true);
-      final (bytes, digest) = await _copyHashing(file, target);
+      final (bytes, digest) = await _copyHashing(file, target, openSink);
       final check = await _hashFile(target);
       if (check != digest) {
         throw FileSystemException('Copy does not match source', target.path);
@@ -93,29 +120,76 @@ Future<FolderExportResult> exportFolder({
     );
     await partialDir.rename(finalDir.path);
     return FolderExportResult(folder: finalDir, files: exported);
-  } catch (_) {
+  } catch (error) {
     if (partialDir.existsSync()) await partialDir.delete(recursive: true);
+    if (error is FileSystemException && isOutOfSpaceError(error)) {
+      throw ExportOutOfSpaceException(error);
+    }
     rethrow;
+  }
+}
+
+/// Where [exportFolder] writes one file's bytes.
+abstract interface class ExportSink {
+  Future<void> add(List<int> chunk);
+
+  /// Flushes to disk and closes.
+  Future<void> close();
+}
+
+typedef ExportSinkOpener = Future<ExportSink> Function(File target);
+
+/// The real writer: a [RandomAccessFile], flushed on close.
+Future<ExportSink> openFileExportSink(File target) async =>
+    _FileExportSink(await target.open(mode: FileMode.writeOnly));
+
+class _FileExportSink implements ExportSink {
+  _FileExportSink(this._file);
+
+  final RandomAccessFile _file;
+
+  @override
+  Future<void> add(List<int> chunk) => _file.writeFrom(chunk);
+
+  @override
+  Future<void> close() async {
+    try {
+      await _file.flush();
+    } finally {
+      await _file.close();
+    }
   }
 }
 
 /// Streams [from] into [to] (temp name, flush, rename) and hashes in the
 /// same pass. Memory use is one read chunk.
-Future<(int, String)> _copyHashing(File from, File to) async {
+Future<(int, String)> _copyHashing(
+  File from,
+  File to,
+  ExportSinkOpener openSink,
+) async {
   final temp = File('${to.path}.tmp');
   final digestSink = _DigestSink();
   final hasher = sha256.startChunkedConversion(digestSink);
-  final out = await temp.open(mode: FileMode.writeOnly);
+  final out = await openSink(temp);
   var bytes = 0;
+  var written = false;
   try {
     await for (final chunk in from.openRead()) {
       hasher.add(chunk);
-      await out.writeFrom(chunk);
+      await out.add(chunk);
       bytes += chunk.length;
     }
-    await out.flush();
+    written = true;
   } finally {
-    await out.close();
+    if (written) {
+      await out.close();
+    } else {
+      // Keep the write error, not a second one from closing.
+      try {
+        await out.close();
+      } catch (_) {}
+    }
   }
   hasher.close();
   await temp.rename(to.path);
