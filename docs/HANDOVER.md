@@ -1,35 +1,37 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), overnight relay
-Branch: main (merged from `phase-1/P1-18-trim-split`)
-Current task ID: P1-18 (done). Next: P1-19
+Branch: main (merged from `phase-1/P1-19-permanent-trim`)
+Current task ID: P1-19 (done). Next: P1-20
 Status: done
 
 ## Done in this session
 
-- ADR-036 (P1-18 done): the review screen has a "Trim and split" panel. Trim start to here, Trim end from here, and Start cut here / End cut here add rows to `cut_ranges`; each add or remove shows a snackbar with Undo (soft delete and restore). The cut list shows each range with its reason; tap to jump, x to remove.
-- `ReviewPlayerController.cutRanges`: merged cuts are skipped while playing, across gaps; a trimmed end stops playback. The timeline strip draws hatched cut spans and counts them in its semantics label; the position row shows time "after cuts" (`ReviewTimeline.keptAudioMs`, `audioEndMs`).
-- `ActivityRepository.split` (one transaction) and `ActivitySplitter` (moves waveform summaries): Split here asks for the Part 2 name, moves later segments, photos, bookmarks and interruptions, divides cuts, and shares a segment the split falls inside (second row, same file, a cut on each side). New activity offsets follow the 9.4 rule from its first segment.
-- 16 new tests; `flutter test` 681 passed, analyze and format clean, J2 journey test passes on Windows.
+- ADR-037 (P1-19 done): `Mp4SampleTrimmer` (`lib/platform/audio_trimmer/mp4_sample_trimmer.dart`) reads the MP4 sample tables (`lib/data/filesystem/mp4_sample_table.dart`) and copies the kept AAC frames byte for byte into a new fast-start file. No re-encode, pure Dart, the same on Android, iOS and Windows, behind `AudioTrimmer`.
+- `PermanentTrimService` (`lib/domain/services/permanent_trim_service.dart`): plan from merged cuts, one new file per kept piece (`audio/segment-001-trim-1.m4a`), every file verified before one transaction (`MediaAssetRepository.replaceWithTrimmed`) swaps the rows. Cuts become gaps so photos and bookmarks keep their places; stored offsets shift if the first segment now starts later. Originals no other row names move to `audio/originals/` (kept out of crash recovery's unlinked check); `removeOriginals` deletes only on request. Waveform summaries are sliced.
+- Review screen: "Apply trims permanently" under the cut list, a confirm dialog (removed and kept time, space needed), a spinner while writing, then "Remove the originals?" with Keep or Remove.
+- 22 new tests; `flutter test` 703 passed, analyze and format clean, J2 journey test passes on Windows.
 
 ## Left to do on this task
 
-- Nothing in code. Device checks in MT-25.
+- Nothing in code. Device checks in MT-26: real recordings from each platform, and playing trimmed files in other players.
 
 ## Exact next step
 
-Start **P1-19 Permanent trim per ADR-003** on branch `phase-1/P1-19-permanent-trim` (FR-REV-06, FR-REV-07). Read ADR-003 and ADR-036 first. Important: `lib/platform/audio_trimmer/m4a_container_trimmer.dart` writes placeholder audio bytes (it was a P0-14 container spike), so a real trimmer is needed: native `MediaExtractor` + `MediaMuxer` on Android, `AVAssetExportSession` passthrough on iOS, and on Windows either Media Foundation or a real Dart MP4 sample-table rewrite (copy `stsz`/`stco` sample ranges). Keep it behind `AudioTrimmer`; "Apply trims permanently" must be a separate confirmed action that writes new files and only then offers to remove originals. After ADR-036, two segment rows can name the same file: never offer to remove a file another row still names. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tooluild_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
+Start **P1-20 Storage Manager and cleanup** on branch `phase-1/P1-20-storage-manager` (FR-STO-05 to 07). Read ADR-036 and ADR-037 first: `file_path` can be shared by two segment rows (count bytes once, never delete a file another row names), and originals kept after a permanent trim sit in `activities/<id>/audio/originals/` with no row (list them as "originals kept after trimming" and offer to remove them; `MediaPaths.isKeptOriginal`, `PermanentTrimService.removeOriginals`). Waveform summaries (`waveforms/`) and thumbnails are derived. Deleting local copies needs a verified export first (FR-STO-06), which P1-21 provides, so build the screen and safe temporary cleanup first and keep that action off until export exists. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tool/build_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
 
 ## Files touched
 
-New: `lib/domain/services/activity_splitter.dart`, `lib/features/playback_review/trim_panel.dart`, `test/data/repositories/activity_split_test.dart`.
-Changed: `lib/data/repositories/activity_repository.dart` (`split`, `ActivitySplitResult`), `lib/domain/services/review_timeline.dart` (`audioEndMs`, `keptAudioMs`), `lib/features/playback_review/review_player_controller.dart` (cut skipping), `lib/features/playback_review/review_screen.dart` (panel, undo snackbars, split dialog), `lib/features/playback_review/timeline_strip.dart` (cuts), tests `test/features/playback_review/review_player_controller_test.dart`, `test/features/playback_review/review_screen_test.dart`, `test/domain/review_timeline_test.dart`, docs (DECISIONS, TEST_PLAN, PROGRESS, HANDOVER).
+New: `lib/data/filesystem/mp4_sample_table.dart`, `lib/platform/audio_trimmer/mp4_sample_trimmer.dart`, `lib/domain/services/permanent_trim_service.dart`, `test/fixtures/mp4_fixture.dart`, `test/platform/mp4_sample_trimmer_test.dart`, `test/domain/permanent_trim_service_test.dart`, `test/features/playback_review/permanent_trim_widget_test.dart`.
+Changed: `lib/data/filesystem/media_paths.dart` (`trimmedSegment`, `originalsFolder`, `isKeptOriginal`), `lib/data/repositories/media_asset_repository.dart` (`replaceWithTrimmed`, `TrimmedSegment`), `lib/features/playback_review/review_screen.dart` (provider, apply flow, two dialogs), `lib/features/playback_review/trim_panel.dart` (button), docs (DECISIONS, TEST_PLAN, PROGRESS, HANDOVER).
 
 ## Failing or skipped tests
 
-None failing: `flutter test` 681 passed. The P0 device spikes and MT-23 to MT-25 still need real hardware.
+None failing: `flutter test` 703 passed. The P0 device spikes and MT-23 to MT-26 still need real hardware.
 
 ## Open questions for the owner
+
+- **ADR-037 (new):** permanent trim is a pure-Dart passthrough copy of AAC frames instead of the native per-platform routes ADR-003 planned, so it works and is tested the same everywhere (iOS cannot be built here). Cuts land on AAC frames (about 21 ms). The trimmed files drop the MP4 edit list, so up to about 50 ms of encoder start-up silence may now be heard at the start. Originals are moved to `audio/originals/` and kept until you tap Remove originals; there is no undo after a permanent trim apart from those kept originals. Say if you want native trimming, a re-encode option, or originals deleted by default.
 
 - **ADR-036 (new):** a split inside a segment does not cut the audio file: both activities point to the same file, each with a cut hiding the other part, so nothing is rewritten or deleted. Part 2 is named in the confirm dialog (default "{title} (Part 2)") and copies type, room, organisation, tags and privacy but not speakers or notes. There is no undo for a split yet. Say if you want an "undo split" or a merge action.
 - **ADR-035 (new):** gallery import needs Android `READ_MEDIA_IMAGES`. Google Play only allows it for apps whose core use needs broad photo access; before a Play listing, decide whether to argue the case or switch Android to the system photo picker (no time-window filter). HEIC originals on Android are skipped (iOS hands over a JPEG). Duplicates are judged by time (within 1 s), large means over 15 MB or 24 MP. Say if you want different rules.
@@ -59,6 +61,7 @@ flutter analyze
 flutter test
 dart format --output=none --set-exit-if-changed lib test tool integration_test
 dart run tool/licence_audit.dart --check
-flutter build windows --release
+flutter test integration_test/app_capture_journey_test.dart -d windows
+powershell -File tool/build_windows_preview.ps1 -SkipTests
 flutter build apk --debug
 ```

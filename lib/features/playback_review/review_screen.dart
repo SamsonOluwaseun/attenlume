@@ -9,9 +9,11 @@ import '../../domain/models/activity.dart';
 import '../../domain/models/enums.dart';
 import '../../domain/models/media.dart';
 import '../../domain/services/activity_splitter.dart';
+import '../../domain/services/permanent_trim_service.dart';
 import '../../domain/services/review_timeline.dart';
 import '../../platform/audio_playback/audio_playback_engine.dart';
 import '../../platform/audio_playback/audioplayers_playback_engine.dart';
+import '../../platform/audio_trimmer/mp4_sample_trimmer.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_providers.dart';
 import 'review_player_controller.dart';
@@ -31,6 +33,18 @@ final activitySplitterProvider = Provider<ActivitySplitter>(
   (ref) => ActivitySplitter(
     activities: ref.watch(activityRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
+  ),
+);
+
+/// "Apply trims permanently" (FR-REV-06, ADR-037) [P1-19].
+final permanentTrimServiceProvider = Provider<PermanentTrimService>(
+  (ref) => PermanentTrimService(
+    activities: ref.watch(activityRepositoryProvider),
+    media: ref.watch(mediaAssetRepositoryProvider),
+    cuts: ref.watch(cutRangeRepositoryProvider),
+    trimmer: const Mp4SampleTrimmer(),
+    mediaRoot: ref.watch(mediaRootProvider),
+    freeSpace: ref.watch(freeSpaceProbeProvider),
   ),
 );
 
@@ -221,6 +235,74 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     _say('Split. "${result.part2.title}" is now in the activity list.');
   }
 
+  Future<void> _applyPermanently() async {
+    await _player?.pause();
+    final service = ref.read(permanentTrimServiceProvider);
+    final PermanentTrimPlan plan;
+    try {
+      plan = await service.plan(widget.activityId);
+    } on PermanentTrimException catch (e) {
+      if (mounted) _say(e.message);
+      return;
+    }
+    if (!mounted) return;
+    if (!plan.hasWork) {
+      _say(
+        'The cuts only cover time between recordings, so there is nothing '
+        'to write.',
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ApplyTrimDialog(plan: plan),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Release the audio files first: Windows cannot move an open file.
+    _player?.dispose();
+    setState(() {
+      _player = null;
+      _loading = true;
+    });
+    final PermanentTrimResult result;
+    try {
+      result = await service.apply(widget.activityId);
+    } on PermanentTrimException catch (e) {
+      await _load();
+      if (mounted) _say(e.message);
+      return;
+    }
+    await _load();
+    if (!mounted) return;
+    if (result.originals.isEmpty) {
+      _say(
+        result.sharedOriginals > 0
+            ? 'Trims applied. The original recording is kept because '
+                  'another activity still uses it.'
+            : 'Trims applied.',
+      );
+      return;
+    }
+    final remove = await showDialog<bool>(
+      context: context,
+      builder: (_) => _RemoveOriginalsDialog(result: result),
+    );
+    if (!mounted) return;
+    if (remove == true) {
+      final removed = await service.removeOriginals(result.originals);
+      if (!mounted) return;
+      _say(
+        removed == result.originals.length
+            ? 'Trims applied. Originals removed.'
+            : 'Trims applied. Some originals could not be removed and are '
+                  'still on this device.',
+      );
+    } else {
+      _say('Trims applied. Your originals are kept.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -281,6 +363,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                     onSplit: () => _split(player.positionMs),
                     onRemoveCut: _removeCut,
                     onSeek: player.seekTo,
+                    onApplyPermanently: _applyPermanently,
                   ),
                   if (player.error case final error?) ...[
                     const SizedBox(height: TokenSpace.space3),
@@ -337,6 +420,81 @@ class _PositionRow extends StatelessWidget {
           ' after cuts',
           key: const Key('review-kept'),
           style: style,
+        ),
+      ],
+    );
+  }
+}
+
+/// Confirms "Apply trims permanently" (FR-REV-06) [P1-19].
+class _ApplyTrimDialog extends StatelessWidget {
+  const _ApplyTrimDialog({required this.plan});
+
+  final PermanentTrimPlan plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final removed = formatOffset(plan.removedMs);
+    final kept = formatOffset(plan.keptMs);
+    return AlertDialog(
+      title: const Text('Apply trims permanently?'),
+      content: Text(
+        'Attenlume writes new audio files without the cut parts: $removed '
+        'removed, $kept left. This needs about '
+        '${formatStorageBytes(plan.estimatedBytes)} of space.\n\n'
+        'Photos, bookmarks and notes stay where they are. Your original '
+        'recordings are kept until you choose to remove them.',
+        key: const Key('apply-trim-summary'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('apply-trim-confirm'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Write trimmed files'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Offers to remove originals once the trimmed files are saved
+/// (FR-REV-06) [P1-19].
+class _RemoveOriginalsDialog extends StatelessWidget {
+  const _RemoveOriginalsDialog({required this.result});
+
+  final PermanentTrimResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = result.originals.length;
+    final files = n == 1 ? 'original recording' : '$n original recordings';
+    return AlertDialog(
+      title: const Text('Remove the originals?'),
+      content: Text(
+        'The trimmed files are saved. Your $files '
+        '(${formatStorageBytes(result.originalBytes)}) are still on this '
+        'device in case you need the cut parts. Removing them frees the '
+        'space and cannot be undone.'
+        '${result.sharedOriginals > 0 ? ' Recordings another activity still uses are kept either way.' : ''}',
+        key: const Key('remove-originals-summary'),
+      ),
+      actions: [
+        TextButton(
+          key: const Key('keep-originals'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Keep originals'),
+        ),
+        TextButton(
+          key: const Key('remove-originals'),
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Remove originals'),
         ),
       ],
     );

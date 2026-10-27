@@ -176,6 +176,145 @@ class MediaAssetRepository {
         ),
       );
 
+  /// Swaps segments for the trimmed files written from them, in one
+  /// transaction (FR-REV-06, ADR-037) [P1-19].
+  ///
+  /// Rows in [replacedIds] are deleted (their files are not touched) and
+  /// [added] are inserted. Sequences are renumbered by start time. When the
+  /// first segment now starts later, stored photo, bookmark and cut offsets
+  /// move back by the same amount, so everything keeps its wall-clock place
+  /// (BUILD_GUIDE 9.4). Returns the inserted rows.
+  Future<List<RecordingSegment>> replaceWithTrimmed(
+    String activityId, {
+    required Set<String> replacedIds,
+    required List<TrimmedSegment> added,
+  }) => _db.transaction(() async {
+    final now = _clock();
+    final before = await segmentsFor(activityId);
+    if (before.any((s) => s.state == SegmentState.writing)) {
+      throw StateError('Stop the recording before trimming it');
+    }
+    DateTime? originOf(Iterable<RecordingSegment> rows) => rows.isEmpty
+        ? null
+        : rows.map((s) => s.startUtc).reduce((a, b) => a.isBefore(b) ? a : b);
+    final oldOrigin = originOf(before);
+
+    await (_db.delete(
+      _db.recordingSegments,
+    )..where((s) => s.id.isIn(replacedIds))).go();
+    var temp = 1000000;
+    for (final t in added) {
+      final s = t.source;
+      await _db
+          .into(_db.recordingSegments)
+          .insert(
+            RecordingSegmentsCompanion.insert(
+              id: t.id,
+              activityId: activityId,
+              sequence: temp++,
+              filePath: t.filePath,
+              state: s.state,
+              requestedProfile: s.requestedProfile,
+              codec: s.codec,
+              container: s.container,
+              channelCount: s.channelCount,
+              sampleRateHz: s.sampleRateHz,
+              requestedBitrateBps: s.requestedBitrateBps,
+              observedBitrateBps: Value(t.observedBitrateBps),
+              inputRoute: Value(s.inputRoute),
+              startUtc: t.startUtc.toUtc(),
+              endUtc: Value(
+                t.startUtc.toUtc().add(Duration(milliseconds: t.durationMs)),
+              ),
+              durationMs: Value(t.durationMs),
+              bytes: Value(t.bytes),
+              sha256: Value(t.sha256),
+              endReason: Value(s.endReason),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+    }
+
+    // Renumber in two passes so the unique (activity, sequence) key holds.
+    final rows = await segmentsFor(activityId)
+      ..sort((a, b) {
+        final byStart = a.startUtc.compareTo(b.startUtc);
+        return byStart != 0 ? byStart : a.sequence.compareTo(b.sequence);
+      });
+    for (final first in const [2000000, 1]) {
+      for (var k = 0; k < rows.length; k++) {
+        await (_db.update(
+          _db.recordingSegments,
+        )..where((s) => s.id.equals(rows[k].id))).write(
+          RecordingSegmentsCompanion(
+            sequence: Value(first + k),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+    }
+
+    final newOrigin = originOf(rows);
+    final shift = oldOrigin == null || newOrigin == null
+        ? 0
+        : newOrigin.difference(oldOrigin).inMilliseconds;
+    if (shift != 0) await _shiftOffsets(activityId, shift, now);
+
+    final ids = {for (final t in added) t.id};
+    return [
+      for (final s in await segmentsFor(activityId))
+        if (ids.contains(s.id)) s,
+    ];
+  });
+
+  Future<void> _shiftOffsets(String activityId, int shift, DateTime now) async {
+    final photos = await (_db.select(
+      _db.photos,
+    )..where((p) => p.activityId.equals(activityId))).get();
+    for (final p in photos) {
+      if (p.offsetMs == null) continue;
+      await (_db.update(_db.photos)..where((r) => r.id.equals(p.id))).write(
+        PhotosCompanion(
+          offsetMs: Value(p.offsetMs! - shift),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+    final bookmarks = await (_db.select(
+      _db.bookmarks,
+    )..where((b) => b.activityId.equals(activityId))).get();
+    for (final b in bookmarks) {
+      if (b.offsetMs == null) continue;
+      await (_db.update(_db.bookmarks)..where((r) => r.id.equals(b.id))).write(
+        BookmarksCompanion(
+          offsetMs: Value(b.offsetMs! - shift),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+    final cuts = await (_db.select(
+      _db.cutRanges,
+    )..where((c) => c.activityId.equals(activityId))).get();
+    for (final c in cuts) {
+      final start = c.startOffsetMs - shift;
+      final end = c.endOffsetMs - shift;
+      await (_db.update(_db.cutRanges)..where((r) => r.id.equals(c.id))).write(
+        end <= 0
+            // Wholly before the new start: it hides nothing now.
+            ? CutRangesCompanion(
+                deletedAt: Value(c.deletedAt ?? now),
+                updatedAt: Value(now),
+              )
+            : CutRangesCompanion(
+                startOffsetMs: Value(start < 0 ? 0 : start),
+                endOffsetMs: Value(end),
+                updatedAt: Value(now),
+              ),
+      );
+    }
+  }
+
   Future<List<RecordingSegment>> segmentsFor(String activityId) =>
       (_db.select(_db.recordingSegments)
             ..where((s) => s.activityId.equals(activityId))
@@ -409,4 +548,28 @@ class MediaAssetRepository {
   /// Removes one bookmark [P1-16]. Audio and photos are not touched.
   Future<void> deleteBookmark(String bookmarkId) =>
       (_db.delete(_db.bookmarks)..where((b) => b.id.equals(bookmarkId))).go();
+}
+
+/// A file written by a permanent trim from part of [source] (FR-REV-06)
+/// [P1-19]. Format fields and the end reason come from [source].
+class TrimmedSegment {
+  const TrimmedSegment({
+    required this.id,
+    required this.source,
+    required this.filePath,
+    required this.startUtc,
+    required this.durationMs,
+    required this.bytes,
+    required this.sha256,
+    required this.observedBitrateBps,
+  });
+
+  final String id;
+  final RecordingSegment source;
+  final String filePath;
+  final DateTime startUtc;
+  final int durationMs;
+  final int bytes;
+  final String sha256;
+  final int observedBitrateBps;
 }
