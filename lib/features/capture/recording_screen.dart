@@ -7,10 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_theme.dart';
 import '../../app/theme/tokens.dart';
-import '../../data/filesystem/media_paths.dart';
 import '../../data/local_database/app_database.dart';
 import '../../data/repositories/repository_providers.dart';
-import '../../data/repositories/repository_support.dart' show uuidV4;
 import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
@@ -20,6 +18,7 @@ import '../../domain/services/recording_state.dart';
 import '../../presentation/components/bookmark_chip.dart';
 import '../../presentation/components/record_button.dart';
 import '../../presentation/components/storage_meter.dart';
+import 'camera_screen.dart';
 import 'mic_test_sheet.dart';
 import 'one_active_prompt_dialog.dart';
 import 'quick_thought_sheet.dart';
@@ -258,58 +257,20 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     );
   }
 
+  /// Opens the in-app camera; recording carries on underneath [P1-14].
   Future<void> _handleTakePhoto() async {
     await HapticFeedback.lightImpact();
-    final interCoord = ref.read(interruptionCoordinatorProvider);
-    final camera = ref.read(photoCameraProvider);
-    final mediaRepo = ref.read(mediaAssetRepositoryProvider);
-    final mediaRoot = await ref.read(mediaRootProvider)();
-
-    try {
-      await interCoord.duringCameraUse(() async {
-        if (!camera.isOpen) {
-          await camera.open();
-        }
-        final photoId = uuidV4();
-        final relativePath = MediaPaths.photo(
-          _activity!.conferenceId,
-          _activity!.id,
-          photoId,
-        );
-        final file = MediaPaths.resolve(mediaRoot, relativePath);
-        await file.parent.create(recursive: true);
-
-        final captured = await camera.takePhoto(file.path);
-
-        await mediaRepo.addPhoto(
-          id: photoId,
-          activityId: _activity!.id,
-          filePath: relativePath,
-          takenUtc: DateTime.now().toUtc(),
-          source: PhotoSource.inApp,
-          bytes: captured.bytes,
-        );
-        unawaited(
-          ref
-              .read(storageBudgetServiceProvider)
-              .checkNow(activityId: widget.activityId),
-        );
-      });
-
-      if (mounted) {
-        setState(() => _photoCount++);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Photo captured'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Camera unavailable: $e')));
-      }
+    if (!mounted) return;
+    final taken = await CameraScreen.open(context, widget.activityId);
+    if (!mounted) return;
+    setState(() => _photoCount += taken);
+    if (taken > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(taken == 1 ? 'Photo saved' : '$taken photos saved'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 

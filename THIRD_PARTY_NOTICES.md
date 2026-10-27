@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 129 Dart and Flutter packages in `pubspec.lock`: 92 can be part of the app, 37 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (6), BSD-2-Clause (1), BSD-3-Clause (71), Flutter engine bundle (permissive, see note) (1), MIT (13).
+- 130 Dart and Flutter packages in `pubspec.lock`: 93 can be part of the app, 37 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (6), BSD-2-Clause (1), BSD-3-Clause (71), Flutter engine bundle (permissive, see note) (1), MIT (14).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -51,6 +51,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `hooks` | 2.2.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2025, the Dart project authors. |
 | `http` | 1.6.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `http_parser` | 4.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
+| `image` | 4.12.0 | pub.dev | direct main | MIT | Copyright (c) 2013-2022 Brendan Duncan. |
 | `jni` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `jni_flutter` | 1.0.4+1 | pub.dev | transitive | BSD-3-Clause | Copyright 2026, the Dart project authors. |
 | `jni_util` | 1.0.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2026, the Dart project authors. |
@@ -1139,6 +1140,33 @@ Apache License
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+```
+
+### MIT: `image`
+
+```text
+The MIT License
+
+Copyright (c) 2013-2022 Brendan Duncan.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ```
 
 ### BSD-3-Clause: `jni`, `leak_tracker`, `leak_tracker_flutter_testing`, `leak_tracker_testing`

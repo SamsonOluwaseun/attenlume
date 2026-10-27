@@ -49,6 +49,7 @@ dependencies:
   audio_session: ^0.2.4
   camera: ^0.12.1
   camera_windows: ^0.3.0+1
+  image: ^4.12.0
 
 dev_dependencies:
   flutter_test:

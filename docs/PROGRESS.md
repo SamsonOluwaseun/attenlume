@@ -593,6 +593,15 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - Windows run of the journey on this PC (Remote Desktop, no microphone redirected): conference created, Session opened the recording screen, Record refused with a visible message. Recording, photo, bookmark and stop steps not run: no microphone. Blocked: needs a microphone.
 - Still open: Android 13+ notification permission is never requested; no camera viewfinder (P1-14).
 
+## 27 October 2026: notification permission and P1-14 camera screen (Claude Code, Opus 5.5, owner away)
+
+- Before changes: `flutter test` 581 passed, `flutter analyze` clean.
+- ADR-029: Android 13+ notification permission requested when the recording service starts. Compiles in the release APK; unverified on a device.
+- ADR-030 (P1-14 first slice): camera screen with live viewfinder, shutter ready after each shot, photo count and last thumbnail; `PhotoCaptureService`; `processPhoto` (EXIF rotation, 2048 px long edge, JPEG 85, 320 px thumbnail, SHA-256) on a background isolate; camera access denied and no camera messages. New dependency `image` 4.12.0 (MIT); notices regenerated (130 packages, 0 flagged).
+- Tests: 15 new (6 photo processor, 7 capture service, 3 camera on the recording screen, minus the replaced blind-photo test). `flutter test` 596 passed, `flutter analyze` clean, `dart format` clean.
+- `integration_test/app_capture_journey_test.dart` on Windows: Session opens the recorder, Record refused with a microphone message, Photo opens the camera screen, which says "No camera found on this device.", Close returns. Passed. No microphone or camera on this PC (Remote Desktop), so recording and shots are unverified here.
+- Left in P1-14: FR-PHO-06 manual import with labels and captions.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -625,3 +634,5 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-12 | done (device storage unverified) | StorageBudgetService, rolling write rate, 30s checks, 100 MB hard reserve stop (storage_low), native Android/iOS free space channels, live StorageMeter compact/expanded UI, 28 new tests (578 total). ADR-026 |
 | Android preview | done (device install unverified) | MIT `LICENSE`, release signing, universal release APK 63.9 MB, README download link. ADR-007 accepted, ADR-027 |
 | Capture entry fixes | done (Android device check pending) | Mic permission prompt, quick start opens recorder, refusal messages, Windows data in local app data, J2 journey test on Windows, preview build script. ADR-028 |
+| P1-14 | in progress (device camera unverified) | Camera screen with viewfinder, compression, thumbnails, SHA-256, 15 new tests (596 total). ADR-030. FR-PHO-06 still to do |
+| Notification permission | done (device unverified) | Android 13+ POST_NOTIFICATIONS requested on first recording. ADR-029 |

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:attenlume/platform/camera/photo_camera.dart';
+import 'package:flutter/widgets.dart';
 
 /// A [PhotoCamera] for tests [P0-05].
 ///
@@ -20,6 +21,10 @@ class FakePhotoCamera implements PhotoCamera {
   /// number. Lets a test make the camera disturb the audio session.
   Future<void> Function(int shot)? onShot;
   int photoBytes = 1024;
+
+  /// When set, each shot writes these bytes (for example a real JPEG)
+  /// instead of [photoBytes] filler bytes.
+  List<int>? photoData;
 
   final List<String> paths = [];
   int shots = 0;
@@ -50,10 +55,16 @@ class FakePhotoCamera implements PhotoCamera {
     if (error != null) throw error;
     final file = File(path);
     await file.parent.create(recursive: true);
-    await file.writeAsBytes(List<int>.filled(photoBytes, 0xff));
+    final data = photoData ?? List<int>.filled(photoBytes, 0xff);
+    await file.writeAsBytes(data);
     paths.add(path);
-    return CapturedPhoto(path: path, bytes: photoBytes);
+    return CapturedPhoto(path: path, bytes: data.length);
   }
+
+  @override
+  Widget buildPreview() => _open
+      ? const SizedBox.expand(key: Key('fake-camera-preview'))
+      : const SizedBox.shrink();
 
   @override
   Future<void> close() async {

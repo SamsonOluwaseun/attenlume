@@ -92,6 +92,29 @@ void main() {
       ))!.single;
       final media = MediaAssetRepository(db);
 
+      // J2 step 5: Photo opens the in-app camera (P1-14). With a camera it
+      // takes one shot; without one it must say so. Either way it closes.
+      Future<void> photoStep() async {
+        await tapKey('record-action-photo');
+        await wait(const Duration(seconds: 3));
+        expect(find.byKey(const Key('camera-screen')), findsOneWidget);
+        final message = find.byKey(const Key('camera-message'));
+        if (message.evaluate().isNotEmpty) {
+          debugPrint(
+            'J2 camera: "${tester.widget<Text>(message).data}". '
+            'Shutter step not run.',
+          );
+        } else {
+          await tapKey('camera-shutter-button');
+          await wait(const Duration(seconds: 4));
+          expect(find.text('1 photo'), findsOneWidget);
+          debugPrint('J2 camera: one photo taken');
+        }
+        await tapKey('camera-close-button');
+        await wait(const Duration(seconds: 1));
+        expect(find.byKey(const Key('camera-screen')), findsNothing);
+      }
+
       // J2 step 3: Record.
       await tapKey('record-button-start');
       await wait(const Duration(seconds: 2));
@@ -109,18 +132,16 @@ void main() {
         );
         debugPrint(
           'J2 no microphone: recording refused with '
-          '"${_snackText(tester)}". Mic, bookmark and stop steps not run.',
+          '"${_snackText(tester)}". Bookmark, note and stop steps not run.',
         );
+        await photoStep();
         return;
       }
 
       expect(find.byKey(const Key('record-status-live')), findsOneWidget);
       await wait(const Duration(seconds: 4));
 
-      // J2 step 5: Photo. Passes with or without a camera, but says which.
-      await tapKey('record-action-photo');
-      await wait(const Duration(seconds: 3));
-      debugPrint('J2 photo: "${_snackText(tester)}"');
+      await photoStep();
 
       // J2 step 6: Bookmark.
       await tapKey('record-action-bookmark');
