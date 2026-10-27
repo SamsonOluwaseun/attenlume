@@ -288,7 +288,9 @@ void main() {
       expect(find.byType(ActivityDetailSheet), findsOneWidget);
       expect(find.text('Recorded duration'), findsOneWidget);
       expect(find.text('17 min'), findsWidgets);
-      expect(find.text('Photos'), findsOneWidget);
+      // Count tile, plus the photos section (P1-14)
+      expect(find.text('Photos'), findsWidgets);
+      expect(find.byKey(const Key('activity-photos-section')), findsOneWidget);
       expect(find.text('Bookmarks'), findsOneWidget);
       expect(find.text('Segments'), findsOneWidget);
 

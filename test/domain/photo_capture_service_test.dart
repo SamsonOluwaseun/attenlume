@@ -160,4 +160,52 @@ void main() {
       throwsA(isA<CameraAccessDeniedException>()),
     );
   });
+
+  test('FR-PHO-06 imports copies of picked files with a label, originals untouched', () async {
+    final conf = await t.conference();
+    final act = await t.activity(conf.id);
+    final picked = File(p.join(root.path, 'picked', 'slide.png'));
+    await picked.parent.create(recursive: true);
+    final bytes = img.encodePng(img.Image(width: 2400, height: 1800));
+    await picked.writeAsBytes(bytes);
+    final modified = DateTime.utc(2026, 11, 4, 9, 45);
+    picked.setLastModifiedSync(modified);
+
+    final saved = await service.importFiles(act.id, [
+      picked.path,
+      p.join(root.path, 'missing.jpg'),
+    ], label: 'Slides');
+
+    expect(saved, hasLength(1), reason: 'the missing file is skipped');
+    final photo = saved.single;
+    expect(photo.source, PhotoSource.manualImport);
+    expect(photo.label, 'Slides');
+    expect(photo.takenUtc, modified);
+    expect(photo.width, 2048);
+    expect(photo.thumbnailPath, isNotNull);
+    expect(await picked.readAsBytes(), bytes);
+    expect(camera.shots, 0);
+  });
+
+  test('FR-PHO-06 caption and label can be set and cleared', () async {
+    final conf = await t.conference();
+    final act = await t.activity(conf.id);
+    final photo = await service.capture(act.id);
+
+    final captioned = await t.media.updatePhotoText(
+      photo.id,
+      caption: ' Roadmap slide ',
+      label: 'Slides',
+    );
+    expect(captioned.caption, 'Roadmap slide');
+    expect(captioned.label, 'Slides');
+
+    final cleared = await t.media.updatePhotoText(
+      photo.id,
+      caption: '',
+      label: '  ',
+    );
+    expect(cleared.caption, isNull);
+    expect(cleared.label, isNull);
+  });
 }

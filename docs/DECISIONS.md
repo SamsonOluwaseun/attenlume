@@ -560,3 +560,14 @@ Format: context, decision, alternatives, consequences.
   5. **New dependency `image` 4.12.0** (MIT, pure Dart, all platforms, maintained: security fixes in October 2026; its only dependency `archive` was already used). Notices regenerated: 130 packages, nothing flagged.
 - **Alternatives:** a small live preview on the recording screen (keeps the camera and its battery cost on all the time); `flutter_image_compress` (native code per platform, no Windows support); compressing on the UI isolate (blocks the shutter for about a second on 12 MP photos).
 - **Consequences:** Taking the first photo is two taps (Photo, then the shutter); later shots are one. The quality numbers (2048 px, 85) are a starting point for the legibility tests in FR-PHO-02. Still to do in P1-14: FR-PHO-06 (manual import with labels, captions). Camera on real devices unverified (MT-21).
+
+## ADR-031: Photo import, captions and labels (P1-14, FR-PHO-06)
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5), owner away. Owner to review.
+- **Context:** FR-PHO-06 asks for manual import with labels and an optional caption per photo. FR-PHO-05 (time-window gallery import with `photo_manager`) is a separate task, P1-15.
+- **Decision:**
+  1. **New dependency `file_selector` 1.1.0** (flutter.dev, BSD-3, endorsed implementations for Android, iOS and Windows). It opens the system file picker; JPEG and PNG only, because those are what `processPhoto` can decode and re-encode (HEIC waits for P1-15's gallery work). Notices regenerated, nothing flagged.
+  2. **`PhotoCaptureService.importFiles`** copies each picked file (never moves or changes the original), compresses it and writes its thumbnail like a camera shot, stores it as `manual_import` with the batch label, and takes its time from the file's last-modified time so the recording offset lines up. Unreadable files are skipped and counted in the message.
+  3. **Photos section in the activity details** (`lib/features/photos/activity_photos_section.dart`): thumbnails decoded at display size (FR-PHO-03), "Import photos" with an optional batch label, and a photo sheet with the photo at screen size, its offset into the recording, and caption and label fields. `MediaAssetRepository.updatePhotoText` trims text and clears blank fields.
+- **Alternatives:** `image_picker` (camera roll on phones but leaves the app and has no Windows support of its own); importing originals untouched (FR-PHO-02 wants the space-saving default for every photo).
+- **Consequences:** P1-14 is complete in code. On phones the file picker shows files rather than the photo gallery; the gallery view comes with P1-15. Unverified on devices.

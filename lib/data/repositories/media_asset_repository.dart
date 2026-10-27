@@ -319,6 +319,27 @@ class MediaAssetRepository {
             ..orderBy([(p) => OrderingTerm.asc(p.takenUtc)]))
           .get();
 
+  /// Sets a photo's caption and label (FR-PHO-06) [P1-14]. Blank text
+  /// clears the field.
+  Future<Photo> updatePhotoText(
+    String photoId, {
+    String? caption,
+    String? label,
+  }) async {
+    String? clean(String? s) =>
+        (s == null || s.trim().isEmpty) ? null : s.trim();
+    await (_db.update(_db.photos)..where((p) => p.id.equals(photoId))).write(
+      PhotosCompanion(
+        caption: Value(clean(caption)),
+        label: Value(clean(label)),
+        updatedAt: Value(_clock()),
+      ),
+    );
+    return (_db.select(
+      _db.photos,
+    )..where((p) => p.id.equals(photoId))).getSingle();
+  }
+
   // Bookmarks (FR-BMK-01).
 
   Future<Bookmark> addBookmark({
