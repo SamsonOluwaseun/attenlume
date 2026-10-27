@@ -14,6 +14,7 @@ import '../../data/repositories/media_asset_repository.dart';
 import '../../data/repositories/repository_support.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
 import '../../platform/audio_route/audio_route_probe.dart';
+import '../../platform/interruptions/audio_interruption_source.dart';
 import '../../shared/utilities/serial_lock.dart';
 import '../models/enums.dart';
 import 'capture_settings.dart';
@@ -129,6 +130,48 @@ class SwitchResult {
   String toString() => 'SwitchResult(${outcome.name}, $stoppedActivityId)';
 }
 
+/// Result of [RecordingService.interrupt].
+enum InterruptOutcome {
+  /// The open segment ended with reason `interruption`, an interruption row
+  /// was opened and the microphone is released (FR-REC-05).
+  interrupted,
+
+  /// The recording was already interrupted. Nothing changed.
+  alreadyInterrupted,
+
+  /// Nothing was recording (idle, paused, saved or waiting for the user).
+  /// Nothing changed and no row was logged.
+  notRecording,
+}
+
+/// Result of [RecordingService.interruptionEnded].
+enum InterruptionEndOutcome {
+  /// A new segment is recording. The interruption row is closed as
+  /// auto-resumed.
+  resumed,
+
+  /// The system did not allow resume, or capture would not start. Audio
+  /// written so far is kept and the recorder waits in
+  /// [RecordingState.userResumeRequired] (FR-REC-05).
+  resumeRequired,
+
+  /// The recorder was not interrupted. Nothing changed.
+  notInterrupted,
+}
+
+/// What [RecordingService.interruptionEnded] did, with the message to show
+/// when the user has to resume.
+class InterruptionEndResult {
+  const InterruptionEndResult(this.outcome, {this.activityId, this.reason});
+
+  final InterruptionEndOutcome outcome;
+  final String? activityId;
+  final String? reason;
+
+  @override
+  String toString() => 'InterruptionEndResult(${outcome.name}, $reason)';
+}
+
 /// Longest a segment runs before it rolls to the next one (FR-REC-03).
 const defaultSegmentMaxDuration = Duration(minutes: 10);
 
@@ -159,6 +202,10 @@ Future<String> sha256OfFileInIsolate(File file) {
 /// Segments roll every [segmentMaxDuration] (FR-REC-03) [P1-05]. Each one
 /// is written under a partial name and renamed only after its data is
 /// flushed to disk, so a final name always means a complete file.
+///
+/// Calls, alarms, other apps and the camera end the open segment through
+/// [interrupt] and resume through [interruptionEnded] (FR-REC-05,
+/// FR-PHO-07) [P1-07]. The `InterruptionCoordinator` sends these.
 class RecordingService {
   RecordingService({
     required this._engine,
@@ -167,6 +214,7 @@ class RecordingService {
     required this._mediaRoot,
     required this._platform,
     this._routes = const NoAudioRouteProbe(),
+    this._session = const NoAudioInterruptions(),
     this._inspector = const M4aInspector(),
     this._clock = systemUtcClock,
     this._hashFile = sha256OfFileInIsolate,
@@ -181,6 +229,10 @@ class RecordingService {
   final Future<Directory> Function() _mediaRoot;
   final CapturePlatform _platform;
   final AudioRouteProbe _routes;
+
+  /// Owns the platform audio session: activated before capture starts and
+  /// after an interruption, deactivated once saved (ADR-013, ADR-021).
+  final AudioInterruptionSource _session;
   final M4aInspector _inspector;
   final UtcClock _clock;
   final Future<String> Function(File) _hashFile;
@@ -196,6 +248,9 @@ class RecordingService {
   RecordingStatus _status = RecordingStatus.idle;
   _OpenSegment? _open;
   Timer? _rollDue;
+
+  /// The interruption row still open, if any (FR-REC-05).
+  String? _openInterruptionId;
   bool _disposed = false;
 
   RecordingStatus get status => _status;
@@ -261,6 +316,7 @@ class RecordingService {
         activityId,
         const ActivitiesCompanion(status: Value(ActivityStatus.active)),
       );
+      await _activateSession();
       final began = await _beginSegment(
         activityId,
         activity.conferenceId,
@@ -304,10 +360,96 @@ class RecordingService {
     final activityId = _status.activityId!;
     return _guard(() async {
       final activity = (await _activities.get(activityId))!;
-      return _beginSegment(
+      await _activateSession();
+      final began = await _beginSegment(
         activityId,
         activity.conferenceId,
         await _activities.effectiveProfile(activityId),
+      );
+      if (began) await _closeInterruption(autoResumed: false);
+      return began;
+    });
+  });
+
+  /// Cuts the recording off for a call, alarm, another app or the camera
+  /// (FR-REC-05, FR-PHO-07) [P1-07].
+  ///
+  /// Ends the open segment with reason `interruption`, releasing the
+  /// microphone so the call is never recorded, and opens an interruption
+  /// row that starts where the segment ended. Nothing restarts until
+  /// [interruptionEnded] or [stop]; [resume] refuses while
+  /// [RecordingState.interrupted].
+  Future<InterruptOutcome> interrupt(InterruptionReason reason) => _lock.run(
+    () async {
+      final state = _status.state;
+      if (state == RecordingState.interrupted ||
+          state == RecordingState.recovering) {
+        return InterruptOutcome.alreadyInterrupted;
+      }
+      if (state != RecordingState.recording) {
+        return InterruptOutcome.notRecording;
+      }
+      final activityId = _status.activityId!;
+      return _guard(() async {
+        _moveTo(_copyStatus(RecordingState.interrupted, interruption: reason));
+        final end = await _finishSegment(SegmentEndReason.interruption);
+        await _openInterruption(activityId, reason, end);
+        return InterruptOutcome.interrupted;
+      });
+    },
+  );
+
+  /// The interruption is over (FR-REC-05) [P1-07].
+  ///
+  /// Closes the interruption row at this moment. When [mayResume] is true
+  /// (the system allows it, or the app's own camera has finished), goes
+  /// `interrupted -> recovering -> recording` in a new segment and the row
+  /// is marked auto-resumed. Otherwise, or if capture will not start, the
+  /// recorder waits in [RecordingState.userResumeRequired] with a plain
+  /// message; the audio written so far is already saved.
+  Future<InterruptionEndResult> interruptionEnded({
+    required bool mayResume,
+  }) => _lock.run(() async {
+    if (_status.state != RecordingState.interrupted) {
+      return const InterruptionEndResult(InterruptionEndOutcome.notInterrupted);
+    }
+    final activityId = _status.activityId!;
+    final profile = _status.profile!;
+    final reason = _status.interruption ?? InterruptionReason.system;
+    return _guard(() async {
+      final endedAt = _clock();
+      if (mayResume) {
+        _moveTo(_copyStatus(RecordingState.recovering, interruption: reason));
+        await _activateSession();
+        final conferenceId = (await _activities.get(activityId))!.conferenceId;
+        final error = await _tryBeginSegment(activityId, conferenceId, profile);
+        if (error == null) {
+          await _closeInterruption(autoResumed: true, endUtc: endedAt);
+          return InterruptionEndResult(
+            InterruptionEndOutcome.resumed,
+            activityId: activityId,
+          );
+        }
+      }
+      await _closeInterruption(autoResumed: false, endUtc: endedAt);
+      final message = mayResume
+          ? 'Recording could not restart on its own. Your audio so far '
+                'is saved. Tap Resume to carry on.'
+          : 'Recording stopped for ${_describe(reason)}. Your audio so '
+                'far is saved. Tap Resume to carry on.';
+      _moveTo(
+        RecordingStatus(
+          state: RecordingState.userResumeRequired,
+          activityId: activityId,
+          profile: profile,
+          errorMessage: message,
+          interruption: reason,
+        ),
+      );
+      return InterruptionEndResult(
+        InterruptionEndOutcome.resumeRequired,
+        activityId: activityId,
+        reason: message,
       );
     });
   });
@@ -396,7 +538,7 @@ class RecordingService {
       final profile = _status.profile!;
       return _guard(() async {
         _moveTo(_copyStatus(RecordingState.switchingSegment));
-        await _finishSegment(SegmentEndReason.routeChange);
+        final end = await _finishSegment(SegmentEndReason.routeChange);
         final conferenceId = (await _activities.get(activityId))!.conferenceId;
         final error = await _tryBeginSegment(activityId, conferenceId, profile);
         if (error == null) {
@@ -409,12 +551,15 @@ class RecordingService {
         final reason =
             'No microphone could take over ($error). Connect one and '
             'tap resume.';
+        // The gap gets a timeline marker until the user resumes (ADR-016).
+        await _openInterruption(activityId, InterruptionReason.routeLost, end);
         _moveTo(
           RecordingStatus(
             state: RecordingState.userResumeRequired,
             activityId: activityId,
             profile: profile,
             errorMessage: reason,
+            interruption: InterruptionReason.routeLost,
           ),
         );
         return RouteChangeResult(
@@ -436,6 +581,7 @@ class RecordingService {
     return _guard(() async {
       _moveTo(_copyStatus(RecordingState.stopping));
       if (_open != null) await _finishSegment(SegmentEndReason.userStop);
+      await _closeInterruption(autoResumed: false);
       final segments = await _media.segmentsFor(activityId);
       final lastEnd = segments.isEmpty ? null : segments.last.endUtc;
       await _activities.update(
@@ -448,6 +594,7 @@ class RecordingService {
       _moveTo(
         RecordingStatus(state: RecordingState.saved, activityId: activityId),
       );
+      await _deactivateSession();
       return activityId;
     });
   }
@@ -464,6 +611,62 @@ class RecordingService {
     _cancelRoll();
     await _engine.dispose();
     await _statusController.close();
+  }
+
+  Future<void> _openInterruption(
+    String activityId,
+    InterruptionReason reason,
+    DateTime startUtc,
+  ) async {
+    final row = await _media.startInterruption(
+      activityId,
+      reason,
+      startUtc: startUtc,
+    );
+    _openInterruptionId = row.id;
+  }
+
+  /// Closes the open interruption row, if there is one.
+  Future<void> _closeInterruption({
+    required bool autoResumed,
+    DateTime? endUtc,
+  }) async {
+    final id = _openInterruptionId;
+    if (id == null) return;
+    _openInterruptionId = null;
+    await _media.endInterruption(
+      id,
+      autoResumed: autoResumed,
+      endUtc: endUtc ?? _clock(),
+    );
+  }
+
+  static String _describe(InterruptionReason reason) => switch (reason) {
+    InterruptionReason.call ||
+    InterruptionReason.system => 'a call or another app',
+    InterruptionReason.alarm => 'an alarm',
+    InterruptionReason.otherApp => 'another app',
+    InterruptionReason.camera => 'the camera',
+    InterruptionReason.routeLost => 'a lost microphone',
+    InterruptionReason.permissionRevoked => 'a microphone permission change',
+  };
+
+  /// Sets up the audio session and asks for focus before capture starts
+  /// (ADR-013). A failure here is left for the encoder start to report.
+  Future<void> _activateSession() async {
+    try {
+      await _session.activate();
+    } on Object {
+      // The encoder start that follows says whether capture works.
+    }
+  }
+
+  Future<void> _deactivateSession() async {
+    try {
+      await _session.deactivate();
+    } on Object {
+      // Nothing is recording any more, so nothing is lost.
+    }
   }
 
   Future<void> _storeOverride(String activityId, RecordingProfile profile) =>
@@ -582,7 +785,8 @@ class RecordingService {
   ///
   /// A good file is flushed and renamed from its partial name. If that
   /// fails, the file keeps its partial name and the row points there.
-  Future<void> _finishSegment(SegmentEndReason reason) async {
+  /// Returns the segment's end time.
+  Future<DateTime> _finishSegment(SegmentEndReason reason) async {
     final open = _open!;
     _open = null;
     _cancelRoll();
@@ -600,7 +804,7 @@ class RecordingService {
         endReason: reason,
         state: SegmentState.damaged,
       );
-      return;
+      return end;
     }
     final AudioFileInfo info;
     try {
@@ -613,7 +817,7 @@ class RecordingService {
         bytes: file.lengthSync(),
         state: SegmentState.damaged,
       );
-      return;
+      return end;
     }
     String? digest;
     try {
@@ -642,6 +846,7 @@ class RecordingService {
       channelCount: info.channelCount,
       sampleRateHz: info.sampleRateHz,
     );
+    return end;
   }
 
   /// Runs [body]. On an unexpected error, moves to
@@ -701,13 +906,17 @@ class RecordingService {
 
   Future<Directory> _root() async => _resolvedRoot ??= await _mediaRoot();
 
-  RecordingStatus _copyStatus(RecordingState state, {String? errorMessage}) =>
-      RecordingStatus(
-        state: state,
-        activityId: _status.activityId,
-        profile: _status.profile,
-        errorMessage: errorMessage,
-      );
+  RecordingStatus _copyStatus(
+    RecordingState state, {
+    String? errorMessage,
+    InterruptionReason? interruption,
+  }) => RecordingStatus(
+    state: state,
+    activityId: _status.activityId,
+    profile: _status.profile,
+    errorMessage: errorMessage,
+    interruption: interruption,
+  );
 
   void _moveTo(RecordingStatus next) {
     if (!canTransition(_status.state, next.state)) {

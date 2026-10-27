@@ -75,7 +75,6 @@ class BluetoothRoutingSpike {
     final changes = <RouteChangeSeen>[];
     var activeReported = false;
     var eventsWithoutChange = 0;
-    String? openInterruptionId;
 
     int offsetMs() => _clock().toUtc().difference(startedAt).inMilliseconds;
     void log(String kind, [Map<String, Object?> detail = const {}]) =>
@@ -132,15 +131,8 @@ class BluetoothRoutingSpike {
       if (service.status.state == RecordingState.userResumeRequired) {
         if (seen.added.isEmpty) return;
         // Stands in for the user tapping resume once a mic is back.
+        // RecordingService closes its route_lost row on resume (ADR-021).
         if (await service.resume()) {
-          if (openInterruptionId != null) {
-            await media.endInterruption(
-              openInterruptionId!,
-              autoResumed: false,
-              endUtc: _clock().toUtc(),
-            );
-            openInterruptionId = null;
-          }
           log('resumed', {'why': 'input_available_simulated_tap'});
         } else {
           log('resume_failed', {'error': service.status.errorMessage});
@@ -173,14 +165,9 @@ class BluetoothRoutingSpike {
             autoResumed: true,
             endUtc: _clock().toUtc(),
           );
-        case RouteChangeOutcome.resumeRequired:
-          final row = await media.startInterruption(
-            activityId,
-            InterruptionReason.routeLost,
-            startUtc: markerStart,
-          );
-          openInterruptionId = row.id;
-        case RouteChangeOutcome.switched ||
+        // RecordingService opens the route_lost row itself (ADR-021).
+        case RouteChangeOutcome.resumeRequired ||
+            RouteChangeOutcome.switched ||
             RouteChangeOutcome.unchanged ||
             RouteChangeOutcome.notRecording:
           break;
@@ -238,13 +225,6 @@ class BluetoothRoutingSpike {
     }
     final savedId = await service.stop();
     log('stop', {'saved': savedId != null});
-    if (openInterruptionId != null) {
-      await media.endInterruption(
-        openInterruptionId!,
-        autoResumed: false,
-        endUtc: _clock().toUtc(),
-      );
-    }
     try {
       await interruptions.deactivate();
     } on Object catch (e) {

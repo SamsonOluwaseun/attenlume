@@ -86,6 +86,7 @@ class RecordingStatus {
     this.segmentStartUtc,
     this.inputRoute,
     this.errorMessage,
+    this.interruption,
   });
 
   static const idle = RecordingStatus(state: RecordingState.idle);
@@ -111,6 +112,11 @@ class RecordingStatus {
   /// Plain description of the last failure, in
   /// [RecordingState.errorRecoverable].
   final String? errorMessage;
+
+  /// Why recording was cut off, while [RecordingState.interrupted],
+  /// [RecordingState.recovering] or [RecordingState.userResumeRequired]
+  /// (FR-REC-05) [P1-07]. Null otherwise.
+  final InterruptionReason? interruption;
 
   @override
   String toString() =>
