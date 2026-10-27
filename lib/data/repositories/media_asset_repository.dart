@@ -128,11 +128,13 @@ class MediaAssetRepository {
   /// Marks a segment finished with what was actually written.
   ///
   /// Format fields left null keep the values requested at start. Pass the
-  /// ones read from the finished file (FR-QUAL-06).
+  /// ones read from the finished file (FR-QUAL-06). Pass [filePath] when
+  /// the file was renamed on finalisation (P1-05).
   Future<RecordingSegment> finaliseSegment(
     String id, {
     required DateTime endUtc,
     required SegmentEndReason endReason,
+    String? filePath,
     int? durationMs,
     int? bytes,
     String? sha256,
@@ -148,6 +150,7 @@ class MediaAssetRepository {
     )..where((s) => s.id.equals(id))).write(
       RecordingSegmentsCompanion(
         state: Value(state),
+        filePath: Value.absentIfNull(filePath),
         endUtc: Value(endUtc.toUtc()),
         endReason: Value(endReason),
         durationMs: Value(durationMs),

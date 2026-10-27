@@ -31,6 +31,21 @@ abstract final class MediaPaths {
     segmentFileName(sequence, attempt: attempt),
   );
 
+  /// The name a segment is written under until it is finalised
+  /// (`segment-001.partial.m4a` for `segment-001.m4a`) [P1-05, FR-REC-03].
+  /// The extension stays last because encoders pick the container from it.
+  static String partial(String relativePath) {
+    final ext = p.posix.extension(relativePath);
+    return '${relativePath.substring(0, relativePath.length - ext.length)}'
+        '$partialMarker$ext';
+  }
+
+  /// True for a path made by [partial].
+  static bool isPartial(String relativePath) =>
+      p.posix.basenameWithoutExtension(relativePath).endsWith(partialMarker);
+
+  static const partialMarker = '.partial';
+
   /// `photos/<photo_id>.jpg` in the activity folder (BUILD_GUIDE 9.5)
   /// [P0-05].
   static String photo(String conferenceId, String activityId, String photoId) =>

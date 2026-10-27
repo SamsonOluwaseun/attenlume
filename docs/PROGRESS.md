@@ -389,6 +389,25 @@ Test results on phase-0/P0-13-shortcut-trigger-spike (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P1-05 rolling segment writer and atomic finalisation
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 372 passed.
+- `RecordingService` rolls every `segmentMaxDuration` (default 10 minutes) through `switchingSegment` with end reason `roll`, same profile, reusing `_finishSegment` and `_beginSegment`. The timer is injected (`RollTimerFactory`), restarts with every new segment and is cancelled on pause, stop, profile or route change, error and dispose. A late timer for an ended segment does nothing [FR-REC-03].
+- Atomic finalisation: the encoder writes `segment-NNN.partial.m4a` and the row points there while `writing`. Finalising inspects, hashes, flushes (`commitSegmentFile`, new `lib/data/filesystem/segment_commit.dart`), renames to `segment-NNN.m4a` and only then updates the row. Damaged files keep the partial name. A failed flush or rename keeps the good file under its partial name. Names are chosen so neither the partial nor the final file is overwritten (NFR-07).
+- `MediaPaths.partial`/`isPartial`; `MediaAssetRepository.finaliseSegment` takes an optional `filePath`.
+- Found by a test and fixed before merge: opening a missing file for append creates it, so `commitSegmentFile` checks the file exists first.
+- One existing test changed on purpose: the row path while writing is now `segment-001.partial.m4a`.
+- ADR-019 recorded. `ARCHITECTURE.md` (3, 8.9) and `TEST_PLAN.md` (2.1, 2.2) updated. No new packages.
+- Not checked on a device: whether the roll timer fires on time with the screen locked (iOS background audio, Android after P1-11). Unverified.
+
+Test results on phase-1/P1-05-rolling-segments (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 392 passed, 0 failed (20 new: 15 in `test/domain/recording_service_roll_test.dart`, 5 in `test/data/filesystem/segment_commit_test.dart`).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -411,3 +430,4 @@ Test results on phase-0/P0-13-shortcut-trigger-spike (Windows 11 build host):
 | P0-07 | blocked: needs real device and headsets | Route probe, `RecordingService.routeChanged`, harness, device test and MT-20 steps built, 26 unit tests with fakes pass (335 total). ADR-016. Windows run on build host blocked (no capture device) |
 | P0-05 | blocked: needs real device | `PhotoCamera` on `camera` 0.12.1, harness, device test and MT-21 steps built, 14 unit tests with fakes pass (349 total). ADR-017. Windows run on build host blocked (no capture device, no camera) |
 | P0-13 | blocked: needs real device | `ShortcutBridge`, `attenlume://` parser, Android tile and launcher shortcuts (APK builds), iOS App Intents (not built, needs Mac), harness, device test and MT-22 steps, 23 unit tests with fakes pass (372 total). ADR-018 |
+| P1-05 | done (device timing unverified) | 10-minute roll timer, partial names, flush then rename, 20 new tests (392 total). ADR-019. Interruption rolls come with P1-07 |

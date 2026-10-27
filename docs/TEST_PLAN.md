@@ -50,6 +50,8 @@ As of P0-13 (27 October 2026, Windows 11 build host): 372 unit and widget tests,
 | `test/spikes/profile_switch_spike_test.dart` | P0-12 harness with a fake engine: one segment per profile, observed against requested bitrate read from the file, gap per switch, declined switch reported, Windows 96 kbps floor, denied mic, JSON and Markdown |
 | `test/spikes/long_run_spike_test.dart` | P0-10 harness with fakes: FR-REC-02 one sample a minute with on-disk file size, last wait shortened, AT-MEM-01 flat and rising RSS trends with warm-up excluded, too few samples, FR-QUAL-06 whole-file rate and MB per hour, stalled file, flat signal, not-recording samples, FR-REC-06 battery drain and the charging and unknown cases, refused start, JSON, CSV and Markdown, Windows battery mapping, process RSS probe |
 | `integration_test/p0_10_long_run_test.dart` | P0-10 on a real low-spec phone or Windows PC (MT-19). Fails when no microphone is available |
+| `test/domain/recording_service_roll_test.dart` | P1-05: FR-REC-03 10-minute roll armed on start, roll ends with `roll` and starts the next segment with the same profile and input, 35 minutes give four gapless segments, interval can be set, pause, stop and dispose cancel the roll, quality and route changes restart it, late timers do nothing, failed next segment keeps earlier audio; atomic finalisation: partial file while writing, final names after, hash before rename and row after, failed rename keeps the partial name, damaged files keep the partial name, leftover partial files never overwritten |
+| `test/data/filesystem/segment_commit_test.dart` | P1-05: FR-REC-03 partial names keep the extension last, `commitSegmentFile` renames with bytes kept, never overwrites (NFR-07), missing file fails without creating one |
 | `test/domain/recording_service_route_test.dart` | P0-07: FR-QUAL-06 input route stored per segment, left empty when unknown or the probe fails; FR-REC-03 route change ends the segment with `route_change`, same input leaves it, `force` cuts a boundary without an active input, nothing while paused or idle; FR-REC-07 no mic left waits in `userResumeRequired`, resume after reconnect, stop still saves |
 | `test/platform/audio_route_probe_test.dart` | P0-07: Android device types and iOS ports to route kinds, Windows name classification, route key, engine probe never claims an active input |
 | `test/spikes/bluetooth_routing_spike_test.dart` | P0-07 harness with fakes: connect and disconnect by event, loss seen only by polling with a `route_lost` marker, no mic left then resume on reconnect, forced boundaries without an active input, events with no change, AT-QUAL-03 rows match files, other channels and rate reported, damaged segment not claimed as checked, probe failure, JSON and Markdown |
@@ -73,7 +75,7 @@ Fixtures: `test/fixtures/m4a_builder.dart` (synthetic M4A files, zero audio payl
 | Activity types: built-ins, custom types, default titles | NFR-03, FR-ACT-05, FR-ACT-06 | P0-09, P1-03 |
 | Profile precedence | FR-QUAL-02, FR-QUAL-03 | P0-09, P1-09 |
 | Recording state machine transitions (every edge in build guide 5.4) | FR-REC-01 to 05, 09 | P1-04 |
-| Segment rolling (pause, interruption, quality, route, 10 minutes) | FR-REC-03 | P1-05 |
+| Segment rolling (pause, interruption, quality, route, 10 minutes) | FR-REC-03 | P1-05 (done except interruption, P1-07) |
 | Offset calculation across gaps | 9.4 offset rule | P0-09, P1-16 |
 | Cut-range maths (overlap, merge, undo) | FR-REV-04 | P1-18 |
 | Split logic (media and bookmarks move by offset) | FR-REV-05 | P1-18 |

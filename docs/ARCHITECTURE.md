@@ -47,17 +47,19 @@ RecordingService  (one instance, mutex around every command, FR-REC-09)
    |                INTERRUPTED, RECOVERING, USER_RESUME_REQUIRED,
    |                STOPPING, SAVED, STORAGE_STOP, ERROR_RECOVERABLE
    |
-   +-- SegmentWriter       create row (state=writing) -> start AudioCaptureEngine
-   |                        -> on roll/stop: stop engine, fsync, measure bytes and
-   |                           duration, compute observed bitrate, state=finalised
+   +-- SegmentWriter       create row (state=writing, segment-NNN.partial.m4a)
+   |                        -> start AudioCaptureEngine, arm 10-minute roll timer
+   |                        -> on roll/stop: stop engine, inspect, hash, fsync,
+   |                           rename to segment-NNN.m4a, state=finalised
    +-- InterruptionCoordinator  audio_session / audio focus / route events -> commands
    +-- StorageBudgetService     30 s ticks while recording, hard stop -> STORAGE_STOP
    +-- ForegroundServiceBridge  Android only: notification, actions
 ```
 
-- **Built in P1-04 (ADR-012):** `RecordingService` in `lib/domain/services/recording_service.dart`, states and transitions in `recording_state.dart`, commands serialised by `SerialLock`. Pause and resume, start-failure handling, finalisation from the inspected file and mid-recording profile change (P0-12, ADR-014) are in. The 10-minute roll, interruptions and route changes are not yet.
+- **Built in P1-04 (ADR-012):** `RecordingService` in `lib/domain/services/recording_service.dart`, states and transitions in `recording_state.dart`, commands serialised by `SerialLock`. Pause and resume, start-failure handling, finalisation from the inspected file and mid-recording profile change (P0-12, ADR-014) are in. Route changes came in P0-07 (ADR-016) and the 10-minute roll with atomic finalisation in P1-05 (ADR-019). Interruptions are P1-07.
 - **One active recording (FR-REC-04):** `RecordingService` holds at most one active activity ID. A start request for another activity returns a `ConflictPending` result for the UI to resolve. Non-visual triggers use the documented default (stop old, start new) and post a notification.
 - **Segment rolling (FR-REC-03):** roll on pause, interruption, profile change, route change and a 10-minute timer. Each roll is stop then start of a new file. The gap between them is recorded as real time (offset rule, build guide 9.4).
+- **Atomic finalisation (FR-REC-03, P1-05, ADR-019):** the encoder writes `segment-NNN.partial.m4a` and the row points there while `writing`. On finalisation the file is inspected and hashed, flushed to disk (`commitSegmentFile` in `lib/data/filesystem/segment_commit.dart`), renamed to `segment-NNN.m4a`, and only then is the row updated with the final path and `finalised`. Damaged files keep their partial name. A failed flush or rename leaves the good file under its partial name, and the row says so. The roll timer is injected (`RollTimerFactory`), restarts with every new segment and is cancelled on pause, stop, error and dispose.
 - **Crash recovery (FR-REC-08):** on launch, every segment with `state=writing` is checked. If its file exists and parses as a valid container, mark it `recovered`. If not, mark it `damaged` and keep the file. Never mark a damaged file as good.
 - **Observed bitrate (FR-QUAL-06):** the `record` package does not report encoder output bitrate, so we compute `bytes * 8 * 1000 / duration_ms` after finalisation.
 
@@ -248,6 +250,11 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `MediaPaths.photo` (`photos/<photo_id>.jpg`) and an optional `id` on `MediaAssetRepository.addPhoto`, so the file is named after its row.
 - Android `CAMERA` permission and iOS `NSCameraUsageDescription`.
 - `lib/spikes/photo_during_recording_spike.dart`: photos during a recording, `camera` interruptions with resume after the shot, gaps matched to interruption rows (AT-PHO-01). Device test `integration_test/p0_05_photo_during_recording_test.dart` (MT-21).
+
+### 8.9 Added in P1-05
+
+- `RecordingService` rolls every `segmentMaxDuration` (default 10 minutes) with reason `roll`, through `switchingSegment`, same profile, timer from the segment's start. A late timer for an ended segment does nothing.
+- `MediaPaths.partial` and `isPartial`; `lib/data/filesystem/segment_commit.dart` (`commitSegmentFile`: existence check, flush, refuse to overwrite, rename); `MediaAssetRepository.finaliseSegment` takes an optional `filePath`.
 
 ### 8.8 Added in P0-13
 
