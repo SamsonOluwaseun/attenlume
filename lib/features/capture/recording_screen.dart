@@ -185,6 +185,23 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     }
   }
 
+  /// Says why a start from this screen was refused. Notification and
+  /// shortcut triggers get theirs from [OneActiveCoordinator] instead.
+  String _startRefusalMessage(StartOutcome? outcome) => switch (outcome) {
+    StartOutcome.microphoneDenied =>
+      'Attenlume needs microphone access. Allow it in your device '
+          'settings, then tap Record again.',
+    StartOutcome.failed =>
+      "Couldn't start recording. Check that a microphone is connected "
+          'and not in use by another app.',
+    StartOutcome.storageFull =>
+      "Couldn't start recording: storage is nearly full (under 100 MB "
+          'remaining).',
+    StartOutcome.recordingNotPermitted =>
+      'This activity is set to not record audio.',
+    _ => "Couldn't start recording.",
+  };
+
   Future<void> _handleStartRecord() async {
     final coordinator = ref.read(oneActiveCoordinatorProvider);
     final result = await startRecordingFromUi(
@@ -199,7 +216,9 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       final messenger = ScaffoldMessenger.maybeOf(context);
       messenger?.showSnackBar(
         SnackBar(
-          content: Text(result.confirmation ?? "Couldn't start recording."),
+          content: Text(
+            result.confirmation ?? _startRefusalMessage(result.startOutcome),
+          ),
         ),
       );
     } else if (result.outcome == RecordRequestOutcome.started ||

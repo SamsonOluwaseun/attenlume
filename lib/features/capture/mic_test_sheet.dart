@@ -127,6 +127,17 @@ class _MicTestSheetState extends ConsumerState<MicTestSheet> {
           sampleRateHz: effective.sampleRateHz,
           channelCount: effective.channelCount,
         );
+        if (!await engine.hasPermission()) {
+          if (!mounted) return;
+          setState(() {
+            _isRunning = false;
+            _isFinished = true;
+            _errorMessage =
+                'Attenlume needs microphone access. Allow it in your '
+                'device settings, then test again.';
+          });
+          return;
+        }
         await engine.start(request, _tempTestPath!);
         _startedEngineDirectly = true;
       } catch (e) {

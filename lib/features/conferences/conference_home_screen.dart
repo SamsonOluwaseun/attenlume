@@ -12,6 +12,7 @@ import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/consent_check_dialog.dart';
+import '../capture/recording_screen.dart';
 import 'activity_detail_sheet.dart';
 import 'conference_delete_dialog.dart';
 import 'conference_wizard_screen.dart';
@@ -23,9 +24,18 @@ import 'start_activity_sheet.dart';
 /// storage used, dominant "Start activity" action, quick-start type buttons,
 /// chronological activity list, and conference goals/outputs.
 class ConferenceHomeScreen extends ConsumerStatefulWidget {
-  const ConferenceHomeScreen({super.key, required this.conferenceId});
+  const ConferenceHomeScreen({
+    super.key,
+    required this.conferenceId,
+    this.openRecorder,
+  });
 
   final String conferenceId;
+
+  /// Opens the recording screen for a newly started activity (J2 step 2).
+  /// Tests replace it to avoid the capture platform.
+  final Future<void> Function(BuildContext context, Activity activity)?
+  openRecorder;
 
   @override
   ConsumerState<ConferenceHomeScreen> createState() =>
@@ -139,8 +149,7 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
       if (!mounted) return;
       await _loadConference();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Started ${activity.title}')));
+      await _openRecorder(activity);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -157,9 +166,24 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     if (created != null && mounted) {
       await _loadConference();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Started ${created.title}')));
+      await _openRecorder(created);
     }
+  }
+
+  /// A started activity goes straight to its recording screen, where the
+  /// quality can be chosen before tapping Record (PRODUCT_SPEC J2).
+  Future<void> _openRecorder(Activity activity) async {
+    final open = widget.openRecorder;
+    if (open != null) {
+      await open(context, activity);
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => RecordingScreen(activityId: activity.id),
+        ),
+      );
+    }
+    if (mounted) await _loadConference();
   }
 
   Future<void> _openActivityDetails(ActivitySummary summary) async {

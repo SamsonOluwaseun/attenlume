@@ -13,9 +13,11 @@ import '../../fixtures/fixtures.dart';
 
 void main() {
   late TestData t;
+  late List<String> openedRecorders;
 
   setUp(() {
     t = TestData();
+    openedRecorders = [];
   });
 
   tearDown(() async {
@@ -39,7 +41,11 @@ void main() {
       ],
       child: MaterialApp(
         theme: AppTheme.light(),
-        home: ConferenceHomeScreen(conferenceId: conferenceId),
+        home: ConferenceHomeScreen(
+          conferenceId: conferenceId,
+          openRecorder: (context, activity) async =>
+              openedRecorders.add(activity.title),
+        ),
       ),
     );
   }
@@ -141,7 +147,7 @@ void main() {
     );
 
     testWidgets(
-      'FR-ACT-02 tapping quick-start button creates activity and refreshes timeline',
+      'FR-ACT-02 tapping quick-start button creates activity, opens the recorder and refreshes timeline',
       (tester) async {
         final conf = await t.conference();
         t.clock.set(DateTime.utc(2026, 11, 4, 14, 15));
@@ -153,8 +159,8 @@ void main() {
         await tester.tap(find.byKey(const Key('quick-start-session')));
         await tester.pumpAndSettle();
 
-        // Confirms creation via SnackBar
-        expect(find.text('Started Session 1, 14:15'), findsOneWidget);
+        // Goes straight to the recording screen (PRODUCT_SPEC J2)
+        expect(openedRecorders, ['Session 1, 14:15']);
 
         // Activity appears in the list
         expect(find.text('Session 1, 14:15'), findsOneWidget);
@@ -190,7 +196,7 @@ void main() {
         // Bottom sheet dismissed, activity created
         expect(find.byType(StartActivitySheet), findsNothing);
         expect(find.text('Keynote 1, 11:00'), findsOneWidget);
-        expect(find.text('Started Keynote 1, 11:00'), findsOneWidget);
+        expect(openedRecorders, ['Keynote 1, 11:00']);
       },
     );
   });

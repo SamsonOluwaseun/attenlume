@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import '../../data/filesystem/app_data_directory.dart';
 import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/services/capture_settings.dart';
@@ -67,14 +67,11 @@ final audioInterruptionSourceProvider = Provider<AudioInterruptionSource>(
       : AudioSessionInterruptionSource(),
 );
 
-/// `<app documents>/media/` (BUILD_GUIDE 9.5).
+/// `<app data>/media/` (BUILD_GUIDE 9.5, ADR-028).
 final mediaRootProvider = Provider<Future<Directory> Function()>(
   (ref) =>
       () async => Directory(
-        p.join(
-          (await getApplicationDocumentsDirectory()).path,
-          MediaPaths.rootFolderName,
-        ),
+        p.join((await appDataDirectory()).path, MediaPaths.rootFolderName),
       ),
 );
 

@@ -39,7 +39,7 @@ All on the device, in the app's private storage (build guide 9.5).
 | Data | Where | Notes |
 |---|---|---|
 | Conferences, goals, activities, bookmarks, cut ranges, notes, contact fields | SQLite database (Drift) | Times in UTC ISO 8601. |
-| Audio segments | `<app documents>/media/conferences/<id>/activities/<id>/audio/` | Original files kept until the user deletes them. |
+| Audio segments | `<app data>/media/conferences/<id>/activities/<id>/audio/` | Original files kept until the user deletes them. |
 | Photos and thumbnails | Same tree, `photos/` and `thumbs/` | In-app photos are not also saved to the camera roll (FR-PHO-04). Imported photos are copied, the camera roll original is left alone. |
 | Temporary export files | `<app cache>/exports-temp/<job_id>/` | Tracked and safe to clear. Never the only copy of any media. |
 | Settings | `app_settings` table | No personal data needed. |
