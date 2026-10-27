@@ -125,54 +125,70 @@ class PhotoCaptureService {
     List<String> paths, {
     String? label,
   }) async {
+    final saved = <Photo>[];
+    for (final source in paths) {
+      final photo = await importFile(activityId, source, label: label);
+      if (photo != null) saved.add(photo);
+    }
+    return saved;
+  }
+
+  /// Imports one image file into [activityId] (FR-PHO-05, FR-PHO-06).
+  ///
+  /// The file at [sourcePath] is copied, never moved or changed, then
+  /// compressed and thumbnailed like a camera shot. [takenUtc] defaults to
+  /// the file's last-modified time. Returns null when the file cannot be
+  /// read; nothing is left behind in the library.
+  Future<Photo?> importFile(
+    String activityId,
+    String sourcePath, {
+    DateTime? takenUtc,
+    PhotoSource source = PhotoSource.manualImport,
+    String? label,
+  }) async {
     final activity = await _activities.get(activityId);
     if (activity == null) throw StateError('Activity $activityId not found');
     final root = await _mediaRoot();
-    final saved = <Photo>[];
-    for (final source in paths) {
-      final photoId = uuidV4();
-      final photoPath = MediaPaths.photo(
-        activity.conferenceId,
-        activityId,
-        photoId,
+    final photoId = uuidV4();
+    final photoPath = MediaPaths.photo(
+      activity.conferenceId,
+      activityId,
+      photoId,
+    );
+    final thumbPath = MediaPaths.thumbnail(
+      activity.conferenceId,
+      activityId,
+      photoId,
+    );
+    final file = MediaPaths.resolve(root, photoPath);
+    try {
+      await file.parent.create(recursive: true);
+      final original = File(sourcePath);
+      final taken = (takenUtc ?? original.lastModifiedSync()).toUtc();
+      await original.copy(file.path);
+      final processed = await _process(
+        photo: file,
+        thumbnail: MediaPaths.resolve(root, thumbPath),
+        quality: quality,
       );
-      final thumbPath = MediaPaths.thumbnail(
-        activity.conferenceId,
-        activityId,
-        photoId,
+      return await _media.addPhoto(
+        id: photoId,
+        activityId: activityId,
+        filePath: photoPath,
+        thumbnailPath: processed.thumbnailWritten ? thumbPath : null,
+        takenUtc: taken,
+        source: source,
+        label: label,
+        width: processed.width,
+        height: processed.height,
+        bytes: processed.bytes,
+        sha256: processed.sha256,
+        originalKept: quality.keepOriginal,
       );
-      final file = MediaPaths.resolve(root, photoPath);
-      try {
-        await file.parent.create(recursive: true);
-        final original = File(source);
-        final takenUtc = original.lastModifiedSync().toUtc();
-        await original.copy(file.path);
-        final processed = await _process(
-          photo: file,
-          thumbnail: MediaPaths.resolve(root, thumbPath),
-          quality: quality,
-        );
-        saved.add(
-          await _media.addPhoto(
-            id: photoId,
-            activityId: activityId,
-            filePath: photoPath,
-            thumbnailPath: processed.thumbnailWritten ? thumbPath : null,
-            takenUtc: takenUtc,
-            source: PhotoSource.manualImport,
-            label: label,
-            width: processed.width,
-            height: processed.height,
-            bytes: processed.bytes,
-            sha256: processed.sha256,
-            originalKept: quality.keepOriginal,
-          ),
-        );
-      } on FileSystemException {
-        if (file.existsSync()) await file.delete();
-      }
+    } on FileSystemException {
+      if (file.existsSync()) await file.delete();
+      return null;
     }
-    return saved;
   }
 
   /// Releases the camera.

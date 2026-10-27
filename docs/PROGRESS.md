@@ -633,6 +633,15 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - `flutter build windows --release` and `flutter build apk --debug` succeed with the new plugin. `integration_test/app_capture_journey_test.dart` on Windows passed (no microphone or camera on this PC).
 - Playback, seeking and speed are unverified on every platform: no real recording can be made on the build host. MT-23 written.
 
+## 27 October 2026: P1-15 gallery import by time window (Claude Code, Opus 5.5, overnight relay)
+
+- Before changes: `flutter analyze` clean, `flutter test` 648 passed.
+- ADR-035: `GallerySource` interface; `PhotoManagerGallerySource` (Android, iOS) on `photo_manager` 3.12.0 (Apache-2.0); `FolderGallerySource` on Windows (folder pick, EXIF `DateTimeOriginal` with offset, else modified time, on a background isolate). `GalleryImportService`: window from segments or actual start and end, margin none / 2 (default) / 5 / 10 min, duplicates (same time within 1 s as an imported photo) start unticked, large files (over 15 MB, or over 24 MP when the size is unknown) and duplicates ask "Import anyway?". "Import photos taken during this activity" in the activity details opens the sheet. `PhotoCaptureService.importFile` shared with manual import (source `gallery_import`, gallery time so offsets line up). Android `READ_MEDIA_IMAGES` and `READ_MEDIA_VISUAL_USER_SELECTED`, iOS `NSPhotoLibraryUsageDescription`.
+- Tests: 17 new (7 service, 4 folder source and EXIF, 6 widget). `flutter test` 665 passed (twice), `flutter analyze` clean, `dart format` clean, notices regenerated (147 packages, 0 flagged).
+- Fixed during testing: the widget test's temp folder could not be deleted on Windows while a thumbnail read started in the fake-async zone was still pending; the test now unmounts and lets reads finish.
+- `flutter build windows --release` and `flutter build apk --debug` succeed. `integration_test/app_capture_journey_test.dart` on Windows passed.
+- Gallery access, HEIC handling and folder scanning on real devices are unverified. MT-24 written.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -671,3 +680,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-13 | done (device thresholds unverified) | SafetyPromptService, recording screen banner, Android battery channel, 12 new tests (612 total). ADR-032 |
 | P1-16 | done (devices unverified) | Bookmarks list with edit and remove, notes editor, Ctrl+B hotkey bookmark, 8 new tests (620 total). ADR-033. Timeline and export use come with P1-17 and P1-21/22 |
 | P1-17 | done (playback unverified on devices) | Review timeline, player across segments and gaps, waveform summaries and paged view, review screen, 28 new tests (648 total). ADR-034. MT-23 for devices |
+| P1-15 | done (devices unverified) | Gallery import by time window: phones via `photo_manager`, Windows via folder and EXIF, margin, duplicate and large warnings, 17 new tests (665 total). ADR-035. MT-24 for devices |

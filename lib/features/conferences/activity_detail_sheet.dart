@@ -556,6 +556,7 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
               const SizedBox(height: TokenSpace.space3),
               ActivityPhotosSection(
                 activityId: act.id,
+                timezone: widget.timezone,
                 onChanged: _refreshSummary,
               ),
 
