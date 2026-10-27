@@ -1,12 +1,16 @@
 package com.samlytics.attenlume
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
+import java.lang.ref.WeakReference
 
 /**
  * MethodChannel bridge for controlling the Android Foreground Service and
@@ -17,9 +21,13 @@ object ForegroundServiceChannel {
     private val main = Handler(Looper.getMainLooper())
     private var channel: MethodChannel? = null
     private var appContext: Context? = null
+    private var activity: WeakReference<Activity>? = null
+    private var askedForNotifications = false
+    private const val NOTIFICATION_REQUEST_CODE = 4211
 
     fun attach(messenger: BinaryMessenger, context: Context) {
         appContext = context.applicationContext
+        activity = (context as? Activity)?.let { WeakReference(it) }
         channel = MethodChannel(messenger, CHANNEL).also {
             it.setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -43,6 +51,7 @@ object ForegroundServiceChannel {
                         } else {
                             ctx.startService(intent)
                         }
+                        requestNotificationPermission()
                         result.success(null)
                     }
 
@@ -83,6 +92,23 @@ object ForegroundServiceChannel {
         channel?.setMethodCallHandler(null)
         channel = null
         appContext = null
+        activity = null
+    }
+
+    /**
+     * Android 13+ hides the recording notification, and its Pause, Stop and
+     * Bookmark actions, until the user allows notifications (ADR-029).
+     * Asks once per app run, the first time a recording starts. Recording
+     * carries on whatever the answer.
+     */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || askedForNotifications) return
+        val host = activity?.get() ?: return
+        if (host.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        askedForNotifications = true
+        host.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST_CODE)
     }
 
     fun deliverAction(action: String, activityId: String? = null) {

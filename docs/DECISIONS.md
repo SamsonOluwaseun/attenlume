@@ -539,3 +539,11 @@ Format: context, decision, alternatives, consequences.
 - **Not fixed here:** Android 13+ notification permission is still never requested, so the recording notification stays hidden until the user allows it in Settings. The camera has no viewfinder; P1-14 builds the photo screen.
 - **Alternatives:** `permission_handler` for prompts (new dependency, not needed for the microphone); auto-starting recording on quick start (skips the quality choice and could record before the user is ready); migrating the Documents data (not worth the risk for one day of test data).
 - **Consequences:** Windows previews start with an empty app. `tool/build_windows_preview.ps1` builds a versioned Windows preview outside the repo for hands-on testing.
+
+## ADR-029: Android 13+ notification permission (P1-11 follow-up)
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5), attended session continued while the owner was away.
+- **Context:** `POST_NOTIFICATIONS` was declared but never requested. On Android 13 and later the recording notification, with its Pause, Stop, Bookmark and Photo actions (FR-REC-10), stays hidden until the user allows notifications. The foreground service itself runs without the permission.
+- **Decision:** `ForegroundServiceChannel.kt` asks for `POST_NOTIFICATIONS` right after it starts the foreground service, at most once per app run and only on API 33+, using the attached `MainActivity`. Recording does not wait for the answer.
+- **Alternatives:** `permission_handler` (new dependency for one prompt); asking at first launch (asks before the user knows why, which the design guide's calm tone argues against).
+- **Consequences:** The first recording on Android 13+ shows the system prompt over the recording screen. Compiles in `flutter build apk --release`; the prompt is unverified on a device (add to MT-17).
