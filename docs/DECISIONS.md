@@ -27,3 +27,19 @@ Format: context, decision, alternatives, consequences.
   6. Do not use `sqlite3_flutter_libs` (end of life) or `ffmpeg_kit_flutter` (discontinued).
 - **Alternatives:** FLAC on Windows (lossless, several times larger); bundling a separate low-bitrate encoder (extra native dependency and licence review); `just_audio_media_kit` (stale, Unlicense, bundles libmpv); `flutter_foreground_task` instead of a native service (kept as fallback).
 - **Consequences:** Windows recordings are about twice the size of Balanced on phones. Storage estimates must use the effective profile per platform. All platform code stays behind interfaces so spikes can change it.
+
+## ADR-004: Scaffold conventions (P0-02)
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-02. Owner to review. (ADR-003 is reserved for the trimming approach, P0-14.)
+- **Context:** P0-02 needed choices the build guide leaves open: Riverpod codegen or not, how Drift stores times, where static Montserrat files come from, how tokens reach Dart, and when to generate app icons.
+- **Decision:**
+  1. Riverpod without code generation for now (plain `Provider`). `riverpod_generator` can be added later without changing call sites much.
+  2. Drift stores `DateTime` as ISO 8601 text (`store_date_time_values_as_text` in `build.yaml`), always written as UTC, matching build guide 9.4. Foreign keys are switched on in `beforeOpen`.
+  3. Schema dumps in `drift_schemas/` with `drift_dev make-migrations`, verified by `SchemaVerifier` tests for every version.
+  4. Montserrat static TTFs from the upstream Montserrat Project repo (`JulietaUla/Montserrat`, `fonts/ttf`, SIL OFL 1.1). The Google Fonts repo only ships the variable font now. Keep the `.woff` files for web and design use.
+  5. `lib/app/theme/tokens.dart` is generated from `design/tokens.json` by `tool/gen_tokens.dart` and checked by a test, so the JSON stays the single source.
+  6. App version starts at `0.1.0+1` (build guide 14: `0.x` during development).
+  7. Launcher icons are **not** generated yet. The supplied icon has a transparent margin around a rounded tile, while iOS needs a full-bleed square without transparency and Android needs an adaptive foreground layer. Making those exports needs either designer-supplied exports or a careful crop, which the design guide forbids doing loosely. Deferred to the owner (open question) or a later task.
+  8. CI (`.github/workflows/ci.yml`): Windows job (codegen drift check, format, analyze, test, Windows debug build), Ubuntu job (debug APK), macOS job (unsigned iOS debug build). Dormant until a remote exists (ADR-001).
+- **Alternatives:** integer Unix timestamps (Drift's default, smaller but unreadable in exports and debugging); variable Montserrat font (one file, but weight mapping in Flutter needs `FontVariation` everywhere); hand-written token constants (drift from the JSON).
+- **Consequences:** P0-09 builds the full schema on this database class and bumps `schemaVersion` with a migration test per version.

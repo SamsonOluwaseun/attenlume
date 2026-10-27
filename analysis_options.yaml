@@ -1,0 +1,40 @@
+# Static analysis for Attenlume [P0-02].
+# flutter_lints plus stricter typing. Generated Drift code is excluded.
+
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - windows/**
+    - "**/*.g.dart"
+    - test/**/generated/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    missing_required_param: error
+    missing_return: error
+
+linter:
+  rules:
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
+    avoid_print: true
+    avoid_slow_async_io: true
+    cancel_subscriptions: true
+    close_sinks: true
+    directives_ordering: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_final_fields: true
+    prefer_final_locals: true
+    prefer_single_quotes: true
+    sort_child_properties_last: true
+    test_types_in_equals: true
+    unawaited_futures: true
+    unnecessary_lambdas: true
+    use_super_parameters: true
