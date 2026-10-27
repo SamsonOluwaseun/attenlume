@@ -56,7 +56,7 @@ None failing in `flutter test` (392 passed). Device tests unchanged from the las
 ## Commands to run
 
 ```powershell
-cd C:\devttenlume
+cd C:\dev\attenlume
 flutter pub get
 dart run build_runner build
 flutter analyze
