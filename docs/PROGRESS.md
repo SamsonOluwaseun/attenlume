@@ -642,6 +642,14 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - `flutter build windows --release` and `flutter build apk --debug` succeed. `integration_test/app_capture_journey_test.dart` on Windows passed.
 - Gallery access, HEIC handling and folder scanning on real devices are unverified. MT-24 written.
 
+## 27 October 2026: P1-18 non-destructive trim with undo, split activity (Claude Code, Opus 5.5, overnight relay)
+
+- Before changes: `flutter analyze` clean, `flutter test` 665 passed.
+- ADR-036: trim start, trim end and middle cuts (two marks) on the review screen, stored in `cut_ranges` with snackbar Undo for add and remove; the player skips merged cuts while playing (across gaps, stopping at a trimmed end); hatched cuts on the timeline strip and time "after cuts". `ActivityRepository.split` and `ActivitySplitter`: split at the playhead into a named Part 2 in one transaction, segments, photos, bookmarks and interruptions move, cuts divided, no audio written (a segment the split falls inside is shared by both parts with a cut on each side), waveform summaries follow.
+- Tests: 16 new (5 player, 1 timeline, 5 repository and splitter, 5 widget), 2 P1-17 widget expectations updated for the sample's 30 s intro cut now being skipped. `flutter test` 681 passed, `flutter analyze` clean, `dart format` clean, notices up to date (no new packages).
+- `integration_test/app_capture_journey_test.dart` on Windows passed.
+- Cut skipping and split on real devices are unverified. MT-25 written.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -681,3 +689,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-16 | done (devices unverified) | Bookmarks list with edit and remove, notes editor, Ctrl+B hotkey bookmark, 8 new tests (620 total). ADR-033. Timeline and export use come with P1-17 and P1-21/22 |
 | P1-17 | done (playback unverified on devices) | Review timeline, player across segments and gaps, waveform summaries and paged view, review screen, 28 new tests (648 total). ADR-034. MT-23 for devices |
 | P1-15 | done (devices unverified) | Gallery import by time window: phones via `photo_manager`, Windows via folder and EXIF, margin, duplicate and large warnings, 17 new tests (665 total). ADR-035. MT-24 for devices |
+| P1-18 | done (devices unverified) | Trim start and end, middle cuts with undo, cut skipping in the player, split at the playhead with a shared segment and divided cuts, 16 new tests (681 total). ADR-036. MT-25 for devices |

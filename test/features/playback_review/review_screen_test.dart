@@ -75,7 +75,8 @@ void main() {
       expect(find.text('Data Mesh in Practice'), findsOneWidget);
       expect(
         find.bySemanticsLabel(
-          'Timeline: 2 segments, 1 gap, 1 bookmark, 1 photo, 1 interruption',
+          'Timeline: 2 segments, 1 gap, 1 bookmark, 1 photo, 1 interruption, '
+          '1 cut',
         ),
         findsOneWidget,
       );
@@ -107,11 +108,13 @@ void main() {
       await settle(tester);
       expect(engine.playing, isTrue);
       expect(find.byTooltip('Pause'), findsOneWidget);
+      // FR-REV-04: playback starts after the 30 s intro cut.
+      expect(engine.seekedTo, const Duration(seconds: 30));
 
       await tester.tap(find.byKey(const Key('review-skip-forward')));
       await settle(tester);
-      expect(engine.seekedTo, const Duration(seconds: 15));
-      expect(find.text('0:15'), findsOneWidget);
+      expect(engine.seekedTo, const Duration(seconds: 45));
+      expect(find.text('0:45'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('review-speed')));
       await settle(tester);
@@ -212,6 +215,134 @@ void main() {
       await settle(tester);
       expect(find.byType(ReviewScreen), findsNothing);
       expect(engine.disposed, isTrue, reason: 'player released on close');
+    });
+  });
+
+  group('FR-REV-04 and FR-REV-05 trim and split [P1-18]', () {
+    Future<void> tapKey(WidgetTester tester, String key) async {
+      final finder = find.byKey(Key(key));
+      await tester.ensureVisible(finder);
+      await tester.tap(finder);
+      await settle(tester);
+    }
+
+    Future<void> seekToKeySlide(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Key slide'));
+      await tester.tap(find.text('Key slide'));
+      await settle(tester);
+    }
+
+    Future<SampleConference> open(WidgetTester tester) async {
+      final sample = await tester.runAsync(() => SampleConference.build(t));
+      await tester.pumpWidget(
+        subject(tester, ReviewScreen(activityId: sample!.keynote.id)),
+      );
+      await settle(tester);
+      return sample;
+    }
+
+    testWidgets('FR-REV-04 trim start to the playhead, then undo', (
+      tester,
+    ) async {
+      final sample = await open(tester);
+      expect(find.text('0:00 to 0:30'), findsOneWidget);
+      expect(find.text('16 min after cuts'), findsOneWidget);
+
+      await seekToKeySlide(tester);
+      await tapKey(tester, 'trim-start');
+      expect(find.text('0:00 to 15:00'), findsOneWidget);
+      expect(find.text('5 min after cuts'), findsOneWidget);
+      final cuts = await tester.runAsync(
+        () => t.cuts.activeFor(sample.keynote.id),
+      );
+      expect(cuts, hasLength(2));
+
+      await tester.tap(find.text('Undo'));
+      await settle(tester);
+      expect(find.text('0:00 to 15:00'), findsNothing);
+      expect(
+        await tester.runAsync(() => t.cuts.activeFor(sample.keynote.id)),
+        hasLength(1),
+      );
+    });
+
+    testWidgets('FR-REV-04 trim end and a middle cut from two marks', (
+      tester,
+    ) async {
+      await open(tester);
+      await seekToKeySlide(tester);
+      await tapKey(tester, 'trim-end');
+      expect(find.text('15:00 to 20:00'), findsOneWidget);
+
+      // Mark 15:00, move to the photo at 14:00, mark again.
+      await tapKey(tester, 'trim-mark-cut');
+      expect(find.byKey(const Key('trim-marking-hint')), findsOneWidget);
+      expect(find.text('End cut here'), findsOneWidget);
+      await tester.ensureVisible(find.byIcon(Icons.photo_camera_outlined));
+      await tester.tap(find.byIcon(Icons.photo_camera_outlined));
+      await settle(tester);
+      await tapKey(tester, 'trim-mark-cut');
+      expect(find.text('14:00 to 15:00'), findsOneWidget);
+      expect(find.text('Start cut here'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp(r'Timeline: .*, 2 cuts$')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('FR-REV-04 removing a cut can be undone', (tester) async {
+      final sample = await open(tester);
+      final intro = (await tester.runAsync(
+        () => t.cuts.activeFor(sample.keynote.id),
+      ))!.single;
+      await tapKey(tester, 'trim-remove-${intro.id}');
+      expect(find.text('0:00 to 0:30'), findsNothing);
+      expect(find.text('Cut removed.'), findsOneWidget);
+      await tester.tap(find.text('Undo'));
+      await settle(tester);
+      expect(find.text('0:00 to 0:30'), findsOneWidget);
+    });
+
+    testWidgets('FR-REV-05 split at the playhead names and creates part 2', (
+      tester,
+    ) async {
+      final sample = await open(tester);
+      await seekToKeySlide(tester);
+      await tapKey(tester, 'trim-split');
+      expect(find.text('Split at 15:00?'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('split-title')), 'Q and A');
+      await tapKey(tester, 'split-confirm');
+      await settle(tester);
+
+      expect(
+        find.text('Split. "Q and A" is now in the activity list.'),
+        findsOneWidget,
+      );
+      final activities = await tester.runAsync(
+        () => t.activities.listForConference(sample.conference.id),
+      );
+      final part2 = activities!.singleWhere((a) => a.title == 'Q and A');
+      final bookmarks = await tester.runAsync(
+        () => t.media.bookmarksFor(part2.id),
+      );
+      expect(bookmarks!.single.label, 'Key slide');
+      // The screen reloads the first part: the bookmark has gone from it.
+      expect(find.text('Key slide'), findsNothing);
+    });
+
+    testWidgets('FR-REV-05 cancelling the split changes nothing', (
+      tester,
+    ) async {
+      final sample = await open(tester);
+      await seekToKeySlide(tester);
+      await tapKey(tester, 'trim-split');
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      final activities = await tester.runAsync(
+        () => t.activities.listForConference(sample.conference.id),
+      );
+      expect(activities, hasLength(3));
+      expect(find.text('Key slide'), findsOneWidget);
     });
   });
 }

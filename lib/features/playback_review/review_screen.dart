@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/tokens.dart';
 import '../../data/filesystem/media_paths.dart';
+import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/activity.dart';
+import '../../domain/models/enums.dart';
+import '../../domain/models/media.dart';
+import '../../domain/services/activity_splitter.dart';
 import '../../domain/services/review_timeline.dart';
 import '../../platform/audio_playback/audio_playback_engine.dart';
 import '../../platform/audio_playback/audioplayers_playback_engine.dart';
@@ -12,6 +16,7 @@ import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_providers.dart';
 import 'review_player_controller.dart';
 import 'timeline_strip.dart';
+import 'trim_panel.dart';
 import 'waveform_pages.dart';
 import 'waveform_view.dart';
 
@@ -22,8 +27,16 @@ final audioPlaybackEngineFactoryProvider =
       (ref) => AudioplayersPlaybackEngine.new,
     );
 
+final activitySplitterProvider = Provider<ActivitySplitter>(
+  (ref) => ActivitySplitter(
+    activities: ref.watch(activityRepositoryProvider),
+    mediaRoot: ref.watch(mediaRootProvider),
+  ),
+);
+
 /// Player, timeline and waveform for one activity (FR-REV-01 to 03)
-/// [P1-17].
+/// [P1-17], with non-destructive trims, cuts with undo and split at the
+/// playhead (FR-REV-04, FR-REV-05) [P1-18].
 class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({super.key, required this.activityId});
 
@@ -38,6 +51,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   ReviewTimeline? _timeline;
   ReviewPlayerController? _player;
   WaveformPager? _pager;
+  List<CutRange> _cuts = const [];
+  int? _markedStartMs;
   bool _loading = true;
 
   @override
@@ -58,18 +73,21 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
       photos: await media.photosFor(id),
       bookmarks: await media.bookmarksFor(id),
     );
+    final cuts = await ref.read(cutRangeRepositoryProvider).activeFor(id);
     final mediaRoot = ref.read(mediaRootProvider);
     if (!mounted) return;
     final engine = ref.read(audioPlaybackEngineFactoryProvider)();
     setState(() {
       _activity = activity;
       _timeline = timeline;
+      _cuts = cuts;
+      _markedStartMs = null;
       _player = ReviewPlayerController(
         timeline: timeline,
         engine: engine,
         resolvePath: (s) async =>
             MediaPaths.resolve(await mediaRoot(), s.filePath).path,
-      );
+      )..cutRanges = cuts;
       _pager = activity == null
           ? null
           : WaveformPager(
@@ -87,6 +105,120 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   void dispose() {
     _player?.dispose();
     super.dispose();
+  }
+
+  /// Trims need finished audio: not while a segment is still being written.
+  bool get _editable {
+    final timeline = _timeline;
+    return timeline != null &&
+        timeline.hasAudio &&
+        timeline.segments.every((s) => s.segment.state != SegmentState.writing);
+  }
+
+  Future<void> _reloadCuts() async {
+    final cuts = await ref
+        .read(cutRangeRepositoryProvider)
+        .activeFor(widget.activityId);
+    if (!mounted) return;
+    setState(() => _cuts = cuts);
+    _player?.cutRanges = cuts;
+  }
+
+  void _say(String message, {VoidCallback? undo}) {
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: undo == null
+            ? null
+            : SnackBarAction(label: 'Undo', onPressed: undo),
+      ),
+    );
+  }
+
+  Future<void> _addCut(int start, int end, String reason) async {
+    if (end <= start) return;
+    final repo = ref.read(cutRangeRepositoryProvider);
+    final cut = await repo.add(
+      widget.activityId,
+      startOffsetMs: start,
+      endOffsetMs: end,
+      reason: reason,
+    );
+    await _reloadCuts();
+    if (!mounted) return;
+    _say(
+      'Cut ${formatOffset(start)} to ${formatOffset(end)}. '
+      'The recording is unchanged.',
+      undo: () async {
+        await repo.remove(cut.id);
+        await _reloadCuts();
+      },
+    );
+  }
+
+  Future<void> _removeCut(CutRange cut) async {
+    final repo = ref.read(cutRangeRepositoryProvider);
+    await repo.remove(cut.id);
+    await _reloadCuts();
+    if (!mounted) return;
+    _say(
+      'Cut removed.',
+      undo: () async {
+        await repo.restore(cut.id);
+        await _reloadCuts();
+      },
+    );
+  }
+
+  void _markCut(int positionMs) {
+    final start = _markedStartMs;
+    if (start == null) {
+      setState(() => _markedStartMs = positionMs);
+      return;
+    }
+    setState(() => _markedStartMs = null);
+    final (from, to) = start < positionMs
+        ? (start, positionMs)
+        : (positionMs, start);
+    _addCut(from, to, 'Cut');
+  }
+
+  Future<void> _split(int positionMs) async {
+    final activity = _activity;
+    if (activity == null) return;
+    await _player?.pause();
+    if (!mounted) return;
+    final title = await showDialog<String>(
+      context: context,
+      builder: (_) =>
+          _SplitDialog(positionMs: positionMs, title: activity.title),
+    );
+    if (title == null || !mounted) return;
+    final ActivitySplitResult result;
+    try {
+      result = await ref
+          .read(activitySplitterProvider)
+          .split(
+            widget.activityId,
+            splitOffsetMs: positionMs,
+            part2Title: title,
+          );
+    } on Object {
+      if (mounted) {
+        _say('The activity could not be split. Nothing was changed.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    _player?.dispose();
+    setState(() {
+      _player = null;
+      _loading = true;
+    });
+    await _load();
+    if (!mounted) return;
+    _say('Split. "${result.part2.title}" is now in the activity list.');
   }
 
   @override
@@ -124,11 +256,32 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                     timeline: timeline,
                     positionMs: player.positionMs,
                     onSeek: player.seekTo,
+                    cuts: player.cuts,
                   ),
                   const SizedBox(height: TokenSpace.space2),
                   _PositionRow(timeline: timeline, player: player),
                   const SizedBox(height: TokenSpace.space3),
                   _Controls(player: player),
+                  const SizedBox(height: TokenSpace.space5),
+                  TrimPanel(
+                    positionMs: player.positionMs,
+                    audioEndMs: timeline.audioEndMs,
+                    cuts: _cuts,
+                    enabled: _editable,
+                    markedStartMs: _markedStartMs,
+                    onTrimStart: () =>
+                        _addCut(0, player.positionMs, 'Trim start'),
+                    onTrimEnd: () => _addCut(
+                      player.positionMs,
+                      timeline.audioEndMs,
+                      'Trim end',
+                    ),
+                    onMarkCut: () => _markCut(player.positionMs),
+                    onCancelMark: () => setState(() => _markedStartMs = null),
+                    onSplit: () => _split(player.positionMs),
+                    onRemoveCut: _removeCut,
+                    onSeek: player.seekTo,
+                  ),
                   if (player.error case final error?) ...[
                     const SizedBox(height: TokenSpace.space3),
                     Text(
@@ -158,7 +311,7 @@ class _PositionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium
         ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
-    return Row(
+    final row = Row(
       children: [
         Text(
           formatOffset(player.positionMs),
@@ -171,6 +324,78 @@ class _PositionRow extends StatelessWidget {
           ' recorded',
           key: const Key('review-recorded'),
           style: style,
+        ),
+      ],
+    );
+    if (player.cuts.isEmpty) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        row,
+        Text(
+          '${formatDuration(Duration(milliseconds: player.keptAudioMs))}'
+          ' after cuts',
+          key: const Key('review-kept'),
+          style: style,
+        ),
+      ],
+    );
+  }
+}
+
+/// Confirms a split and names the new activity (FR-REV-05) [P1-18].
+class _SplitDialog extends StatefulWidget {
+  const _SplitDialog({required this.positionMs, required this.title});
+
+  final int positionMs;
+  final String title;
+
+  @override
+  State<_SplitDialog> createState() => _SplitDialogState();
+}
+
+class _SplitDialogState extends State<_SplitDialog> {
+  late final TextEditingController _name = TextEditingController(
+    text: '${widget.title.isEmpty ? 'Session' : widget.title} (Part 2)',
+  );
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final at = formatOffset(widget.positionMs);
+    return AlertDialog(
+      title: Text('Split at $at?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Everything from $at, with its photos and bookmarks, moves to a '
+            'new activity. No audio is deleted or rewritten.',
+          ),
+          const SizedBox(height: TokenSpace.space3),
+          TextField(
+            key: const Key('split-title'),
+            controller: _name,
+            decoration: const InputDecoration(labelText: 'New activity name'),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('split-confirm'),
+          onPressed: () => Navigator.of(context).pop(_name.text),
+          child: const Text('Split'),
         ),
       ],
     );

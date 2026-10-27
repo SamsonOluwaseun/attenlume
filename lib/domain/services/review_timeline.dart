@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import '../models/enums.dart';
 import '../models/media.dart';
+import 'cut_range_math.dart';
 import 'timeline_offset.dart';
 
 /// One audio file placed on the review timeline (FR-REV-02) [P1-17].
@@ -211,6 +214,32 @@ class ReviewTimeline {
     var total = 0;
     for (final s in segments) {
       if (s.playable) total += s.durationMs;
+    }
+    return total;
+  }
+
+  /// End of the last segment: where "Trim end" cuts to.
+  int get audioEndMs {
+    var end = 0;
+    for (final s in segments) {
+      if (s.endMs > end) end = s.endMs;
+    }
+    return end;
+  }
+
+  /// Playable audio left once [cuts] (merged, timeline offsets) are
+  /// skipped (FR-REV-04) [P1-18].
+  int keptAudioMs(List<TimeRange> cuts) {
+    var total = 0;
+    for (final s in segments) {
+      if (!s.playable) continue;
+      var kept = s.durationMs;
+      for (final c in cuts) {
+        final start = math.max(c.startMs, s.startMs);
+        final end = math.min(c.endMs, s.endMs);
+        if (end > start) kept -= end - start;
+      }
+      total += kept;
     }
     return total;
   }

@@ -1,36 +1,37 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), overnight relay
-Branch: main (merged from `phase-1/P1-15-gallery-import`)
-Current task ID: P1-15 (done). Next: P1-18
+Branch: main (merged from `phase-1/P1-18-trim-split`)
+Current task ID: P1-18 (done). Next: P1-19
 Status: done
 
 ## Done in this session
 
-- ADR-035 (P1-15 done): "Import photos taken during this activity" in the activity details. Lists gallery photos from the activity's recorded span (or actual start and end) with a margin (none, 2 min default, 5, 10), marks likely duplicates (unticked) and large files, asks "Import anyway?" for either, and imports the chosen photos as `gallery_import` with their gallery time, so offsets line up with the recording. Originals are copied, never moved or changed.
-- `GallerySource` interface in `lib/platform/gallery/`: `PhotoManagerGallerySource` (Android, iOS, `photo_manager` 3.12.0, Apache-2.0) and `FolderGallerySource` (Windows: folder pick, EXIF `DateTimeOriginal`, modified-time fallback, background isolate). `PhotoCaptureService.importFile` now shared with manual import.
-- Android `READ_MEDIA_IMAGES` and `READ_MEDIA_VISUAL_USER_SELECTED`, iOS `NSPhotoLibraryUsageDescription`.
-- 17 new tests; `flutter test` 665 passed (twice), analyze and format clean, notices regenerated (147 packages, 0 flagged). Windows release and Android debug builds succeed. J2 journey test passes on Windows.
+- ADR-036 (P1-18 done): the review screen has a "Trim and split" panel. Trim start to here, Trim end from here, and Start cut here / End cut here add rows to `cut_ranges`; each add or remove shows a snackbar with Undo (soft delete and restore). The cut list shows each range with its reason; tap to jump, x to remove.
+- `ReviewPlayerController.cutRanges`: merged cuts are skipped while playing, across gaps; a trimmed end stops playback. The timeline strip draws hatched cut spans and counts them in its semantics label; the position row shows time "after cuts" (`ReviewTimeline.keptAudioMs`, `audioEndMs`).
+- `ActivityRepository.split` (one transaction) and `ActivitySplitter` (moves waveform summaries): Split here asks for the Part 2 name, moves later segments, photos, bookmarks and interruptions, divides cuts, and shares a segment the split falls inside (second row, same file, a cut on each side). New activity offsets follow the 9.4 rule from its first segment.
+- 16 new tests; `flutter test` 681 passed, analyze and format clean, J2 journey test passes on Windows.
 
 ## Left to do on this task
 
-- Nothing in code. Device checks in MT-24 (phone permissions including partial access, HEIC on iPhone and Android, Windows Camera Roll folder).
+- Nothing in code. Device checks in MT-25.
 
 ## Exact next step
 
-Start **P1-18 Non-destructive trim with undo, split activity** on branch `phase-1/P1-18-trim-split` (FR-REV-04, FR-REV-05 in `docs/BUILD_GUIDE.md`). Build on `lib/features/playback_review/review_screen.dart`, `lib/domain/services/cut_range_math.dart`, `lib/domain/services/activity_split_service.dart` and `lib/data/repositories/cut_range_repository.dart` (inspect them first; much of the maths and storage already exists from P0-14 and P0-09). Trim start and end, exclude middle ranges stored in `cut_ranges` with soft-delete undo, show cuts on the timeline strip, and "Split at playhead" moving media and bookmarks by offset. The design board's Highlights / Timeline / Photos tabs can come with it. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tooluild_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
+Start **P1-19 Permanent trim per ADR-003** on branch `phase-1/P1-19-permanent-trim` (FR-REV-06, FR-REV-07). Read ADR-003 and ADR-036 first. Important: `lib/platform/audio_trimmer/m4a_container_trimmer.dart` writes placeholder audio bytes (it was a P0-14 container spike), so a real trimmer is needed: native `MediaExtractor` + `MediaMuxer` on Android, `AVAssetExportSession` passthrough on iOS, and on Windows either Media Foundation or a real Dart MP4 sample-table rewrite (copy `stsz`/`stco` sample ranges). Keep it behind `AudioTrimmer`; "Apply trims permanently" must be a separate confirmed action that writes new files and only then offers to remove originals. After ADR-036, two segment rows can name the same file: never offer to remove a file another row still names. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tooluild_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
 
 ## Files touched
 
-New: `lib/platform/gallery/gallery_source.dart`, `lib/platform/gallery/photo_manager_gallery_source.dart`, `lib/platform/gallery/folder_gallery_source.dart`, `lib/domain/services/gallery_import_service.dart`, `lib/features/photos/gallery_import_sheet.dart`, tests `test/domain/gallery_import_service_test.dart`, `test/platform/folder_gallery_source_test.dart`, `test/features/photos/gallery_import_sheet_test.dart`, fixture `test/fixtures/fake_gallery_source.dart`.
-Changed: `lib/domain/services/photo_capture_service.dart` (`importFile`), `lib/features/photos/activity_photos_section.dart` (new button, `timezone`), `lib/features/conferences/activity_detail_sheet.dart`, `android/app/src/main/AndroidManifest.xml`, `ios/Runner/Info.plist`, `pubspec.yaml`, `pubspec.lock`, `THIRD_PARTY_NOTICES.md`, `windows/flutter/` generated files, docs (ARCHITECTURE, PLATFORM_FEASIBILITY, TEST_PLAN, DECISIONS, PROGRESS, HANDOVER).
+New: `lib/domain/services/activity_splitter.dart`, `lib/features/playback_review/trim_panel.dart`, `test/data/repositories/activity_split_test.dart`.
+Changed: `lib/data/repositories/activity_repository.dart` (`split`, `ActivitySplitResult`), `lib/domain/services/review_timeline.dart` (`audioEndMs`, `keptAudioMs`), `lib/features/playback_review/review_player_controller.dart` (cut skipping), `lib/features/playback_review/review_screen.dart` (panel, undo snackbars, split dialog), `lib/features/playback_review/timeline_strip.dart` (cuts), tests `test/features/playback_review/review_player_controller_test.dart`, `test/features/playback_review/review_screen_test.dart`, `test/domain/review_timeline_test.dart`, docs (DECISIONS, TEST_PLAN, PROGRESS, HANDOVER).
 
 ## Failing or skipped tests
 
-None failing: `flutter test` 665 passed. The P0 device spikes, MT-23 and MT-24 still need real hardware.
+None failing: `flutter test` 681 passed. The P0 device spikes and MT-23 to MT-25 still need real hardware.
 
 ## Open questions for the owner
 
+- **ADR-036 (new):** a split inside a segment does not cut the audio file: both activities point to the same file, each with a cut hiding the other part, so nothing is rewritten or deleted. Part 2 is named in the confirm dialog (default "{title} (Part 2)") and copies type, room, organisation, tags and privacy but not speakers or notes. There is no undo for a split yet. Say if you want an "undo split" or a merge action.
 - **ADR-035 (new):** gallery import needs Android `READ_MEDIA_IMAGES`. Google Play only allows it for apps whose core use needs broad photo access; before a Play listing, decide whether to argue the case or switch Android to the system photo picker (no time-window filter). HEIC originals on Android are skipped (iOS hands over a JPEG). Duplicates are judged by time (within 1 s), large means over 15 MB or 24 MP. Say if you want different rules.
 
 - **ADR-034 (new):** playback uses `audioplayers` (one publisher for Android, iOS and Windows) instead of the planned `just_audio` + `just_audio_windows`. The waveform is drawn from the input level sampled while recording (200 ms), not decoded from the audio, so it shows loudness rather than exact peaks, and recordings made before this change show a flat line. Say if you want decoded waveforms (needs a native decoder or FFmpeg).
