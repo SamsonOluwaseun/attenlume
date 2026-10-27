@@ -40,10 +40,24 @@ Test results on `phase-0/P0-02-scaffold` (Windows 11 build host):
 - `flutter build apk --debug`: built. Not installed on any phone (unverified).
 - iOS: not built (no Mac). Unverified.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-03 project docs
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 12 passed.
+- New docs from build guide 1.6: `docs/PRODUCT_SPEC.md` (11 journeys, 18 user stories, edge cases, acceptance detail), `docs/PRIVACY_AND_SAFETY.md` (consent, stored data, retention, sharing, permission wording drafts, cloud and AI summaries), `docs/TEST_PLAN.md` (current suite, planned unit, widget and integration tests, manual tests MT-01 to 15, AT list with every device cell unverified, AT-CLD-01 to 10 and Phase 2 placeholders, device matrix, empty results log), `docs/RELEASE_PLAN.md` (milestones, versioning, CI, Windows, Android and iOS distribution, iOS blocked without a Mac, identifiers, checklist).
+- `README.md`: every 1.6 document linked, plus export format, caveats and Windows downloads sections.
+- New test `test/docs/docs_index_test.dart` (P0-03, 2 tests): every 1.6 document exists and is linked from the README.
+
+Test results on `phase-0/P0-03-docs` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 14 passed, 0 failed.
+- `dart format --set-exit-if-changed lib test tool`: clean.
+
 ## Task status
 
 | Task | Status | Evidence |
 |---|---|---|
 | P0-01 | done | `docs/PLATFORM_FEASIBILITY.md` and `docs/ARCHITECTURE.md` drafted, ADR-002. Desk audit only, no device results |
 | P0-02 | done (CI unverified) | analyze clean, 12 tests pass, Windows and APK debug builds succeed locally. CI file written, not run (no remote). No device runs |
-| P0-03 | todo | |
+| P0-03 | done | Four docs created, all 1.6 docs linked from README, `P0-03` docs index tests pass (14 total) |
+| P0-09 | todo | Next |

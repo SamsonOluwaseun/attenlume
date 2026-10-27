@@ -22,13 +22,34 @@ Design tokens: edit `design/tokens.json`, then run `dart run tool/gen_tokens.dar
 
 Database schema: after changing tables and bumping `schemaVersion`, run `dart run drift_dev make-migrations` and add a migration test (see `test/data/local_database/migration_test.dart`).
 
+## Export format
+
+Planned, not built yet (task P1-21). A conference exports as a structured folder or ZIP with `README_START_HERE.md`, `conference.json`, `timeline.csv`, `analysis_prompt.md`, one folder per activity (audio segments, photos, notes, bookmarks, cut ranges) and `checksums.sha256`. The full layout is in `docs/BUILD_GUIDE.md` section 5.10.
+
+## Caveats
+
+- No platform has been tested on a real device yet. See the device matrix in `docs/TEST_PLAN.md`.
+- iOS cannot be built or signed without a Mac (`docs/RELEASE_PLAN.md`).
+- On Windows the system AAC encoder's minimum is 96 kbps, so all quality profiles record at about 43 MB per hour there (ADR-002).
+
+## Windows downloads
+
+None yet. Releases will be published on GitHub Releases with an installer, a portable ZIP and SHA-256 checksums once the release pipeline (P1-28) exists. Unsigned builds will trigger a SmartScreen warning.
+
 ## Docs
 
-- `AGENTS.md`: rules for coding agents
-- `docs/BUILD_GUIDE.md`: full specification
-- `docs/DESIGN_GUIDE.md`: brand, screens and tokens
-- `docs/ARCHITECTURE.md`, `docs/PLATFORM_FEASIBILITY.md`, `docs/DECISIONS.md`
-- `docs/PROGRESS.md`, `docs/HANDOVER.md`
+- [`AGENTS.md`](AGENTS.md): rules for coding agents
+- [`docs/BUILD_GUIDE.md`](docs/BUILD_GUIDE.md): full specification
+- [`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md): brand, screens and tokens
+- [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md): user journeys, stories, edge cases and acceptance detail
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): modules, recording lifecycle, storage, export, dependency versions
+- [`docs/PLATFORM_FEASIBILITY.md`](docs/PLATFORM_FEASIBILITY.md): OS capabilities, sources and the spike results matrix
+- [`docs/PRIVACY_AND_SAFETY.md`](docs/PRIVACY_AND_SAFETY.md): consent, stored data, retention, sharing and permissions
+- [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md): automated and manual tests, acceptance tests, device matrix and results
+- [`docs/RELEASE_PLAN.md`](docs/RELEASE_PLAN.md): milestones, versioning, distribution and signing
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): architecture decision records
+- [`docs/PROGRESS.md`](docs/PROGRESS.md): dated log of work done
+- [`docs/HANDOVER.md`](docs/HANDOVER.md): where the last agent stopped
 
 ## Licences
 
