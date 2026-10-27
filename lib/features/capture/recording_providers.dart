@@ -8,6 +8,7 @@ import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/services/capture_settings.dart';
 import '../../domain/services/crash_recovery_service.dart';
+import '../../domain/services/foreground_service_coordinator.dart';
 import '../../domain/services/interruption_coordinator.dart';
 import '../../domain/services/one_active_coordinator.dart';
 import '../../domain/services/recording_service.dart';
@@ -19,6 +20,7 @@ import '../../platform/audio_route/audio_session_route_probe.dart';
 import '../../platform/audio_route/engine_route_probe.dart';
 import '../../platform/camera/photo_camera.dart';
 import '../../platform/camera/plugin_photo_camera.dart';
+import '../../platform/foreground_service/foreground_service_bridge.dart';
 import '../../platform/interruptions/audio_interruption_source.dart';
 import '../../platform/interruptions/audio_session_interruption_source.dart';
 import '../../platform/storage/free_space_probe.dart';
@@ -129,6 +131,33 @@ final interruptionNoticesProvider = Provider<InAppInterruptionNotices>((ref) {
   return sink;
 });
 
+/// Platform bridge for Android foreground service and ongoing notification [P1-11, FR-REC-10].
+final foregroundServiceBridgeProvider = Provider<ForegroundServiceBridge>((
+  ref,
+) {
+  if (Platform.isAndroid) {
+    final bridge = MethodChannelForegroundServiceBridge();
+    ref.onDispose(bridge.dispose);
+    return bridge;
+  }
+  return const NoopForegroundServiceBridge();
+});
+
+/// Coordinates the foreground service and persistent notification with
+/// the recording lifecycle, notification actions, and interruptions [P1-11, FR-REC-10].
+final foregroundServiceCoordinatorProvider =
+    Provider<ForegroundServiceCoordinator>((ref) {
+      final coordinator = ForegroundServiceCoordinator(
+        recorder: ref.watch(recordingServiceProvider),
+        activities: ref.watch(activityRepositoryProvider),
+        media: ref.watch(mediaAssetRepositoryProvider),
+        bridge: ref.watch(foregroundServiceBridgeProvider),
+        inAppNotices: ref.watch(interruptionNoticesProvider),
+      )..start();
+      ref.onDispose(coordinator.dispose);
+      return coordinator;
+    });
+
 /// Listens for calls, alarms, other apps, the camera and device changes
 /// while the recorder exists (FR-REC-05, FR-PHO-07) [P1-07].
 final interruptionCoordinatorProvider = Provider<InterruptionCoordinator>((
@@ -137,7 +166,7 @@ final interruptionCoordinatorProvider = Provider<InterruptionCoordinator>((
   final coordinator = InterruptionCoordinator(
     recorder: ref.watch(recordingServiceProvider),
     source: ref.watch(audioInterruptionSourceProvider),
-    notices: ref.watch(interruptionNoticesProvider),
+    notices: ref.watch(foregroundServiceCoordinatorProvider),
     // Only iOS reports the active input (ADR-016).
     forceRouteRoll: !Platform.isIOS,
   )..start();
@@ -147,9 +176,11 @@ final interruptionCoordinatorProvider = Provider<InterruptionCoordinator>((
 
 /// Every start goes through here so the one-active rule holds for all
 /// triggers (FR-REC-04) [P1-06]. Creating it also starts the
-/// [interruptionCoordinatorProvider], so no recording runs unwatched.
+/// [interruptionCoordinatorProvider] and [foregroundServiceCoordinatorProvider],
+/// so no recording runs unwatched.
 final oneActiveCoordinatorProvider = Provider<OneActiveCoordinator>((ref) {
   ref.watch(interruptionCoordinatorProvider);
+  ref.watch(foregroundServiceCoordinatorProvider);
   return OneActiveCoordinator(
     recorder: ref.watch(recordingServiceProvider),
     activities: ref.watch(activityRepositoryProvider),

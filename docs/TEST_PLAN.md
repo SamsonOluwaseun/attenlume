@@ -26,10 +26,13 @@ dart format --output=none --set-exit-if-changed lib test tool
 
 ### 2.1 Current suite
 
-As of P1-10 (27 October 2026, Windows 11 build host): 530 unit and widget tests, all passing. The tests in `integration_test/` are device tests: see MT-16 to MT-22.
+As of P1-11 (27 October 2026, Windows 11 build host): 550 unit and widget tests, all passing. The tests in `integration_test/` are device tests: see MT-16 to MT-22.
 
 | File | Proves |
 |---|---|
+| `test/platform/foreground_service/foreground_service_bridge_test.dart` | P1-11: FR-REC-10 MethodChannel startService, updateNotification, stopService, notification action dispatching, malformed data handling, NoopForegroundServiceBridge fallback |
+| `test/domain/foreground_service_coordinator_test.dart` | P1-11: FR-REC-10 start, update, and stop of foreground service notification across recording states, pause/resume/stop/bookmark action handling, interruption notice forwarding |
+| `test/features/capture/recording_providers_foreground_test.dart` | P1-11: FR-REC-10 Riverpod provider wiring for foregroundServiceBridge and coordinator, calculateElapsed multi-segment aggregation |
 | `test/presentation/components/record_button_test.dart` | P1-10: FR-UI-01 idle 96px record button, active controls (pause/resume, stop), tabular figures timer; FR-REC-09 600ms debounce on taps; secondary action buttons |
 | `test/presentation/components/bookmark_chip_test.dart` | P1-10: FR-UI-04 48px touch target height, label, 600ms lime flash and haptic feedback |
 | `test/features/capture/level_meter_test.dart` | P1-10: FR-UI-01/06 dBFS normalization ([-60, 0] dBFS), waveform visualizer in lime for active recording, muted state when paused, reduce motion support |

@@ -433,3 +433,33 @@ Format: context, decision, alternatives, consequences.
   - *FFmpeg audio analysis*: Rejected. Platform `AudioCaptureEngine.levelDbfs()` provides native decibel readings with zero overhead.
 - **Consequences:** The full live recording experience is integrated and verified with unit and widget tests. Notification actions (P1-11) and storage monitoring (P1-12) will bind directly to the states exposed by `RecordingScreen`.
 
+## ADR-025: Android foreground service, ongoing notification and action dispatch (P1-11)
+
+- **Date:** 27 October 2026. **Decided by:** Google Antigravity in unattended mode, task P1-11. Owner to review.
+- **Context:** Requirement FR-REC-10 specifies an ongoing Android persistent notification while recording with Pause/Resume, Stop, Bookmark and (where allowed) Photo actions. On Android 14+ (API 34), continuous microphone capture with the screen locked or app backgrounded requires a foreground service of type `microphone` (`android:foregroundServiceType="microphone"`) started while the app is in the foreground. Non-Android platforms (iOS, Windows) must retain clean execution paths without platform channel exceptions or overhead.
+- **Decision:**
+  1. **Thin Native Kotlin Foreground Service (`RecordingForegroundService.kt`).**
+     - Declared with `android:foregroundServiceType="microphone"` and runs with `ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE` (Android 11+ / API 30+).
+     - Posts to NotificationChannel `attenlume_recording_channel` with `NotificationManager.IMPORTANCE_LOW` so ongoing timer updates and state transitions do not cause repeated audible chimes.
+     - Live Chronometer: Sets `setUsesChronometer(true)` with `setWhen(baseTimeMs)` while actively recording, enabling zero-CPU native ticking in the notification tray without background timer overhead. When paused or interrupted, chronometer is stopped and total elapsed duration is rendered in the content text.
+     - Notification actions:
+       - Actively recording: Pause, Stop, Bookmark, and Photo.
+       - Paused: Resume, Stop, Bookmark, and Photo.
+       - Interrupted / userResumeRequired: Resume and Stop.
+     - Action dispatch: Notification action PendingIntents use `PendingIntent.getService` directly delivering actions (`ACTION_PAUSE`, `ACTION_RESUME`, `ACTION_STOP`, `ACTION_BOOKMARK`) to `onStartCommand` of `RecordingForegroundService`, which forwards them to Dart over `ForegroundServiceChannel.deliverAction`.
+     - Photo action: Dispatches an activity PendingIntent launching `MainActivity` with deep link `attenlume://photo?source=notification`, keeping user within sanctioned camera foreground paths.
+     - Stopping: Cleanly stopped via `ServiceCompat.stopForeground(STOP_FOREGROUND_REMOVE)` and `stopSelf()`.
+  2. **Platform Channel Bridge (`ForegroundServiceBridge`).**
+     - `MethodChannelForegroundServiceBridge` bridges Dart to `RecordingForegroundService.kt` via MethodChannel `com.samlytics.attenlume/foreground_service`.
+     - `NoopForegroundServiceBridge` is used on Windows, iOS, and in tests with zero overhead.
+  3. **Coordinator (`ForegroundServiceCoordinator`).**
+     - Listens to `RecordingService.statusStream`. Starts foreground service when status enters `RecordingState.recording`, updates it across segment rolling, pause, resume, route change, and interruption events, and stops it when status transitions to `saved`, `idle`, `stopping`, or `errorRecoverable`.
+     - Notification action taps directly invoke `recorder.pause()`, `recorder.resume()`, `recorder.stop()`, or `media.addBookmark(source: BookmarkSource.notification)`.
+     - Implements `InterruptionNoticeSink`, updating the notification text with interruption reasons (e.g. "Recording interrupted. Tap Resume to continue") while multiplexing notices to `InAppInterruptionNotices`.
+  4. **Elapsed Duration Calculation across Segments.**
+     - `calculateElapsed` aggregates durations from all finalised and recovered segments in `MediaAssetRepository` plus the active open segment's elapsed span (`clock().difference(status.segmentStartUtc!)`).
+- **Alternatives:**
+  - *Third-party plugin (`flutter_foreground_task`)*: Rejected. Implementing a native Kotlin service in `android/` avoids new third-party dependencies, keeps licence audits clean, and aligns seamlessly with existing `ShortcutChannel.kt` and `MainActivity.kt`.
+  - *BroadcastReceiver for notification actions*: Rejected. `PendingIntent.getService` routes actions directly to the already-running foreground service without registering extra manifest receivers.
+- **Consequences:** Offline background capture on Android is fully backed by an ongoing foreground service and notification with interactive actions. Verified locally with Windows release and Android debug APK builds. Real device validation (MT-17) remains outstanding.
+

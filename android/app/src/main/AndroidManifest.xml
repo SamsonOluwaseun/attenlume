@@ -55,6 +55,11 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE"/>
             </intent-filter>
         </service>
+        <!-- Recording foreground service with microphone type [P1-11, FR-REC-10]. -->
+        <service
+            android:name=".RecordingForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
         <!-- Deep links go to ShortcutChannel, not to Flutter's router. -->
         <meta-data
             android:name="flutter_deeplinking_enabled"
