@@ -31,6 +31,15 @@ abstract final class MediaPaths {
     segmentFileName(sequence, attempt: attempt),
   );
 
+  /// `photos/<photo_id>.jpg` in the activity folder (BUILD_GUIDE 9.5)
+  /// [P0-05].
+  static String photo(String conferenceId, String activityId, String photoId) =>
+      p.posix.join(
+        activityFolder(conferenceId, activityId),
+        'photos',
+        '$photoId.jpg',
+      );
+
   /// The absolute file for a stored relative path.
   static File resolve(Directory mediaRoot, String relativePath) =>
       File(p.joinAll([mediaRoot.path, ...p.posix.split(relativePath)]));

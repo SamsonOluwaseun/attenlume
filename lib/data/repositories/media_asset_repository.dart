@@ -245,7 +245,10 @@ class MediaAssetRepository {
 
   // Photos (FR-PHO-01, FR-PHO-06).
 
+  /// [id] lets the caller name the file after the row before the row
+  /// exists (`photos/<photo_id>.jpg`).
   Future<Photo> addPhoto({
+    String? id,
     required String activityId,
     required String filePath,
     required DateTime takenUtc,
@@ -260,12 +263,12 @@ class MediaAssetRepository {
     bool originalKept = false,
   }) => _db.transaction(() async {
     final now = _clock();
-    final id = _newId();
+    final photoId = id ?? _newId();
     await _db
         .into(_db.photos)
         .insert(
           PhotosCompanion.insert(
-            id: id,
+            id: photoId,
             activityId: activityId,
             filePath: filePath,
             thumbnailPath: Value(thumbnailPath),
@@ -288,7 +291,9 @@ class MediaAssetRepository {
             updatedAt: now,
           ),
         );
-    return (_db.select(_db.photos)..where((p) => p.id.equals(id))).getSingle();
+    return (_db.select(
+      _db.photos,
+    )..where((p) => p.id.equals(photoId))).getSingle();
   });
 
   Future<List<Photo>> photosFor(String activityId) =>
