@@ -129,7 +129,25 @@ Test results on phase-0/P0-11-storage-export (Windows 11 build host):
 - lutter test: 150 passed, 0 failed (33 new, P0-11).
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
-- lutter build windows --release and lutter build apk --debug: both built successfully.
+- flutter build windows --release and flutter build apk --debug: both built successfully.
+
+## 2026-10-27, Google Antigravity: P0-14 trimming approach and non-destructive cut maths
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 150 passed.
+- Cut-range mathematics and consolidation: `CutRangeMath` (`lib/domain/services/cut_range_math.dart`) consolidating overlapping and contiguous cut ranges (FR-REV-04, Product Spec edge case: "Cut ranges overlap: Merged for playback and export. Each stays separately undoable"), deriving keep ranges, trimmed durations, and bidirectional timeline offset mapping.
+- Activity split planning: `ActivitySplitService` (`lib/domain/services/activity_split_service.dart`) implementing playhead splitting (FR-REV-05). Bookmarks and photos partition by offset, cut ranges spanning split point divide cleanly across the boundary, and splits occurring inside interruption gaps partition segments without needing audio file slicing.
+- Instruction export: `CutsManifest` (`lib/data/filesystem/cuts_manifest.dart`) generating and parsing `cuts.json` (FR-REV-07, FR-EXP-03) with pre-computed external `ffmpeg` filter complex expressions (`atrim`, `asetpts`, `concat`) and atomic file writes via `.partial` staging.
+- Audio trimming engine: `AudioTrimmer` abstract interface (`lib/platform/audio_trimmer/audio_trimmer.dart`), pure Dart `M4aContainerTrimmer` (`m4a_container_trimmer.dart`), and `SimulatedAudioTrimmer` (`simulated_audio_trimmer.dart`). Tested atomic `.partial` transaction contract and failure recovery: partial files are cleaned up on failure, and source recordings are never deleted or modified (FR-REV-06, NFR-07). Trimmed output validated with `M4aInspector`.
+- Trimming spike runner: `TrimmingSpike` (`lib/spikes/trimming_spike.dart`) exercising cut math consolidation, split planning, `cuts.json` round-trip, M4A container trimming with bounded RSS, and failure recovery.
+- Architecture Decision Record: ADR-003 recorded in `docs/DECISIONS.md`.
+
+Test results on phase-0/P0-14-trimming (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 179 passed, 0 failed (29 new, P0-14).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool: clean.
+- flutter build windows --release and flutter build apk --debug: both built successfully.
 
 ## Task status
 
@@ -142,4 +160,4 @@ Test results on phase-0/P0-11-storage-export (Windows 11 build host):
 | P0-06 | blocked: needs real device | Harness, inspector, export and 24 unit tests pass (100 total). Real capture blocked: no mic in the build host's RDP session. Run MT-16 |
 | P0-08 | done (licence choice awaits owner) | `THIRD_PARTY_NOTICES.md` generated and tested (117 total), ADR-007 recommends Apache 2.0 |
 | P0-11 | done | Windows probe, thresholds, preflight, folder and ZIP streaming exports pass 33 tests (150 total). 1 GiB RAM benchmark: 10.3 MB / 5.6 MB peak RSS delta. ADR-008 |
-| P0-14 | todo | Next |
+| P0-14 | done | Cut-range maths, split logic, cuts.json manifest, M4A container trimmer, failure rollback pass 29 tests (179 total). ADR-003 |

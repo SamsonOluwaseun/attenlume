@@ -1,65 +1,56 @@
 # Handover
 
 Date and agent: 27 October 2026, Google Antigravity, unattended run
-Branch: main (P0-11 merged from `phase-0/P0-11-storage-export`)
-Current task ID: P0-14 (next)
-Status: P0-11 done. P0-14 not started.
+Branch: main (P0-14 merged from `phase-0/P0-14-trimming`)
+Current task ID: P1-01 (next)
+Status: P0-14 done. All Phase 0 tasks are either done or blocked-on-device. P1-01 ready to start.
 
 ## Done in this session
 
-- P0-11: Low-storage simulation and streaming export with bounded RAM [FR-STO-01, FR-STO-02, FR-STO-04, FR-EXP-02, FR-EXP-04, FR-EXP-05, FR-EXP-06, AT-STO-02, AT-STO-03].
-  - `FreeSpaceProbe` interface (`lib/platform/storage/free_space_probe.dart`) and Win32 `GetDiskFreeSpaceExW` implementation (`windows_free_space_probe.dart`) via `dart:ffi`.
-  - Storage threshold service `StorageThresholds` (`lib/domain/services/storage_thresholds.dart`) implementing FR-STO-01/02/04 thresholds (ok, warning, urgent, hardStop).
-  - Preflight checks `preflightExport`, `estimateFolderExportBytes`, and `estimateZipExportBytes` (`lib/data/filesystem/export_space.dart`) with `defaultExportReserveBytes` (256 MB) and `InsufficientSpaceException`.
-  - Streaming ZIP export `exportZip` (`lib/data/filesystem/zip_export.dart`) with store compression (level 0), embedded `checksums.sha256` and companion `<zipName>.sha256`, and atomic rename from `.partial`.
-  - `exportFolder` updated to support preflight free-space checks, injected writers (`openSink`), and mapping of OS disk-full errors (112/39 on Windows, 28 on POSIX) to `ExportOutOfSpaceException`.
-  - Clean failure recovery: verified that both folder and ZIP exports delete partial files and leave sources untouched on preflight failure or mid-export disk-full.
-  - Large-export benchmark on Windows 11 host (1 GiB synthetic file):
-    - `exportFolder`: 18.1 s, peak RSS delta 10.3 MB. Verified checksums clean.
-    - `exportZip`: 18.8 s, peak RSS delta 5.6 MB. ZIP size 1,073,742,095 bytes (271 bytes overhead).
-  - Spike runner `StorageExportSpike` (`lib/spikes/storage_export_spike.dart`).
-  - 33 new tests added (150 total tests, 0 failed).
-  - ADR-008 recorded in `docs/DECISIONS.md`.
+- P0-14: Spike trimming approach per platform, non-destructive cut maths, activity splitting, and instruction export [FR-REV-04, FR-REV-05, FR-REV-06, FR-REV-07, FR-EXP-03, NFR-07].
+  - `CutRangeMath` (`lib/domain/services/cut_range_math.dart`): cut-range consolidation for overlapping/contiguous cuts (Product Spec edge case: "Cut ranges overlap: Merged for playback and export. Each stays separately undoable"), keep-range derivation, trimmed duration calculation, and bidirectional timeline offset mapping.
+  - `ActivitySplitService` (`lib/domain/services/activity_split_service.dart`): non-destructive playhead activity splitting (FR-REV-05). Bookmarks and photos move by offset; cut ranges spanning split point divide cleanly across the boundary; gap splits partition segments without needing audio file slicing.
+  - `CutsManifest` (`lib/data/filesystem/cuts_manifest.dart`): `cuts.json` schema and builder for `audio_mode: original_with_cuts` (FR-REV-07, FR-EXP-03). Generates exact external `ffmpeg` filter complex strings (`atrim`, `asetpts`, `concat`) for CLI and external AI processing.
+  - `AudioTrimmer` abstraction (`lib/platform/audio_trimmer/audio_trimmer.dart`), pure Dart container trimmer `M4aContainerTrimmer`, and `SimulatedAudioTrimmer`. Enforces the atomic `.partial` transaction contract: on failure, partial targets are removed and source recordings remain completely untouched (FR-REV-06, NFR-07). Trimmed outputs verified with `M4aInspector`.
+  - Spike runner `TrimmingSpike` (`lib/spikes/trimming_spike.dart`) validating cut math, split planning, `cuts.json` round-trip, M4A container trimming with bounded RSS, and failure recovery.
+  - 29 new tests added (179 total tests, 0 failed).
+  - ADR-003 recorded in `docs/DECISIONS.md`.
   - Both `flutter build windows --release` and `flutter build apk --debug` succeed on `main`.
 
 ## Left to do on this task
 
-None. P0-11 is complete.
+None. P0-14 is complete.
 
 ## Exact next step
 
-Start P0-14 on branch `phase-0/P0-14-trimming`: spike for trimming approach per platform (passthrough trimming without re-encoding, ADR-003 desk research plus harness).
-Note: Spikes P0-04, P0-05, P0-07, P0-10, P0-12, and P0-13 require real devices (phone/Mac/microphone).
+Start Phase 1 task P1-01 on branch `phase-1/P1-01-conference-wizard`: Conference wizard and quick start [FR-CONF-01 to 08].
+Note: Phase 0 spike tasks requiring real devices (P0-04, P0-05, P0-06/MT-16, P0-07, P0-10, P0-12, P0-13) are documented and blocked pending physical device sessions (phone/Mac/mic).
 
 ## Files touched
 
 New:
-- `lib/platform/storage/free_space_probe.dart`
-- `lib/platform/storage/windows_free_space_probe.dart`
-- `lib/domain/services/storage_thresholds.dart`
-- `lib/data/filesystem/export_space.dart`
-- `lib/data/filesystem/zip_export.dart`
-- `lib/spikes/storage_export_spike.dart`
-- `test/fixtures/fake_free_space_probe.dart`
-- `test/platform/free_space_probe_test.dart`
-- `test/domain/storage_thresholds_test.dart`
-- `test/data/filesystem/export_space_test.dart`
-- `test/data/filesystem/zip_export_test.dart`
-- `test/spikes/storage_export_spike_test.dart`
+- `lib/domain/services/cut_range_math.dart`
+- `lib/domain/services/activity_split_service.dart`
+- `lib/data/filesystem/cuts_manifest.dart`
+- `lib/platform/audio_trimmer/audio_trimmer.dart`
+- `lib/platform/audio_trimmer/m4a_container_trimmer.dart`
+- `lib/platform/audio_trimmer/simulated_audio_trimmer.dart`
+- `lib/spikes/trimming_spike.dart`
+- `test/domain/cut_range_math_test.dart`
+- `test/domain/activity_split_service_test.dart`
+- `test/data/filesystem/cuts_manifest_test.dart`
+- `test/platform/audio_trimmer_test.dart`
+- `test/spikes/trimming_spike_test.dart`
 
 Changed:
-- `pubspec.yaml` and `pubspec.lock` (`archive` 4.5.2, `ffi` 2.2.0)
-- `THIRD_PARTY_NOTICES.md`
-- `lib/data/filesystem/folder_export.dart`
-- `test/data/filesystem/folder_export_test.dart`
+- `docs/DECISIONS.md` (ADR-003)
 - `docs/PLATFORM_FEASIBILITY.md`
-- `docs/DECISIONS.md`
 - `docs/PROGRESS.md`
 - `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (150 passed). Nothing skipped. `integration_test/p0_06_windows_mic_test.dart` still fails on this PC (no microphone in Remote Desktop session, blocked, expected). No device tests run.
+None failing in `flutter test` (179 passed). Nothing skipped. `integration_test/p0_06_windows_mic_test.dart` still fails on this PC (no microphone in Remote Desktop session, blocked, expected). No device tests run.
 
 ## Open questions for the owner
 

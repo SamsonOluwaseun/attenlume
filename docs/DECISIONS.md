@@ -28,9 +28,39 @@ Format: context, decision, alternatives, consequences.
 - **Alternatives:** FLAC on Windows (lossless, several times larger); bundling a separate low-bitrate encoder (extra native dependency and licence review); `just_audio_media_kit` (stale, Unlicense, bundles libmpv); `flutter_foreground_task` instead of a native service (kept as fallback).
 - **Consequences:** Windows recordings are about twice the size of Balanced on phones. Storage estimates must use the effective profile per platform. All platform code stays behind interfaces so spikes can change it.
 
+## ADR-003: Trimming approach, cut-range maths and instruction export (P0-14)
+
+- **Date:** 27 October 2026. **Decided by:** Google Antigravity in unattended mode, task P0-14. Owner to review.
+- **Context:** Attenlume requires trimming at three distinct levels:
+  1. *Non-destructive review and editing*: users trim start, end, or exclude middle ranges (coffee breaks, transit between rooms) with instant undo, without touching raw recording files (FR-REV-04, NFR-07).
+  2. *Activity splitting*: when one recording session covers two activities, splitting at the playhead divides the activity into two activities, moving bookmarks, photos, and segments by offset (FR-REV-05).
+  3. *Permanent trim and export*: "Apply trims permanently" is an explicit user-confirmed action that writes new files before offering to remove originals (FR-REV-06); exports support trimmed audio files or original files accompanied by machine-readable instructions (`cuts.json`) (FR-EXP-03, FR-REV-07).
+- **Decision:**
+  1. **Non-destructive metadata first (`cut_ranges`)**: The primary editing workflow records cut intervals (`start_offset_ms` to `end_offset_ms`) in SQLite with soft deletion (`deleted_at`) for undo. During playback, the review player skips cut ranges on the fly.
+  2. **Consolidation and timeline math (`CutRangeMath`)**: All consumer operations (playback skipping, keep-range calculation, export) run cut ranges through `CutRangeMath.mergeOverlappingCutRanges`. Overlapping and contiguous cut ranges are consolidated into canonical non-overlapping intervals, solving the Product Spec edge case while keeping individual user cuts separately undoable.
+  3. **Activity splitting (`ActivitySplitService`)**: Splitting at playhead offset $P$ partitions the activity timeline. Bookmarks and photos with offset $< P$ remain in Activity 1; those with offset $\ge P$ move to Activity 2 with adjusted offset $offset - P$. Cut ranges spanning $P$ are split cleanly across the boundary. If the split falls inside an interruption/pause gap between segments, segments partition without needing audio slicing.
+  4. **Instruction export (`cuts.json`)**: When exporting with `audio_mode: original_with_cuts` (FR-EXP-03, FR-REV-07), Attenlume outputs a standardized `cuts.json` containing `activity_id`, `total_duration_ms`, `trimmed_duration_ms`, `cuts`, `keep_ranges`, and `segments`. The manifest includes a pre-computed external `ffmpeg` filter complex string (`atrim`, `asetpts`, `concat`) enabling zero-loss external processing.
+  5. **Platform passthrough trimming without re-encoding**: Permanent trim (FR-REV-06, P1-19) uses native passthrough sample extraction without re-encoding, preserving exact original audio quality with zero generational compression loss and minimal battery/CPU usage:
+     - *Android*: Native Android `MediaExtractor` + `MediaMuxer` (copies AAC sample buffers directly between input timestamps and output). AAC frames are self-contained at 1024 samples (~21.33 ms at 48 kHz), providing frame-accurate cuts suitable for speech.
+     - *iOS*: Native `AVAssetExportSession` with `AVAssetExportPresetPassthrough` and `CMTimeRange`.
+     - *Windows*: Media Foundation sink writer or container-level ISOBMFF/M4A box trimming (`M4aContainerTrimmer`).
+  6. **Safe file transaction guarantees (NFR-07)**:
+     - All trims write to a `<targetFile>.partial` temporary file first.
+     - Partial files are verified (non-empty, validated with `M4aInspector`, SHA-256 computed) and renamed atomically to the target filename.
+     - On failure or cancellation, `.partial` files are immediately deleted. Original recordings are **never** overwritten or deleted automatically (FR-REV-06, NFR-07).
+  7. **Rejection of FFmpeg bundling**: `ffmpeg_kit_flutter` was discontinued in 2023. `ffmpeg_kit_flutter_new` is LGPL-3.0 with dynamic linking / redistribution overhead and 30–50 MB binary bloat per architecture. Rejected for core trimming.
+- **Alternatives:**
+  - *Full audio re-encoding*: Rejected. Unnecessary CPU/battery drain, generational audio loss, and slower by orders of magnitude compared to passthrough frame copying.
+  - *FFmpeg bundling*: Rejected due to LGPL compliance obligations and binary size impact.
+  - *Destructive in-place edits*: Rejected. Violates core non-destructive design tenet (NFR-07).
+- **Consequences:**
+  - UI tasks (`P1-18`) will use `CutRangeMath` for virtual waveform/timeline rendering and `ActivitySplitService` for playhead splits.
+  - Permanent trim (`P1-19`) will implement platform method channels conforming to the `AudioTrimmer` contract.
+  - Windows desktop can utilize the pure Dart container trimmer (`M4aContainerTrimmer`) or Media Foundation.
+
 ## ADR-004: Scaffold conventions (P0-02)
 
-- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-02. Owner to review. (ADR-003 is reserved for the trimming approach, P0-14.)
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-02. Owner to review.
 - **Context:** P0-02 needed choices the build guide leaves open: Riverpod codegen or not, how Drift stores times, where static Montserrat files come from, how tokens reach Dart, and when to generate app icons.
 - **Decision:**
   1. Riverpod without code generation for now (plain `Provider`). `riverpod_generator` can be added later without changing call sites much.
