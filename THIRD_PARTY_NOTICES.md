@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 115 Dart and Flutter packages in `pubspec.lock`: 77 can be part of the app, 38 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (4), BSD-2-Clause (1), BSD-3-Clause (62), Flutter engine bundle (permissive, see note) (1), MIT (9).
+- 117 Dart and Flutter packages in `pubspec.lock`: 79 can be part of the app, 38 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (4), BSD-2-Clause (1), BSD-3-Clause (62), Flutter engine bundle (permissive, see note) (1), MIT (11).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -16,6 +16,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 
 | Package | Version | Source | Dependency | Licence | Copyright |
 |---|---|---|---|---|---|
+| `archive` | 4.5.2 | pub.dev | direct main | MIT | Copyright (c) 2013-2021 Brendan Duncan. |
 | `args` | 2.7.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `async` | 2.13.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `boolean_selector` | 2.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2016, the Dart project authors. |
@@ -28,7 +29,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `drift` | 2.35.3 | pub.dev | direct main | MIT | Copyright (c) 2021 Simon Binder |
 | `drift_flutter` | 0.3.1 | pub.dev | direct main | MIT | Copyright (c) 2024 Simon Binder |
 | `fake_async` | 1.3.3 | pub.dev | transitive | Apache-2.0 | Not stated in the licence file |
-| `ffi` | 2.2.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2019, the Dart project authors. |
+| `ffi` | 2.2.0 | pub.dev | direct main | BSD-3-Clause | Copyright 2019, the Dart project authors. |
 | `file` | 7.0.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. All rights reserved. |
 | `fixnum` | 1.1.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `flutter` | 0.0.0 | Flutter SDK | direct main | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
@@ -62,6 +63,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `path_provider_windows` | 2.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors. All rights reserved. |
 | `platform` | 3.2.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. All rights reserved. |
 | `plugin_platform_interface` | 2.1.8 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors. All rights reserved. |
+| `posix` | 6.5.3 | pub.dev | transitive | MIT | Copyright (c) 2020 Brett Sutton |
 | `process` | 5.0.6 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `pub_semver` | 2.2.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `record` | 7.1.2 | pub.dev | direct main | BSD-3-Clause | Copyright 2022 openapi4j authors. All rights reserved. |
@@ -274,6 +276,33 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 ## Licence texts of packages in the app
 
 Identical texts are printed once. The Flutter engine bundle (`sky_engine`) is over 1 MB and is not repeated here: the app shows it on its licences screen, and it ships with the Flutter SDK.
+
+### MIT: `archive`
+
+```text
+The MIT License
+
+Copyright (c) 2013-2021 Brendan Duncan.
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
 
 ### BSD-3-Clause: `args`, `logging`, `process`
 
@@ -1204,6 +1233,32 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### MIT: `posix`
+
+```text
+MIT License
+
+Copyright (c) 2020 Brett Sutton
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### BSD-3-Clause: `record`, `record_android`, `record_ios`, `record_linux`, `record_macos`, `record_platform_interface`, `record_web`, `record_windows`
