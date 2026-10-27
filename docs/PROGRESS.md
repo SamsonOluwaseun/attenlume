@@ -243,6 +243,26 @@ Test results on phase-1/P1-03-activity-crud (Windows 11 build host):
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
 
+## 2026-10-27, Claude Code (Opus 5.5): P1-04 RecordingService with state machine and mutex
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 237 passed.
+- `RecordingState`, `recordingTransitions`, `canTransition` and `RecordingStatus` (`lib/domain/services/recording_state.dart`): the build guide 5.4 state machine, with the small additions in ADR-012.
+- `SerialLock` (`lib/shared/utilities/serial_lock.dart`): runs commands one at a time in order (FR-REC-09).
+- `RecordingService` (`lib/domain/services/recording_service.dart`): `start`, `pause`, `resume`, `stop`, `dispose`, a status stream and `StartOutcome` results. Segment row in state `writing` before the encoder starts (FR-REC-01). Encoder writes straight to a file under the media root (FR-REC-02). Finalisation stores what `M4aInspector` reads from the file plus a SHA-256 hashed in an isolate. Unparseable files are kept as `damaged`. Refuses activities marked "not recording audio" and returns `conflict` for a second activity (NFR-04, prompt in P1-06).
+- `MediaPaths` (`lib/data/filesystem/media_paths.dart`): relative segment paths per build guide 9.5, never overwriting an existing file.
+- `MediaAssetRepository`: added `nextSegmentSequence`; `finaliseSegment` takes the observed codec, container, channels and sample rate (FR-QUAL-06).
+- Providers: `recordingServiceProvider`, `recordingStatusProvider`, `audioCaptureEngineProvider`, `mediaRootProvider` (`lib/features/capture/recording_providers.dart`). No UI yet (recording screen is P1-10).
+- Tests: 28 new (`test/domain/recording_service_test.dart` 20, `test/domain/recording_state_test.dart` 6, `test/data/filesystem/media_paths_test.dart` 2), using `FakeCaptureEngine` (`test/fixtures/fake_capture_engine.dart`). Real capture is **unverified**: the tests use a fake engine, no microphone was used.
+- ADR-012 recorded.
+
+Test results on phase-1/P1-04-recording-service (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 265 passed, 0 failed (28 new, P1-04).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged (no new packages).
+- dart format --output=none --set-exit-if-changed lib test tool: clean.
+- flutter build windows --release and flutter build apk --debug: both built successfully.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -258,3 +278,5 @@ Test results on phase-1/P1-03-activity-crud (Windows 11 build host):
 | P1-01 | done | Quick start (<30 s, 1 field + 1 button), wizard, role, goals, outputs, profile, policy notice, archive, deletion summary pass 11 tests (190 total). ADR-009 |
 | P1-02 | done | Conference home, stats card, dominant button, 4 quick-start buttons, chronological activity list, ActivityCard, StatusPill, AttenlumeButton, 28 new tests (218 total). ADR-010 |
 | P1-03 | done | Activity CRUD editor, custom types, awareness consent check, contact fields, 19 new tests (237 total). ADR-011 |
+| P1-04 | done (real capture unverified) | RecordingService, state machine, serial lock, media paths, 28 new tests (265 total). ADR-012 |
+| P0-04, P0-05, P0-07, P0-10, P0-12, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these (rows added in P1-04 so the table matches the handover) |

@@ -55,6 +55,7 @@ RecordingService  (one instance, mutex around every command, FR-REC-09)
    +-- ForegroundServiceBridge  Android only: notification, actions
 ```
 
+- **Built in P1-04 (ADR-012):** `RecordingService` in `lib/domain/services/recording_service.dart`, states and transitions in `recording_state.dart`, commands serialised by `SerialLock`. Pause and resume, start-failure handling and finalisation from the inspected file are in. The 10-minute roll, interruptions and route changes are not yet.
 - **One active recording (FR-REC-04):** `RecordingService` holds at most one active activity ID. A start request for another activity returns a `ConflictPending` result for the UI to resolve. Non-visual triggers use the documented default (stop old, start new) and post a notification.
 - **Segment rolling (FR-REC-03):** roll on pause, interruption, profile change, route change and a 10-minute timer. Each roll is stop then start of a new file. The gap between them is recorded as real time (offset rule, build guide 9.4).
 - **Crash recovery (FR-REC-08):** on launch, every segment with `state=writing` is checked. If its file exists and parses as a valid container, mark it `recovered`. If not, mark it `damaged` and keep the file. Never mark a damaged file as good.
