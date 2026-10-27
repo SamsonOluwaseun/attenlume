@@ -71,7 +71,7 @@ class FakeCaptureEngine implements AudioCaptureEngine {
     if (_path != null) throw StateError('Fake engine already capturing');
     startedPaths.add(path);
     requests.add(request);
-    await File(path).writeAsBytes(const []);
+    File(path).writeAsBytesSync(const []);
     _path = path;
     _request = request;
   }
@@ -86,7 +86,7 @@ class FakeCaptureEngine implements AudioCaptureEngine {
     _path = null;
     if (path == null) return null;
     final delivered = deliveredBitrateBps(_request!);
-    await File(path).writeAsBytes(
+    File(path).writeAsBytesSync(
       buildM4a(
         channels: deliveredChannels(_request!),
         sampleRateHz: deliveredSampleRateHz(_request!),

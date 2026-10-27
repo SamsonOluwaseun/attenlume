@@ -17,6 +17,8 @@ import '../../platform/audio_capture/record_capture_engine.dart';
 import '../../platform/audio_route/audio_route_probe.dart';
 import '../../platform/audio_route/audio_session_route_probe.dart';
 import '../../platform/audio_route/engine_route_probe.dart';
+import '../../platform/camera/photo_camera.dart';
+import '../../platform/camera/plugin_photo_camera.dart';
 import '../../platform/interruptions/audio_interruption_source.dart';
 import '../../platform/interruptions/audio_session_interruption_source.dart';
 import '../../platform/storage/free_space_probe.dart';
@@ -39,6 +41,13 @@ final capturePlatformProvider = Provider<CapturePlatform>(
 final audioCaptureEngineProvider = Provider<AudioCaptureEngine>(
   (ref) => RecordCaptureEngine(),
 );
+
+/// Camera for still photos during recording (ADR-017, FR-UI-03).
+final photoCameraProvider = Provider<PhotoCamera>((ref) {
+  final camera = PluginPhotoCamera();
+  ref.onDispose(camera.close);
+  return camera;
+});
 
 /// Which microphone is in use (ADR-016) [P0-07]. Windows only lists the
 /// engine's inputs.

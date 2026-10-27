@@ -26,10 +26,15 @@ dart format --output=none --set-exit-if-changed lib test tool
 
 ### 2.1 Current suite
 
-As of P0-13 (27 October 2026, Windows 11 build host): 372 unit and widget tests, all passing. The tests in `integration_test/` are device tests: see MT-16 to MT-22.
+As of P1-10 (27 October 2026, Windows 11 build host): 530 unit and widget tests, all passing. The tests in `integration_test/` are device tests: see MT-16 to MT-22.
 
 | File | Proves |
 |---|---|
+| `test/presentation/components/record_button_test.dart` | P1-10: FR-UI-01 idle 96px record button, active controls (pause/resume, stop), tabular figures timer; FR-REC-09 600ms debounce on taps; secondary action buttons |
+| `test/presentation/components/bookmark_chip_test.dart` | P1-10: FR-UI-04 48px touch target height, label, 600ms lime flash and haptic feedback |
+| `test/features/capture/level_meter_test.dart` | P1-10: FR-UI-01/06 dBFS normalization ([-60, 0] dBFS), waveform visualizer in lime for active recording, muted state when paused, reduce motion support |
+| `test/features/capture/mic_test_sheet_test.dart` | P1-10: FR-UI-06 10-second countdown, live level polling, active microphone signal detection vs. flat signal (peak <= -70.0 dBFS), cleanup of temp capture |
+| `test/features/capture/recording_screen_test.dart` | P1-10: FR-UI-01 full record/pause/resume/stop cycle with live controls; FR-UI-02 header with conference, activity, room; FR-UI-03 photo capture keeping shutter ready; FR-UI-04 bookmark button and standard chips; FR-UI-05 QuickThoughtSheet saving text reflection and updating notes; FR-UI-06 mic test sheet trigger; FR-UI-08 recording profile selector integration; ADR-021 interruption banner with Resume |
 | `test/app/app_test.dart` | P0-02 app shell starts on the welcome screen, NFR-01 no sign-in offered, P0-02 system theme with Montserrat |
 | `test/app/theme/contrast_test.dart` | NFR-09 contrast of token pairs in light and dark, button label size, navy recording theme |
 | `test/app/theme/tokens_sync_test.dart` | P0-02 generated tokens match `design/tokens.json` |

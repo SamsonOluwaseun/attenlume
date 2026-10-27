@@ -16,6 +16,7 @@ import '../../shared/utilities/date_formatters.dart';
 import '../activities/activity_editor_screen.dart';
 import '../capture/recording_profile_selector.dart';
 import '../capture/recording_providers.dart';
+import '../capture/recording_screen.dart';
 
 /// Modal bottom sheet displaying detailed activity metadata, contact details,
 /// and captured assets (FR-ACT-03, FR-ACT-04, FR-ACT-08).
@@ -549,6 +550,26 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
               ],
 
               const SizedBox(height: TokenSpace.space4),
+
+              AttenlumeButton(
+                key: const Key('activity-detail-record-button'),
+                label: _summary.hasActiveRecording
+                    ? 'Open recording screen'
+                    : 'Open recorder',
+                leading: const Icon(Icons.mic_rounded),
+                onPressed: () {
+                  Navigator.of(context)
+                      .push(
+                        MaterialPageRoute<void>(
+                          builder: (context) =>
+                              RecordingScreen(activityId: act.id),
+                        ),
+                      )
+                      .then((_) => _refreshSummary());
+                },
+              ),
+
+              const SizedBox(height: TokenSpace.space3),
 
               Row(
                 children: [

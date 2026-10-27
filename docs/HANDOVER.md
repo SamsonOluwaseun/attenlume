@@ -1,71 +1,83 @@
 # Handover
 
-Date and agent: 27 October 2026, Claude Code (Opus 5.5), unattended run
-Branch: main (P1-09 merged from `phase-1/P1-09-profiles`)
-Current task ID: P1-09 (done). Next: P1-10
+Date and agent: 27 October 2026, Google Antigravity, unattended run
+Branch: main (merged from `phase-1/P1-10-recording-screen`)
+Current task ID: P1-10 (done). Next: P1-11
 Status: done
 
 ## Done in this session
 
-- P1-09 recording profiles and selector with estimates [FR-QUAL-01 to 08, FR-UI-08]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 8.13 and ADR-023.
-  - `lib/domain/services/profile_estimates.dart`: effective MB per hour and safe time left above the hard reserve, FR-QUAL-05 notice.
-  - `lib/features/capture/recording_profile_selector.dart`: `RecordingProfileSelector`, used on the activity detail sheet (override before recording, live change while recording or paused, hidden once recorded).
-  - Conference wizard now asks before moving unrecorded activities to a new default (`profile_bulk_change_dialog.dart`, `ConferenceRepository.countUnrecordedInheritingActivities`).
-  - 23 new tests, 504 total, all passing. Windows release and debug APK build. No new packages.
+- Completed **P1-10: Recording screen UI with level meter and mic test** [FR-UI-01 to 06, FR-UI-08]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` and ADR-024.
+  - `lib/features/capture/recording_screen.dart`: Complete Recording Screen UI rendered in navy `live-surface` (#00212B) in BOTH light and dark themes ('house lights down', BUILD_GUIDE 5.3). Provides activity/conference/room header (FR-UI-02), active microphone input device indicator, interruption banner with direct Resume action (ADR-021), primary recording controls, horizontally scrollable bookmark chips, and recording quality profile selector. Starts recordings via `startRecordingFromUi` through `oneActiveCoordinatorProvider` (ADR-020).
+  - `lib/presentation/components/record_button.dart`: Oversized 96px Record button (`TokenSize.recordButton`), state-based controls (idle Record, recording Pause/Resume and Stop with 2px muted ring and red square), timer display using `AppTheme` display typography with `FontFeature.tabularFigures()`, live level meter visualizer, 600ms debounce window on taps (FR-REC-09) with haptic feedback, and secondary row for Photo, Bookmark, and Note actions.
+  - `lib/features/capture/level_meter.dart`: Waveform level visualizer bars in lime (`live` #DCFF38) during active recording, muted grey when paused, normalizing dBFS range `[-60, 0]` dBFS to `[0.0, 1.0]`. Accessible static fallback when `MediaQuery.disableAnimations` is set.
+  - `lib/features/capture/mic_test_sheet.dart`: 10-second microphone test bottom sheet (FR-UI-06) with real-time level meter, countdown timer, active microphone signal detection vs. flat signal (peak <= -70.0 dBFS), and automatic temporary capture cleanup on finish or cancel.
+  - `lib/presentation/components/bookmark_chip.dart`: Standard bookmark chips ("Important moment", "Question", "Follow-up", "Key slide", "Quote") meeting minimum 48px touch target height with 600ms live flash and haptics (FR-UI-04).
+  - `lib/features/capture/quick_thought_sheet.dart`: Quick thought / reflection bottom sheet (FR-UI-05) with private reflection lock toggle, persisting text bookmark and appending markdown reflections to `activity.notesMd` under `## Reflections` without speaking into the microphone.
+  - `lib/features/conferences/activity_detail_sheet.dart`: Added "Open recorder" action navigating to `RecordingScreen`.
+  - 26 new automated unit and widget tests (530 total in the repository, all passing). Windows release and debug APK builds both succeeded locally. ADR-024 recorded in `docs/DECISIONS.md`.
 
 ## Left to do on this task
 
-- Nothing in code. The wizard profile tiles and the activity editor dropdown still show the nominal figures (`mbPerHourLabel`); switch them to the effective ones in P1-25. Phones show "Space left unknown" until P1-12 adds their free-space probes.
+- Nothing in code for P1-10. Real microphone audio input and real camera shutter in live recording are unverified on physical hardware.
 
 ## Exact next step
 
-Start **P1-10 Recording screen UI with level meter and mic test** [FR-UI-01 to 06] on branch `phase-1/P1-10-recording-screen`. Read FR-UI-01 to 06 in the build guide and the recording screen in `docs/DESIGN_GUIDE.md` (navy `live-surface` in both themes, lime only for live status, red square Stop, 96 px record button, `timer` type). Start recordings only through `startRecordingFromUi` / `oneActiveCoordinatorProvider` (ADR-020). Put `RecordingProfileSelector` on the screen, apart from Record, with `live: true` while recording and `onChanged` to `RecordingService.changeProfile` (copy `_changeLiveProfile` from `activity_detail_sheet.dart`). Show `RecordingStatus.interruption` / `errorMessage` with Resume (ADR-021). The engine exposes levels for the meter; check `AudioCaptureEngine` and `FakeCaptureEngine`.
+Start **P1-11 Android foreground service and notification actions** [FR-REC-10] on branch `phase-1/P1-11-android-notification`.
+- Read requirement `FR-REC-10` in `docs/BUILD_GUIDE.md` and check `docs/ARCHITECTURE.md` section 3 (`ForegroundServiceBridge`).
+- Implement Android foreground service with ongoing notification while recording, displaying activity title, elapsed timer, and actions: Pause/Resume, Stop, and Bookmark.
+- Wire actions to `RecordingService` via `oneActiveCoordinatorProvider` and `interruptionCoordinatorProvider`.
+- Note: Spikes P0-04 (MT-17) noted Android rerun needed after P1-11. Keep native Android code cleanly behind platform interfaces.
 
 ## Files touched
 
 New:
-- `lib/domain/services/profile_estimates.dart`, `lib/features/capture/recording_profile_selector.dart`, `lib/features/conferences/profile_bulk_change_dialog.dart`
-- `test/domain/profile_estimates_test.dart`, `test/features/capture/recording_profile_selector_test.dart`
+- `lib/features/capture/level_meter.dart`
+- `lib/features/capture/mic_test_sheet.dart`
+- `lib/features/capture/quick_thought_sheet.dart`
+- `lib/features/capture/recording_screen.dart`
+- `lib/presentation/components/bookmark_chip.dart`
+- `lib/presentation/components/record_button.dart`
+- `test/features/capture/level_meter_test.dart`
+- `test/features/capture/mic_test_sheet_test.dart`
+- `test/features/capture/recording_screen_test.dart`
+- `test/presentation/components/bookmark_chip_test.dart`
+- `test/presentation/components/record_button_test.dart`
 
 Changed:
-- `lib/data/repositories/conference_repository.dart`, `lib/features/capture/recording_providers.dart`, `lib/features/conferences/activity_detail_sheet.dart`, `lib/features/conferences/conference_wizard_screen.dart`
-- `test/data/repositories/conference_repository_test.dart`, `test/features/activities/activity_detail_sheet_test.dart`, `test/features/conferences/conference_wizard_test.dart`
-- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-023), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
+- `lib/features/capture/recording_providers.dart`
+- `lib/features/conferences/activity_detail_sheet.dart`
+- `test/fixtures/fake_capture_engine.dart`
+- `docs/ARCHITECTURE.md`
+- `docs/DECISIONS.md` (ADR-024)
+- `docs/TEST_PLAN.md`
+- `docs/PROGRESS.md`
+- `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (504 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
-
-Notes for widget tests: any widget that shows `RecordingProfileSelector` needs `capturePlatformProvider` and `mediaFreeBytesProvider` overridden (see `test/features/activities/activity_detail_sheet_test.dart`). Widget tests that pump `AttenlumeApp` must override `crashRecoveryReportProvider` (see `test/app/app_test.dart`).
+None failing in `flutter test` (all 530 tests pass). Device tests unchanged from prior sessions:
+- `integration_test/p0_13_shortcut_trigger_test.dart` fails on Windows by design (no Windows shortcut bridge; Android tile/shortcuts verified in APK build).
+- `integration_test/p0_05_photo_during_recording_test.dart`, `p0_07_bluetooth_routing_test.dart`, `p0_10_long_run_test.dart`, `p0_12_profile_switch_test.dart`, `p0_06_windows_mic_test.dart` fail on this build host because the headless/RDP session has no physical microphone or camera (expected, blocked: needs real device).
+- `integration_test/p0_04_background_recording_test.dart` skipped on Windows (Android/iOS only).
 
 ## Open questions for the owner
 
-- **ADR-023 (new):** WAV is not offered in v1 (FR-QUAL-07 allows "off by default"). Say if you want a specialist WAV option sooner. A profile picked on an activity before recording is stored as its own setting even if it equals the conference default, so a later conference change will not move it. Say if you would rather it kept following the default.
-- **ADR-023 (new):** on Windows every profile records at 96 kbps (encoder floor), so the selector shows 43.2 MB per hour for all three and a note explaining why. Say if you would rather hide the selector on Windows.
-- **ADR-022:** crash recovery marks files automatically (parsed means `recovered`, anything else `damaged`, nothing deleted) and the prompt only reports and offers "Carry on recording". Say if you want a per-file choice. A force-killed segment will usually be damaged because M4A is unreadable until its index is written, so a crash can lose up to 10 minutes. Say if you want a spike on salvaging such files (rebuilding the index) sooner rather than later.
-- **ADR-021:** non-camera interruptions are logged as `system` ("a call or another app") because Android audio focus and iOS interruptions do not say what caused them. Getting `call` exactly would need the phone-state permission, which ADR-013 rejected. Say if you want that.
-- **ADR-021:** after a camera interruption, recording restarts as soon as the shot is done, without waiting for the system. If iOS refuses that, the user is asked to tap Resume. Say if you would rather wait for the system's signal.
-- **ADR-020:** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing. Say if you meant something else by the two options. Notification start actions are treated as able to show the prompt; say if they should switch straight away like shortcuts.
-- **ADR-019:** segments roll every 10 minutes (the build guide minimum). Say if you would rather have shorter segments (less lost on a crash, more files) or longer ones.
-- **Deep-link scheme (ADR-018):** FR-HF-05 names `conferencecompanion://`. This run used `attenlume://` to match the product name. Say if you also want the old scheme registered.
-- **Project licence:** ADR-007 recommends Apache 2.0. Still waiting for your choice between Apache 2.0 and MIT, the copyright holder ("Samlytics Data Services") and whether to exclude the brand assets.
-- **Device testing** is outstanding for P0-04 (MT-17), P0-05 (MT-21), P0-06 (MT-16), P0-07 (MT-20), P0-10 (MT-19), P0-12 (MT-18) and P0-13 (MT-22). A Windows laptop with a microphone, a webcam and a battery, signed in at the console, would unblock MT-16 and the Windows halves of MT-18 to MT-21 at once. MT-20 also needs Bluetooth headsets. MT-22 needs an Android 14+ phone, and a Mac and iPhone.
-- ADR-018: the iOS test-only intent "Start recording without opening (test)" is visible in the Shortcuts app. It should be removed before release (P2-01). Say if you want it hidden sooner.
-- ADR-017: photos start at `ResolutionPreset.veryHigh` (about 1080p). Say if you want a higher default for slides before the P1-14 legibility tests.
-- ADR-017: if the iPhone shutter sound turns up in recordings, say whether that is acceptable (it cannot be silenced in some regions).
-- ADR-016: a segment boundary is cut on every audio device change on Android and Windows. Say if you would rather accept missed boundaries than extra ones.
-- ADR-016: should Android record from a connected Bluetooth mic by default, or keep the built-in mic unless the user picks one?
-- ADR-012 lets a recording start when an activity's permission status is still `unknown`. Say if you want a per-activity prompt first.
-- ADR-013 uses Android audio usage `media`. Review after the first Android run.
-- ADR-014 always cuts a new segment on a profile change, even when the encoder settings are identical (Windows).
-- ADR-015 defers `battery_plus`. Say if you would rather adopt it now.
+- **ADR-024 (new):** Recording screen uses the navy `live-surface` (#00212B) in BOTH light and dark themes ('house lights down') to prevent screen glare in dark lecture halls. Confirm this meets brand expectations.
+- **ADR-024 (new):** Live audio level sampling polls `audioCaptureEngineProvider.levelDbfs()` every 200ms while actively recording and maps `[-60, 0]` dBFS to `[0.0, 1.0]`. When `MediaQuery.disableAnimations` is set, a non-animating accessible level bar is displayed.
+- **ADR-023:** WAV is not offered in v1 (FR-QUAL-07 allows "off by default"). Say if you want a specialist WAV option sooner.
+- **ADR-023:** On Windows every profile records at 96 kbps (encoder floor), so the selector shows 43.2 MB per hour for all three.
+- **ADR-022:** Crash recovery marks files automatically (parsed means `recovered`, anything else `damaged`, nothing deleted).
+- **ADR-021:** Non-camera interruptions are logged as `system` ("a call or another app") because Android audio focus and iOS interruptions do not say what caused them.
+- **ADR-020:** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing.
+- **ADR-019:** Segments roll every 10 minutes (the build guide minimum).
+- **Project licence:** ADR-007 recommends Apache 2.0. Waiting for your choice between Apache 2.0 and MIT, the copyright holder ("Samlytics Data Services") and whether to exclude brand assets.
+- **Device testing:** Outstanding for real devices (MT-16 to MT-22).
 
 ## Commands to run
 
 ```powershell
 cd C:\dev\attenlume
-flutter pub get
-dart run build_runner build
 flutter analyze
 flutter test
 dart format --output=none --set-exit-if-changed lib test tool integration_test

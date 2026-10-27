@@ -483,6 +483,28 @@ Test results on phase-1/P1-09-profiles (Windows 11 build host):
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Google Antigravity: P1-10 recording screen UI with level meter and mic test
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 504 passed.
+- Full Recording Screen UI in navy `live-surface` (#00212B) in both light and dark themes ('house lights down', BUILD_GUIDE 5.3, ADR-024).
+- FR-UI-01: 96px Record button (idle), Pause/Resume (live-raised) and Stop (2px muted ring, red square) controls. Elapsed time display in large `timer` typography with tabular figures. Debounced taps at 600ms (FR-REC-09) with haptic feedback.
+- FR-UI-02: Header displaying conference name, activity title, and room (if set).
+- FR-UI-03: One-tap Photo action button using `PluginPhotoCamera` wrapped in `InterruptionCoordinator.duringCameraUse`, persisting photo row with metadata and snackbar confirmation while keeping the shutter ready for immediate follow-up shots.
+- FR-UI-04: One-tap Bookmark button and horizontally scrolling standard bookmark chips ("Important moment", "Question", "Follow-up", "Key slide", "Quote") meeting minimum 48px touch target height with 600ms live flash and haptics.
+- FR-UI-05: Quick Thought / Reflection bottom sheet with private reflection toggle, saving text bookmark and appending markdown reflections to `activity.notesMd` without speaking into speaker audio.
+- FR-UI-06: Active microphone input device label, live multi-bar waveform level meter in lime (`live` #DCFF38), and 10-second microphone test sheet with countdown and active vs. flat signal (peak <= -70.0 dBFS) detection.
+- FR-UI-08: `RecordingProfileSelector` integrated apart from the Record button, allowing override changes before recording and live profile changes during recording (`RecordingService.changeProfile`).
+- ADR-020 & ADR-021: Start delegates to `startRecordingFromUi` via `oneActiveCoordinatorProvider`, and interruptions display a navy/warning banner with a direct "Resume" button.
+- ADR-024 recorded. `docs/ARCHITECTURE.md` and `docs/TEST_PLAN.md` updated. No new dependencies.
+
+Test results on `phase-1/P1-10-recording-screen` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 530 passed, 0 failed (26 new: 5 in `test/presentation/components/record_button_test.dart`, 4 in `test/presentation/components/bookmark_chip_test.dart`, 4 in `test/features/capture/level_meter_test.dart`, 3 in `test/features/capture/mic_test_sheet_test.dart`, 10 in `test/features/capture/recording_screen_test.dart`).
+- `dart format --output=none --set-exit-if-changed lib test tool integration_test`: clean.
+- `dart run tool/licence_audit.dart --check`: up to date, nothing flagged.
+- `flutter build windows --release` and `flutter build apk --debug`: both built. Not tested on physical microphone/camera hardware (unverified).
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -510,3 +532,4 @@ Test results on phase-1/P1-09-profiles (Windows 11 build host):
 | P1-07 | done (device interruptions unverified) | `interrupt`, `interruptionEnded`, `InterruptionCoordinator`, camera and route events, 36 new tests (455 total). ADR-021 |
 | P1-08 | done (device crash unverified) | `CrashRecoveryService`, recovery prompt and gate, 26 new tests (481 total). ADR-022 |
 | P1-09 | done (device estimates unverified) | `estimateProfile`, `RecordingProfileSelector`, bulk change confirmation, 23 new tests (504 total). ADR-023 |
+| P1-10 | done (device capture unverified) | Recording screen UI, 96px record button, debounce, tabular timer, level meter, mic test, photo, bookmarks, quick thought, 26 new tests (530 total). ADR-024 |
