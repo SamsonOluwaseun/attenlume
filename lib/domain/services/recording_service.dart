@@ -42,6 +42,41 @@ enum StartOutcome {
   failed,
 }
 
+/// Result of [RecordingService.changeProfile].
+enum ProfileChangeOutcome {
+  /// The open segment ended with reason `quality_change` and a new one is
+  /// recording with the new profile. When paused, the next segment will
+  /// use it.
+  changed,
+
+  /// The recording already uses this profile. Nothing changed.
+  alreadyInUse,
+
+  /// Nothing is recording or paused. Nothing changed.
+  notRecording,
+
+  /// The encoder refused the new profile, so recording carried on in a new
+  /// segment with the previous one (FR-QUAL-04). See
+  /// [ProfileChangeResult.reason].
+  declined,
+
+  /// Neither profile could start. Earlier segments are kept and the
+  /// recorder is in [RecordingState.errorRecoverable].
+  failed,
+}
+
+/// What [RecordingService.changeProfile] did, with a plain reason when it
+/// declined or failed.
+class ProfileChangeResult {
+  const ProfileChangeResult(this.outcome, {this.reason});
+
+  final ProfileChangeOutcome outcome;
+  final String? reason;
+
+  @override
+  String toString() => 'ProfileChangeResult(${outcome.name}, $reason)';
+}
+
 /// SHA-256 of a file, streamed off the UI isolate (BUILD_GUIDE 12.4).
 Future<String> sha256OfFileInIsolate(File file) {
   final path = file.path;
@@ -163,6 +198,62 @@ class RecordingService {
     });
   });
 
+  /// Changes the recording profile mid-recording (FR-QUAL-04) [P0-12].
+  ///
+  /// Finalises the open segment with reason `quality_change`, then starts
+  /// a new segment with [profile]. The running encoder is never changed
+  /// and no file is transcoded. If the encoder refuses [profile], the new
+  /// segment starts with the previous profile instead and the change is
+  /// declined with a reason. On success the profile is stored as the
+  /// activity override, so a later resume keeps it. While paused, only the
+  /// override changes.
+  Future<ProfileChangeResult> changeProfile(
+    RecordingProfile profile,
+  ) => _lock.run(() async {
+    final state = _status.state;
+    final activityId = _status.activityId;
+    if (activityId == null ||
+        (state != RecordingState.recording && state != RecordingState.paused)) {
+      return const ProfileChangeResult(ProfileChangeOutcome.notRecording);
+    }
+    final previous = _status.profile!;
+    if (profile == previous) {
+      return const ProfileChangeResult(ProfileChangeOutcome.alreadyInUse);
+    }
+    return _guard(() async {
+      if (state == RecordingState.paused) {
+        await _storeOverride(activityId, profile);
+        _publish(
+          RecordingStatus(
+            state: RecordingState.paused,
+            activityId: activityId,
+            profile: profile,
+          ),
+        );
+        return const ProfileChangeResult(ProfileChangeOutcome.changed);
+      }
+      _moveTo(_copyStatus(RecordingState.switchingSegment));
+      await _finishSegment(SegmentEndReason.qualityChange);
+      final conferenceId = (await _activities.get(activityId))!.conferenceId;
+      final refused = await _tryBeginSegment(activityId, conferenceId, profile);
+      if (refused == null) {
+        await _storeOverride(activityId, profile);
+        return const ProfileChangeResult(ProfileChangeOutcome.changed);
+      }
+      final reason = 'The ${profile.label} profile could not start ($refused).';
+      if (await _beginSegment(activityId, conferenceId, previous)) {
+        return ProfileChangeResult(
+          ProfileChangeOutcome.declined,
+          reason: '$reason Still recording with ${previous.label}.',
+        );
+      }
+      return ProfileChangeResult(
+        ProfileChangeOutcome.failed,
+        reason: '$reason ${_status.errorMessage}',
+      );
+    });
+  });
+
   /// Stops and saves the current recording. Returns the saved activity ID,
   /// or null if nothing was held (repeat stops are harmless).
   Future<String?> stop() => _lock.run(() async {
@@ -200,8 +291,36 @@ class RecordingService {
     await _statusController.close();
   }
 
-  /// Creates the segment row, then starts the encoder on its file.
+  Future<void> _storeOverride(String activityId, RecordingProfile profile) =>
+      _activities.update(
+        activityId,
+        ActivitiesCompanion(recordingProfileOverride: Value(profile)),
+      );
+
+  /// Starts a segment, or moves to [RecordingState.errorRecoverable] if
+  /// the encoder refuses.
   Future<bool> _beginSegment(
+    String activityId,
+    String conferenceId,
+    RecordingProfile profile,
+  ) async {
+    final error = await _tryBeginSegment(activityId, conferenceId, profile);
+    if (error == null) return true;
+    _moveTo(
+      RecordingStatus(
+        state: RecordingState.errorRecoverable,
+        activityId: activityId,
+        profile: profile,
+        errorMessage: 'Recording could not start: $error',
+      ),
+    );
+    return false;
+  }
+
+  /// Creates the segment row, then starts the encoder on its file. Returns
+  /// null once recording, or the encoder's error. A refused start leaves
+  /// its row marked damaged and the state unchanged.
+  Future<Object?> _tryBeginSegment(
     String activityId,
     String conferenceId,
     RecordingProfile profile,
@@ -251,15 +370,7 @@ class RecordingService {
         bytes: file.existsSync() ? file.lengthSync() : null,
         state: SegmentState.damaged,
       );
-      _moveTo(
-        RecordingStatus(
-          state: RecordingState.errorRecoverable,
-          activityId: activityId,
-          profile: profile,
-          errorMessage: 'Recording could not start: $error',
-        ),
-      );
-      return false;
+      return error;
     }
     _open = _OpenSegment(segment.id, file);
     _moveTo(
@@ -272,7 +383,7 @@ class RecordingService {
         segmentStartUtc: segment.startUtc,
       ),
     );
-    return true;
+    return null;
   }
 
   /// Stops the encoder and records what the file really holds
@@ -373,6 +484,10 @@ class RecordingService {
         'to ${next.state.name}',
       );
     }
+    _publish(next);
+  }
+
+  void _publish(RecordingStatus next) {
     _status = next;
     if (!_statusController.isClosed) _statusController.add(next);
   }

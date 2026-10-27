@@ -27,7 +27,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | Bluetooth mic routing and fallback | P0-07 | unverified | unverified | unverified | Needs headset and lapel mic |
 | 90-minute low-spec recording: memory, size, battery | P0-10 | unverified | unverified | unverified | No figures until measured |
 | Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | **pass** (Windows probe, preflight, disk-full cleanup, streaming folder and ZIP exports with bounded RAM; see 2.12) | Real RSS measured: delta 10.3 MB (folder), 5.6 MB (ZIP) on a 1 GiB file |
-| Per-segment profile switch, observed bitrate | P0-12 | unverified | unverified | unverified | |
+| Per-segment profile switch, observed bitrate | P0-12 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.3.1) | `integration_test/p0_12_profile_switch_test.dart`, manual steps MT-18. Switch logic tested with fakes only |
 | Start recording from App Intent (iOS) or Quick Settings tile (Android) | P0-13 | unverified | unverified | n/a | Phase 2 feasibility only |
 | Passthrough trimming without re-encoding | P0-14 | unverified (method channel in P1-19) | unverified (method channel in P1-19) | **pass** (pure container M4A trimmer, cut maths, split logic, cuts.json; see 2.11) | ADR-003 |
 
@@ -80,6 +80,21 @@ Planned handling (FR-QUAL-05, recorded in ADR-002):
 - Alternatives to evaluate in P0-06 if 96 kbps is a problem: FLAC (lossless, much larger), or a bundled low-bitrate encoder (adds a dependency and a licence review). Windows devices usually have far more free storage than phones, so 96 kbps is the documented default.
 
 Android and iOS: no documented hard floor was found at 32 to 64 kbps mono AAC-LC, but encoder support varies by device. P0-12 must query and record the observed bitrate per device.
+
+### 2.3.1 Spike P0-12 harness (27 October 2026)
+
+Built on the Windows build host. **No audio was captured on any platform.** Nothing below is a measured bitrate or gap.
+
+- Harness: `ProfileSwitchSpike` (`lib/spikes/profile_switch_spike.dart`) runs the real `RecordingService` with `RecordCaptureEngine`: Economy, Balanced, Enhanced, then Economy again, `P0_12_SECONDS` each (default 20), switching through `RecordingService.changeProfile` (ADR-014). Each finished file is reinspected with `M4aInspector`. Report columns: requested kbps, codec, channels, sample rate, duration, declared kbps (`esds`), payload kbps (`mdat`), whole-file kbps, payload deviation from the request, MB per hour observed and requested, gap before the segment (database timestamps) and end reason. JSON and Markdown, printed and saved next to the audio.
+- Run on the build host (Windows 11 Pro 26200, Remote Desktop session, `-d windows`, `P0_12_SECONDS=3`): start failed with `PlatformException(Record, null, No audio recording device was found., null)`. One `damaged` row (Economy requested, 96 kbps after the ADR-002 floor), no switches. **Blocked**, same cause as P0-06.
+- What a switch costs on a device is unknown. The gap includes stopping the encoder, inspecting the file, hashing it in an isolate and starting the next encoder. If it is long enough to lose words, move the hash after the next start (it does not need to block recording).
+- Unit tests with fakes: `test/spikes/profile_switch_spike_test.dart` (8) and the FR-QUAL-04 group in `test/domain/recording_service_test.dart` (8). They prove the switch logic and the report, not the platform.
+
+| Platform | Device and OS | Economy kbps | Balanced kbps | Enhanced kbps | Gap per switch | Words lost at switch | Result |
+|---|---|---|---|---|---|---|---|
+| Android | not run | | | | | | blocked: needs real device |
+| iOS | not run | | | | | | blocked: needs Mac and iPhone |
+| Windows | build host, RDP | | | | | | blocked: no capture device |
 
 ### 2.4 Android background recording
 
