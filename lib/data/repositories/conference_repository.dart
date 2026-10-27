@@ -184,6 +184,23 @@ class ConferenceRepository {
     );
   });
 
+  /// Activities that follow the conference default and have no segments
+  /// yet: the ones a bulk profile change would move (FR-QUAL-03) [P1-09].
+  Future<int> countUnrecordedInheritingActivities(String id) async {
+    final inheriting =
+        await (_db.select(_db.activities)..where(
+              (a) =>
+                  a.conferenceId.equals(id) &
+                  a.recordingProfileOverride.isNull(),
+            ))
+            .get();
+    var count = 0;
+    for (final activity in inheriting) {
+      if (!await _hasSegments(activity.id)) count++;
+    }
+    return count;
+  }
+
   Future<bool> _hasSegments(String activityId) async {
     final row =
         await (_db.selectOnly(_db.recordingSegments)

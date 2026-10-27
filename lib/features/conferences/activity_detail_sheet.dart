@@ -1,15 +1,21 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/tokens.dart';
+import '../../data/local_database/app_database.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/activity.dart';
 import '../../domain/models/enums.dart';
+import '../../domain/services/recording_service.dart';
+import '../../domain/services/recording_state.dart';
 import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../presentation/components/status_pill.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/activity_editor_screen.dart';
+import '../capture/recording_profile_selector.dart';
+import '../capture/recording_providers.dart';
 
 /// Modal bottom sheet displaying detailed activity metadata, contact details,
 /// and captured assets (FR-ACT-03, FR-ACT-04, FR-ACT-08).
@@ -116,6 +122,68 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
 
     if (mounted) {
       Navigator.of(context).pop({'deleted': true});
+    }
+  }
+
+  /// Quality selector (FR-UI-08) [P1-09]: live while this activity is
+  /// recording, editable before its first segment, hidden once recorded
+  /// (the metadata row still names the profile).
+  List<Widget> _buildProfileSelector() {
+    final act = _summary.activity;
+    if (_summary.hasActiveRecording || act.status == ActivityStatus.active) {
+      final status = ref.watch(recordingStatusProvider).asData?.value;
+      final live =
+          status != null &&
+          status.activityId == act.id &&
+          status.profile != null &&
+          (status.state == RecordingState.recording ||
+              status.state == RecordingState.paused);
+      if (!live) return const [];
+      return [
+        RecordingProfileSelector(
+          selected: status.profile!,
+          live: true,
+          onChanged: _changeLiveProfile,
+        ),
+        const SizedBox(height: TokenSpace.space3),
+      ];
+    }
+    if (_summary.segmentCount > 0) return const [];
+    return [
+      RecordingProfileSelector(
+        selected: _summary.effectiveProfile,
+        onChanged: _setProfileOverride,
+      ),
+      const SizedBox(height: TokenSpace.space3),
+    ];
+  }
+
+  Future<void> _setProfileOverride(RecordingProfile profile) async {
+    await ref
+        .read(activityRepositoryProvider)
+        .update(
+          _summary.activity.id,
+          ActivitiesCompanion(recordingProfileOverride: Value(profile)),
+        );
+    await _refreshSummary();
+  }
+
+  /// FR-QUAL-04: a new segment with the new profile, or a reason why not.
+  Future<void> _changeLiveProfile(RecordingProfile profile) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final result = await ref
+        .read(recordingServiceProvider)
+        .changeProfile(profile);
+    final message = switch (result.outcome) {
+      ProfileChangeOutcome.changed =>
+        'Recording quality is now ${profile.label}.',
+      ProfileChangeOutcome.alreadyInUse ||
+      ProfileChangeOutcome.notRecording => null,
+      ProfileChangeOutcome.declined ||
+      ProfileChangeOutcome.failed => result.reason,
+    };
+    if (message != null) {
+      messenger?.showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -298,6 +366,8 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
               ),
 
               const SizedBox(height: TokenSpace.space3),
+
+              ..._buildProfileSelector(),
 
               // Contact Details Card (FR-ACT-08)
               if (hasContactInfo) ...[

@@ -465,6 +465,24 @@ Test results on phase-1/P1-08-crash-recovery (Windows 11 build host):
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P1-09 recording profiles and selector
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 481 passed.
+- `profile_estimates.dart`: MB per hour from the settings that will really be requested (Windows 43.2 for every profile, ADR-002) and safe minutes left above the 100 MiB hard reserve. Unknown free space reads "Space left unknown". FR-QUAL-05 notice when a profile cannot be met ("Economy records at 96 kbps instead of 32 kbps").
+- `RecordingProfileSelector` (FR-UI-08): three profiles with MB per hour and time left, no record control. On the activity detail sheet until P1-10: a pick before the first segment stores the activity override; while the activity is recording or paused it shows the profile in use and changes go through `RecordingService.changeProfile` with the reason shown if declined; hidden once recorded.
+- FR-QUAL-03: the wizard used to move unrecorded activities to a new default without asking. It now counts them (`ConferenceRepository.countUnrecordedInheritingActivities`) and asks "New activities only", "Change them too" or "Cancel".
+- FR-QUAL-06 and the FR-QUAL-05 metadata were already in place (P0-09, P0-12). FR-QUAL-07: no WAV offered in v1. FR-QUAL-08: photos keep their own setting. ADR-023.
+- New providers: `capturePlatformProvider`, `freeSpaceProbeProvider`, `mediaFreeBytesProvider`. No new packages.
+- Not checked on a device: estimates against real file growth and free space on phones (unknown until P1-12), live change on a real recording (MT-18). Unverified.
+
+Test results on phase-1/P1-09-profiles (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 504 passed, 0 failed (23 new: 9 in `test/domain/profile_estimates_test.dart`, 7 in `test/features/capture/recording_profile_selector_test.dart`, 3 in `test/features/activities/activity_detail_sheet_test.dart`, 3 in `test/features/conferences/conference_wizard_test.dart`, 1 in `test/data/repositories/conference_repository_test.dart`).
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -491,3 +509,4 @@ Test results on phase-1/P1-08-crash-recovery (Windows 11 build host):
 | P1-06 | done (device triggers unverified) | `switchTo`, `OneActiveCoordinator`, prompt dialog, 27 new tests (419 total). ADR-020 |
 | P1-07 | done (device interruptions unverified) | `interrupt`, `interruptionEnded`, `InterruptionCoordinator`, camera and route events, 36 new tests (455 total). ADR-021 |
 | P1-08 | done (device crash unverified) | `CrashRecoveryService`, recovery prompt and gate, 26 new tests (481 total). ADR-022 |
+| P1-09 | done (device estimates unverified) | `estimateProfile`, `RecordingProfileSelector`, bulk change confirmation, 23 new tests (504 total). ADR-023 |

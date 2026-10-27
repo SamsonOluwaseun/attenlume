@@ -1,6 +1,7 @@
 import 'package:attenlume/app/theme/app_theme.dart';
 import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
+import 'package:attenlume/data/repositories/activity_repository.dart';
 import 'package:attenlume/data/repositories/conference_repository.dart';
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/services/device_timezone.dart';
@@ -343,4 +344,107 @@ void main() {
       expect(conf, isNull);
     },
   );
+
+  group('FR-QUAL-03 bulk change confirmation [P1-09]', () {
+    Future<(String, String, String)> seed() async {
+      final conf = await repo.create(
+        name: 'Profile Conference',
+        timezone: 'Europe/London',
+        defaultRecordingProfile: RecordingProfile.balanced,
+      );
+      final acts = ActivityRepository(db);
+      final types = await acts.types();
+      final typeId = types.first.id;
+      final unrecorded = await acts.create(
+        conferenceId: conf.id,
+        typeId: typeId,
+        title: 'Not yet recorded',
+      );
+      final later = await acts.create(
+        conferenceId: conf.id,
+        typeId: typeId,
+        title: 'Also not recorded',
+      );
+      return (conf.id, unrecorded.id, later.id);
+    }
+
+    Future<void> changeToEnhancedAndSave(
+      WidgetTester tester,
+      String confId,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(createSubject(conferenceId: confId));
+      await tester.pumpAndSettle();
+      final tile = find.byKey(const Key('profile-tile-enhanced'));
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      final save = find.byKey(const Key('save-conference-button'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    testWidgets('FR-QUAL-03 asks before moving unrecorded activities, and '
+        '"New activities only" keeps them', (tester) async {
+      final (confId, a, b) = (await tester.runAsync(seed))!;
+      await changeToEnhancedAndSave(tester, confId);
+
+      expect(
+        find.byKey(const Key('profile-bulk-change-dialog')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('2 activities that have not been recorded yet'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('profile-bulk-new-only')));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      final acts = ActivityRepository(db);
+      final conf = (await tester.runAsync(() => repo.get(confId)))!;
+      expect(conf.defaultRecordingProfile, RecordingProfile.enhanced);
+      for (final id in [a, b]) {
+        expect(
+          await tester.runAsync(() => acts.effectiveProfile(id)),
+          RecordingProfile.balanced,
+        );
+      }
+    });
+
+    testWidgets('FR-QUAL-03 "Change them too" moves unrecorded activities', (
+      tester,
+    ) async {
+      final (confId, a, _) = (await tester.runAsync(seed))!;
+      await changeToEnhancedAndSave(tester, confId);
+      await tester.tap(find.byKey(const Key('profile-bulk-include')));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(
+        await tester.runAsync(() => ActivityRepository(db).effectiveProfile(a)),
+        RecordingProfile.enhanced,
+      );
+    });
+
+    testWidgets('FR-QUAL-03 Cancel saves nothing', (tester) async {
+      final (confId, a, _) = (await tester.runAsync(seed))!;
+      await changeToEnhancedAndSave(tester, confId);
+      await tester.tap(find.byKey(const Key('profile-bulk-cancel')));
+      await tester.pumpAndSettle();
+      final conf = (await tester.runAsync(() => repo.get(confId)))!;
+      expect(conf.defaultRecordingProfile, RecordingProfile.balanced);
+      expect(
+        await tester.runAsync(() => ActivityRepository(db).effectiveProfile(a)),
+        RecordingProfile.balanced,
+      );
+    });
+  });
 }

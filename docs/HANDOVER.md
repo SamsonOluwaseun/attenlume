@@ -1,45 +1,48 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), unattended run
-Branch: main (P1-08 merged from `phase-1/P1-08-crash-recovery`)
-Current task ID: P1-08 (done). Next: P1-09
+Branch: main (P1-09 merged from `phase-1/P1-09-profiles`)
+Current task ID: P1-09 (done). Next: P1-10
 Status: done
 
 ## Done in this session
 
-- P1-08 crash recovery and reconciliation [FR-REC-08, AT-REC-03]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 3 and 8.12, ADR-022.
-  - `CrashRecoveryService.reconcile()`: `writing` rows checked at their path and at the final name; parsed files `recovered` (fields from the file, renamed to the final name, never over an existing file), others `damaged` with zero span and kept. Open interruptions closed, `active` activities completed or back to draft, the held activity skipped, unlinked audio files listed.
-  - `CrashRecoveryGate` wraps the welcome screen in `AttenlumeApp` and shows `CrashRecoveryDialog` once per start, with "Carry on recording" through the one-active coordinator.
-  - 26 new tests, 481 total, all passing. Windows release and debug APK build. No new packages.
+- P1-09 recording profiles and selector with estimates [FR-QUAL-01 to 08, FR-UI-08]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 8.13 and ADR-023.
+  - `lib/domain/services/profile_estimates.dart`: effective MB per hour and safe time left above the hard reserve, FR-QUAL-05 notice.
+  - `lib/features/capture/recording_profile_selector.dart`: `RecordingProfileSelector`, used on the activity detail sheet (override before recording, live change while recording or paused, hidden once recorded).
+  - Conference wizard now asks before moving unrecorded activities to a new default (`profile_bulk_change_dialog.dart`, `ConferenceRepository.countUnrecordedInheritingActivities`).
+  - 23 new tests, 504 total, all passing. Windows release and debug APK build. No new packages.
 
 ## Left to do on this task
 
-- Nothing in code. P1-17 (timeline) and P1-21 (export) must treat `recovered` segments like finalised ones and `damaged` ones as gaps. Device check MT-13 / AT-REC-03 (force-kill on a phone and on Windows) is outstanding.
+- Nothing in code. The wizard profile tiles and the activity editor dropdown still show the nominal figures (`mbPerHourLabel`); switch them to the effective ones in P1-25. Phones show "Space left unknown" until P1-12 adds their free-space probes.
 
 ## Exact next step
 
-Start **P1-09 Recording profiles and selector with estimates** [FR-QUAL-01 to 08, FR-UI-08] on branch `phase-1/P1-09-profiles`. Existing pieces to extend, not replace: `recording_profile_rules.dart` (precedence), `capture_settings.dart` (effective encoder settings, Windows 96 kbps floor, ADR-002), `RecordingService.changeProfile` (FR-QUAL-04, ADR-014), `storage_thresholds.dart` and the free-space probe (P0-11). Build the selector widget (MB per hour and safe time left, kept apart from Record), show effective settings when a profile is unavailable (FR-QUAL-05), and bulk change confirmation for unrecorded activities (FR-QUAL-03, see `ConferenceRepository`).
+Start **P1-10 Recording screen UI with level meter and mic test** [FR-UI-01 to 06] on branch `phase-1/P1-10-recording-screen`. Read FR-UI-01 to 06 in the build guide and the recording screen in `docs/DESIGN_GUIDE.md` (navy `live-surface` in both themes, lime only for live status, red square Stop, 96 px record button, `timer` type). Start recordings only through `startRecordingFromUi` / `oneActiveCoordinatorProvider` (ADR-020). Put `RecordingProfileSelector` on the screen, apart from Record, with `live: true` while recording and `onChanged` to `RecordingService.changeProfile` (copy `_changeLiveProfile` from `activity_detail_sheet.dart`). Show `RecordingStatus.interruption` / `errorMessage` with Resume (ADR-021). The engine exposes levels for the meter; check `AudioCaptureEngine` and `FakeCaptureEngine`.
 
 ## Files touched
 
 New:
-- `lib/domain/services/crash_recovery_service.dart`, `lib/features/capture/crash_recovery_dialog.dart`
-- `test/domain/crash_recovery_service_test.dart`, `test/features/capture/crash_recovery_dialog_test.dart`
+- `lib/domain/services/profile_estimates.dart`, `lib/features/capture/recording_profile_selector.dart`, `lib/features/conferences/profile_bulk_change_dialog.dart`
+- `test/domain/profile_estimates_test.dart`, `test/features/capture/recording_profile_selector_test.dart`
 
 Changed:
-- `lib/app/app.dart`, `lib/data/filesystem/media_paths.dart`, `lib/data/repositories/activity_repository.dart`, `lib/data/repositories/media_asset_repository.dart`, `lib/features/capture/recording_providers.dart`
-- `test/app/app_test.dart`, `test/data/filesystem/segment_commit_test.dart`
-- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-022), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
+- `lib/data/repositories/conference_repository.dart`, `lib/features/capture/recording_providers.dart`, `lib/features/conferences/activity_detail_sheet.dart`, `lib/features/conferences/conference_wizard_screen.dart`
+- `test/data/repositories/conference_repository_test.dart`, `test/features/activities/activity_detail_sheet_test.dart`, `test/features/conferences/conference_wizard_test.dart`
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-023), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (481 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
+None failing in `flutter test` (504 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
 
-Note for widget tests that pump `AttenlumeApp`: override `crashRecoveryReportProvider` (see `test/app/app_test.dart`), otherwise recovery reaches for `path_provider` and the real recorder. For widget tests that use the real database and `RecordingService`, futures made inside `testWidgets` only complete while the fake zone is pumped (see `test/features/capture/one_active_prompt_test.dart`).
+Notes for widget tests: any widget that shows `RecordingProfileSelector` needs `capturePlatformProvider` and `mediaFreeBytesProvider` overridden (see `test/features/activities/activity_detail_sheet_test.dart`). Widget tests that pump `AttenlumeApp` must override `crashRecoveryReportProvider` (see `test/app/app_test.dart`).
 
 ## Open questions for the owner
 
-- **ADR-022 (new):** crash recovery marks files automatically (parsed means `recovered`, anything else `damaged`, nothing deleted) and the prompt only reports and offers "Carry on recording". Say if you want a per-file choice. A force-killed segment will usually be damaged because M4A is unreadable until its index is written, so a crash can lose up to 10 minutes. Say if you want a spike on salvaging such files (rebuilding the index) sooner rather than later.
+- **ADR-023 (new):** WAV is not offered in v1 (FR-QUAL-07 allows "off by default"). Say if you want a specialist WAV option sooner. A profile picked on an activity before recording is stored as its own setting even if it equals the conference default, so a later conference change will not move it. Say if you would rather it kept following the default.
+- **ADR-023 (new):** on Windows every profile records at 96 kbps (encoder floor), so the selector shows 43.2 MB per hour for all three and a note explaining why. Say if you would rather hide the selector on Windows.
+- **ADR-022:** crash recovery marks files automatically (parsed means `recovered`, anything else `damaged`, nothing deleted) and the prompt only reports and offers "Carry on recording". Say if you want a per-file choice. A force-killed segment will usually be damaged because M4A is unreadable until its index is written, so a crash can lose up to 10 minutes. Say if you want a spike on salvaging such files (rebuilding the index) sooner rather than later.
 - **ADR-021:** non-camera interruptions are logged as `system` ("a call or another app") because Android audio focus and iOS interruptions do not say what caused them. Getting `call` exactly would need the phone-state permission, which ADR-013 rejected. Say if you want that.
 - **ADR-021:** after a camera interruption, recording restarts as soon as the shot is done, without waiting for the system. If iOS refuses that, the user is asked to tap Resume. Say if you would rather wait for the system's signal.
 - **ADR-020:** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing. Say if you meant something else by the two options. Notification start actions are treated as able to show the prompt; say if they should switch straight away like shortcuts.
@@ -60,7 +63,7 @@ Note for widget tests that pump `AttenlumeApp`: override `crashRecoveryReportPro
 ## Commands to run
 
 ```powershell
-cd C:\dev\attenlume
+cd C:\devttenlume
 flutter pub get
 dart run build_runner build
 flutter analyze

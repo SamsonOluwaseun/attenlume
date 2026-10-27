@@ -11,6 +11,7 @@ import '../../domain/services/device_timezone.dart';
 import '../../shared/utilities/date_formatters.dart';
 import 'conference_delete_dialog.dart';
 import 'conference_home_screen.dart';
+import 'profile_bulk_change_dialog.dart';
 
 /// Full conference set-up wizard and editor [FR-CONF-01 to 08].
 ///
@@ -265,6 +266,25 @@ class _ConferenceWizardScreenState
       // Update existing conference
       final confId = widget.conferenceId!;
 
+      // FR-QUAL-03: new activities only, unless the user confirms moving
+      // unrecorded ones too. Cancel saves nothing.
+      var includeUnrecorded = false;
+      if (_existingConference?.defaultRecordingProfile != _defaultProfile) {
+        final unrecorded = await repo.countUnrecordedInheritingActivities(
+          confId,
+        );
+        if (unrecorded > 0) {
+          if (!mounted) return;
+          final choice = await showProfileBulkChangeDialog(
+            context,
+            unrecordedCount: unrecorded,
+            profile: _defaultProfile,
+          );
+          if (choice == null) return;
+          includeUnrecorded = choice;
+        }
+      }
+
       await repo.update(
         confId,
         ConferencesCompanion(
@@ -286,7 +306,7 @@ class _ConferenceWizardScreenState
         await repo.changeDefaultRecordingProfile(
           confId,
           _defaultProfile,
-          includeUnrecordedActivities: true,
+          includeUnrecordedActivities: includeUnrecorded,
         );
       }
 

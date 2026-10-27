@@ -135,6 +135,26 @@ void main() {
       );
     });
 
+    test('FR-QUAL-03 counts only unrecorded activities that inherit the '
+        'default, for the bulk change prompt [P1-09]', () async {
+      final c = await t.conference();
+      expect(await t.conferences.countUnrecordedInheritingActivities(c.id), 0);
+      final recorded = await t.activity(c.id);
+      await t.segment(
+        recorded.id,
+        start: t.clock.now,
+        length: const Duration(minutes: 1),
+      );
+      await t.activity(c.id);
+      await t.activity(c.id);
+      await t.activities.create(
+        conferenceId: c.id,
+        typeId: builtinTypeId('session'),
+        recordingProfileOverride: RecordingProfile.economy,
+      );
+      expect(await t.conferences.countUnrecordedInheritingActivities(c.id), 2);
+    });
+
     test('FR-QUAL-03 update refuses to change the profile directly', () async {
       final c = await t.conference();
       expect(
