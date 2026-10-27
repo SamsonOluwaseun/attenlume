@@ -367,6 +367,28 @@ Test results on phase-0/P0-05-photo-during-recording-spike (Windows 11 build hos
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-13 shortcut trigger spike harness
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 349 passed.
+- Picked P0-13 because it was the last Phase 0 task without a harness (agent prompt: Phase 0 first). Its dependency P0-04 is blocked-on-device.
+- No new packages.
+- `lib/platform/shortcuts/`: `ShortcutCommand` parses `attenlume://` URIs (`record/start|stop|toggle`, `bookmark`, `photo`, `conversation/new`, optional `source` and UUID v4 `activity`) and channel payloads; `ShortcutBridge`, `MethodChannelShortcutBridge` (`com.samlytics.attenlume/shortcuts`), `NoShortcutBridge` [FR-HF-01, FR-HF-04, FR-HF-05].
+- Android: `ShortcutChannel.kt`, `RecordTileService.kt` (Quick Settings tile; opens the app via `startActivityAndCollapse(PendingIntent)` on API 34+, `unlockAndRun` when locked; spike-only direct mode), `MainActivity.kt` forwards `attenlume://` intents, launcher shortcuts in `res/xml/shortcuts.xml`, `VIEW` intent filter, Flutter route deep linking off. Compiles into the debug APK. Not run on a phone.
+- iOS: `ShortcutCommandCenter.swift` (in-app plugin, URLs through `addSceneDelegate`), `ShortcutIntents.swift` (Start, Stop, Bookmark, New conversation, Take photo, a test-only start without opening, Siri phrases), `CFBundleURLTypes`, `FlutterDeepLinkingEnabled` off, both Swift files added to `project.pbxproj` by hand. **Not built** (needs a Mac).
+- `ShortcutTriggerSpike` (`lib/spikes/shortcut_trigger_spike.dart`): each command drives the real `RecordingService` (one-active rule, bookmarks only while recording), logs lifecycle on arrival, tap-to-recording time and the level for 5 s after each start, flags background and silent starts. JSON and Markdown.
+- Device test `integration_test/p0_13_shortcut_trigger_test.dart` and manual steps MT-22 in `TEST_PLAN.md`.
+- ADR-018 recorded. `PLATFORM_FEASIBILITY.md` 1, 2.13.1 and 3, `TEST_PLAN.md` (2.1, MT-22, AT-HF-01, results log) and `ARCHITECTURE.md` (8.8, 9) updated.
+- **No trigger observed on any phone.** The device test was run on the build host with `-d windows` for 10 s: the harness ran, microphone permission true, no trigger arrived (Windows has no tile or intents; it fails by design). P0-13 is blocked: needs an Android 14+ phone, and a Mac and iPhone.
+
+Test results on phase-0/P0-13-shortcut-trigger-spike (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 372 passed, 0 failed (23 new: 14 in `test/platform/shortcut_command_test.dart`, 9 in `test/spikes/shortcut_trigger_spike_test.dart`).
+- `integration_test/p0_13_shortcut_trigger_test.dart -d windows` (10 s): failed as expected, no trigger on Windows (not a code fault).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -388,4 +410,4 @@ Test results on phase-0/P0-05-photo-during-recording-spike (Windows 11 build hos
 | P0-10 | blocked: needs real device | Harness, memory and battery probes, device test and MT-19 steps built, 18 unit tests with fakes pass (309 total). ADR-015. Windows run on build host blocked (no capture device) |
 | P0-07 | blocked: needs real device and headsets | Route probe, `RecordingService.routeChanged`, harness, device test and MT-20 steps built, 26 unit tests with fakes pass (335 total). ADR-016. Windows run on build host blocked (no capture device) |
 | P0-05 | blocked: needs real device | `PhotoCamera` on `camera` 0.12.1, harness, device test and MT-21 steps built, 14 unit tests with fakes pass (349 total). ADR-017. Windows run on build host blocked (no capture device, no camera) |
-| P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet |
+| P0-13 | blocked: needs real device | `ShortcutBridge`, `attenlume://` parser, Android tile and launcher shortcuts (APK builds), iOS App Intents (not built, needs Mac), harness, device test and MT-22 steps, 23 unit tests with fakes pass (372 total). ADR-018 |

@@ -12,5 +12,9 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // App Intents and deep links [P0-13].
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AttenlumeShortcuts") {
+      ShortcutCommandCenter.register(with: registrar)
+    }
   }
 }

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcuts (long-press the icon) [P0-13, FR-HF-04]. Each opens
+     the app with an attenlume:// URI that ShortcutCommand.parse reads. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="record_start"
+        android:enabled="true"
+        android:icon="@drawable/ic_tile_record"
+        android:shortcutShortLabel="@string/shortcut_start_short"
+        android:shortcutLongLabel="@string/shortcut_start_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.samlytics.attenlume"
+            android:targetClass="com.samlytics.attenlume.MainActivity"
+            android:data="attenlume://record/start?source=app_shortcut" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="record_stop"
+        android:enabled="true"
+        android:icon="@drawable/ic_tile_record"
+        android:shortcutShortLabel="@string/shortcut_stop_short"
+        android:shortcutLongLabel="@string/shortcut_stop_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.samlytics.attenlume"
+            android:targetClass="com.samlytics.attenlume.MainActivity"
+            android:data="attenlume://record/stop?source=app_shortcut" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="bookmark"
+        android:enabled="true"
+        android:icon="@drawable/ic_tile_record"
+        android:shortcutShortLabel="@string/shortcut_bookmark_short"
+        android:shortcutLongLabel="@string/shortcut_bookmark_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.samlytics.attenlume"
+            android:targetClass="com.samlytics.attenlume.MainActivity"
+            android:data="attenlume://bookmark?source=app_shortcut" />
+    </shortcut>
+</shortcuts>

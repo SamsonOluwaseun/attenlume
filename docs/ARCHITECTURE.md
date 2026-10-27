@@ -249,6 +249,13 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - Android `CAMERA` permission and iOS `NSCameraUsageDescription`.
 - `lib/spikes/photo_during_recording_spike.dart`: photos during a recording, `camera` interruptions with resume after the shot, gaps matched to interruption rows (AT-PHO-01). Device test `integration_test/p0_05_photo_during_recording_test.dart` (MT-21).
 
+### 8.8 Added in P0-13
+
+- `lib/platform/shortcuts/`: `ShortcutCommand` (the `attenlume://` URI parser, the only one), `ShortcutBridge` interface, `MethodChannelShortcutBridge` on `com.samlytics.attenlume/shortcuts`, `NoShortcutBridge` for Windows until P2-05. ADR-018.
+- Android: `ShortcutChannel.kt` (channel, initial-command hold, tile mode), `RecordTileService.kt` (Quick Settings tile), `MainActivity.kt` passes `attenlume://` intents on, `res/xml/shortcuts.xml` launcher shortcuts, `VIEW` intent filter, Flutter route deep linking off.
+- iOS: `ShortcutCommandCenter.swift` (in-app plugin, scene URL events through `addSceneDelegate`), `ShortcutIntents.swift` (App Intents and Siri phrases), `CFBundleURLTypes`, `FlutterDeepLinkingEnabled` off. Not built yet (needs a Mac).
+- `lib/spikes/shortcut_trigger_spike.dart`: commands drive `RecordingService` with the one-active rule; lifecycle, tap-to-recording time and level after each start. Device test `integration_test/p0_13_shortcut_trigger_test.dart` (MT-22). The app itself does not listen to the bridge yet (P2-01, P2-03).
+
 ## 9. Open risks
 
 | Risk | Where | Mitigation |
@@ -260,4 +267,6 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 | Windows AAC bitrate silently snapped to 96 kbps by `record_windows` | P0-06 | Store bitrate read from the file, never the request (ADR-006) |
 | No Windows playback package from a big publisher | P0-06 | `PlaybackEngine` interface, `audioplayers` fallback |
 | No Windows gallery API | P1-15 | Folder pick plus EXIF time filter |
+| A shortcut cannot start the microphone from the background | P0-13 | Default opens the app first (tile, Start intent), ADR-018. Direct mode measured in MT-22 |
+| Hand-edited `project.pbxproj` and unbuilt Swift for App Intents | P0-13 | First Mac build checks it; the files are self-contained and can be re-added in Xcode |
 | Android and Windows packages do not report which mic is recording | P0-07 | Cut a boundary on every device change (ADR-016); add `AudioRecord.getRoutedDevice` and a Windows default-device query in P1-07 |

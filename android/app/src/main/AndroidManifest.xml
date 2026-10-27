@@ -31,7 +31,34 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- attenlume:// deep links for shortcuts and assistant routines
+                 [P0-13, FR-HF-05]. ShortcutChannel.kt passes them to Dart. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="attenlume"/>
+            </intent-filter>
+            <!-- Launcher shortcuts [P0-13, FR-HF-04]. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+        <!-- Quick Settings tile [P0-13, FR-HF-04]. -->
+        <service
+            android:name=".RecordTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_record"
+            android:label="@string/tile_record_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
+        <!-- Deep links go to ShortcutChannel, not to Flutter's router. -->
+        <meta-data
+            android:name="flutter_deeplinking_enabled"
+            android:value="false" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
