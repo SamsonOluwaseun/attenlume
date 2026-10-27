@@ -76,7 +76,7 @@ RecordingService  (one instance, mutex around every command, FR-REC-09)
 
 ## 6. Dependencies (audited in P0-01)
 
-Data pulled from pub.dev on 27 October 2026 with `tool/pub_audit.py` (latest version, publish date, verified publisher, licence and platform tags from pub.dev analysis). "Tested" versions get pinned in `pubspec.yaml` during P0-02 and listed in section 7 once a build and tests pass with them. Licences are pub.dev's detected licence. The full review is P0-08.
+Data pulled from pub.dev on 27 October 2026 with `tool/pub_audit.py` (latest version, publish date, verified publisher, licence and platform tags from pub.dev analysis). "Tested" versions get pinned in `pubspec.yaml` during P0-02 and listed in section 7 once a build and tests pass with them. Licences are pub.dev's detected licence. The full review was P0-08: `THIRD_PARTY_NOTICES.md` and ADR-007.
 
 Toolchain: Flutter 3.47.8 stable, Dart 3.13.7. Every package below accepts Dart 3.13.
 
@@ -184,6 +184,7 @@ Versions from `pubspec.lock` on `main` after P0-02. "Tested" means `flutter anal
 | record | 7.1.2 (record_windows 2.3.0, record_android 2.2.0, record_ios 2.1.1) | Windows: encoder query true, no capture device in RDP session (P0-06). Android and iOS: builds only | 2026-10-27 |
 | crypto | 3.0.8 | Streaming SHA-256 in folder export tests (P0-06) | 2026-10-27 |
 | integration_test (dev, SDK) | Flutter 3.47.8 | P0-06 harness on Windows desktop | 2026-10-27 |
+| yaml (dev) | 3.1.4 | Reads `pubspec.lock` in `tool/licence_audit.dart` (P0-08). Already in the lock through `hooks` | 2026-10-27 |
 
 Build notes: Gradle installed CMake 3.22.1 into the Android SDK on the first APK build. Montserrat static TTFs (400, 500, 600, 700) come from the upstream Montserrat Project repo (`JulietaUla/Montserrat`, `fonts/ttf`), because the Google Fonts repo now ships only the variable font. SHA-256:
 
@@ -208,6 +209,10 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/data/filesystem/m4a_inspector.dart`: reads codec, channels, sample rate, duration and bitrates from a finished M4A by walking box headers. Loads only `moov`. Rejects files without `moov`.
 - `lib/data/filesystem/folder_export.dart`: streaming copy with SHA-256, partial folder then rename, no overwrite, `checksums.sha256`, `verifyChecksums`. Seed of P1-21.
 - `lib/spikes/`: spike harnesses. Not wired into the app UI (ADR-006).
+
+### 8.2 Added in P0-08
+
+- `tool/licence_audit.dart`: reads `pubspec.lock`, `.dart_tool/package_config.json` and each package's licence file, works out which packages are reachable from the app's `dependencies`, and writes `THIRD_PARTY_NOTICES.md`. `--check` exits 1 if the file is stale or a package in the app is copyleft or unrecognised. Native components, fonts and brand assets are a hand-written section in the same tool.
 
 ## 9. Open risks
 
