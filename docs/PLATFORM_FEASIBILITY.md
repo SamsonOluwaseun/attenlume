@@ -25,7 +25,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | AAC-LC at 32, 48, 64 kbps mono | P0-06, P0-12 | unverified | unverified | **not available per docs**, plugin source picks the nearest supported rate (2.6.1). On-device bitrate **blocked** | Windows encoder minimum is 96 kbps. AAC-LC encoder present on build host: `isEncoderSupported(aacLc)` true |
 | Export to user-chosen folder | P0-06 | unverified | unverified | **partial**: streaming copy, SHA-256 verify and no-overwrite pass on the build host (unit tests). Folder picker not built yet (P1-21) | `lib/data/filesystem/folder_export.dart` |
 | Bluetooth mic routing and fallback | P0-07 | unverified | unverified | unverified | Needs headset and lapel mic |
-| 90-minute low-spec recording: memory, size, battery | P0-10 | unverified | unverified | unverified | No figures until measured |
+| 90-minute low-spec recording: memory, size, battery | P0-10 | **blocked: needs real device** (harness ready; locked part expected silent until P1-11) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.4.2) | `integration_test/p0_10_long_run_test.dart`, manual steps MT-19. No figures until measured |
 | Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | **pass** (Windows probe, preflight, disk-full cleanup, streaming folder and ZIP exports with bounded RAM; see 2.12) | Real RSS measured: delta 10.3 MB (folder), 5.6 MB (ZIP) on a 1 GiB file |
 | Per-segment profile switch, observed bitrate | P0-12 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.3.1) | `integration_test/p0_12_profile_switch_test.dart`, manual steps MT-18. Switch logic tested with fakes only |
 | Start recording from App Intent (iOS) or Quick Settings tile (Android) | P0-13 | unverified | unverified | n/a | Phase 2 feasibility only |
@@ -119,6 +119,23 @@ Built on the Windows build host. **Nothing has run on a phone.** Every result be
 - **Android expectation:** with no foreground service (P1-11), Android 9 and later give a backgrounded app silence from the microphone, so the background part is expected to be flat. Rerun P0-04 on Android after P1-11. Audio focus is requested with `AndroidAudioUsage.media` and speech content, so a ringing call should arrive as focus loss (interruption began).
 - **iOS expectation:** with `UIBackgroundModes: audio` and a `playAndRecord` session activated in the foreground, recording should continue when locked. `record_ios` 2.1.1 also manages the audio session by default (read from its source: `m_manageAudioSession = true` in `Recorder.swift`), which may replace our category and options when recording starts. If the run shows that, turn it off through the plugin's `ios.manageAudioSession` call in `RecordCaptureEngine` (ADR-013).
 - Unit tests with fakes: `test/spikes/background_recording_spike_test.dart` (10 tests). They prove the harness logic, not the platform.
+
+### 2.4.2 Spike P0-10 harness (27 October 2026)
+
+Built on the Windows build host. **No audio was captured and no device figures exist.** Nothing below is a measured memory, size or battery figure.
+
+- Harness: `LongRunSpike` (`lib/spikes/long_run_spike.dart`) runs the real `RecordingService` with `RecordCaptureEngine` for `P0_10_MINUTES` (default 90). Every `P0_10_SAMPLE_SECONDS` (default 60) it logs process RSS (`ProcessInfo.currentRss`, whole app process), the on-disk size of the open segment file, the input level and the battery. Each sample is printed as a CSV row during the run, so a run the OS kills still leaves a trail. Report: RSS before start, first, last and peak; least-squares RSS slope in MB per hour after a 5-minute warm-up; mean RSS of the first and last third; minutes recorded against requested; whole-file kbps against requested, MB per hour and per 8 hours; intervals where the open file did not grow; flat-signal samples; battery drop per hour. JSON, CSV and Markdown, saved next to the audio. Observations only, no verdict (ADR-015).
+- Battery: Windows reads `GetSystemPowerStatus` (https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getsystempowerstatus) through `dart:ffi`. Android and iOS answer "unknown" until P1-13 adds a channel, so the tester notes the battery percentage by hand at the start and end.
+- Rolling segments are not built yet (P1-05), so a 90-minute run writes **one** 90-minute segment today. Re-run after P1-05 to see the 10-minute roll and its effect on memory.
+- Android: without the P1-11 foreground service the locked part of the run is expected to be silent or stopped (see 2.4.1). The first Android run measures the unlocked app; the AT-REC-01 locked run waits for P1-11.
+- Run on the build host (Windows 11 Pro 26200, Remote Desktop session, `-d windows`, `P0_10_MINUTES=1`, `P0_10_SAMPLE_SECONDS=10`): start failed with `PlatformException(Record, null, No audio recording device was found., null)`. One `damaged` row (96 kbps requested), no samples. Battery: unknown (`GetSystemPowerStatus` reports no system battery on this PC). **Blocked**, same cause as P0-06 and P0-12.
+- Unit tests with fakes: `test/spikes/long_run_spike_test.dart` (18). They prove the sampling, trend maths and report, not the platform.
+
+| Platform | Device, RAM and OS | Minutes recorded | RSS start / end / peak MB | RSS slope MB/h | MB per hour | Battery % per hour | Result |
+|---|---|---|---|---|---|---|---|
+| Android | not run | | | | | | blocked: needs real device |
+| iOS | not run | | | | | | blocked: needs Mac and iPhone |
+| Windows | build host, RDP | 0 | | | | | blocked: no capture device |
 
 ### 2.5 iOS background recording and interruptions
 

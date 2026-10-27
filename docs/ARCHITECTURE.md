@@ -228,6 +228,11 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `RecordingService.changeProfile` (FR-QUAL-04, ADR-014): while recording, goes through `switchingSegment`, ends the segment with reason `quality_change` and starts a new one with the new profile. A refused profile restarts with the previous one and returns `declined` with a reason. While paused, only the activity override changes. A successful change is stored as `activity.recording_profile_override`.
 - `lib/spikes/profile_switch_spike.dart`: records one segment per profile through `changeProfile`, reinspects every file and reports requested, declared, payload and whole-file bitrate, deviation, MB per hour and the gap per switch. Device test `integration_test/p0_12_profile_switch_test.dart` (MT-18).
 
+### 8.5 Added in P0-10
+
+- `lib/platform/diagnostics/`: `MemoryProbe` with `ProcessMemoryProbe` (`ProcessInfo` RSS and peak), `BatteryProbe` with `WindowsBatteryProbe` (`GetSystemPowerStatus` through `dart:ffi`) and `UnknownBatteryProbe` (Android and iOS until P1-13). ADR-015.
+- `lib/spikes/long_run_spike.dart`: records for a fixed time through `RecordingService`, samples RSS, open-file size, level and battery, and reports the RSS trend, file rate, MB per hour and battery drain. Device test `integration_test/p0_10_long_run_test.dart` (MT-19).
+
 ## 9. Open risks
 
 | Risk | Where | Mitigation |

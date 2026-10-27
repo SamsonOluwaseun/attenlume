@@ -304,6 +304,25 @@ Test results on phase-0/P0-12-profile-switch-spike (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-10 90-minute low-spec run spike harness
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 291 passed.
+- Picked P0-10 over P1-05 because the agent prompt puts Phase 0 first and P0-10's dependency (P0-04) is blocked-on-device.
+- `lib/platform/diagnostics/`: `MemoryProbe` and `ProcessMemoryProbe` (`ProcessInfo` RSS and peak), `BatteryProbe`, `WindowsBatteryProbe` (`GetSystemPowerStatus` through `dart:ffi`) and `UnknownBatteryProbe` (Android and iOS until P1-13).
+- `LongRunSpike` (`lib/spikes/long_run_spike.dart`): runs the real `RecordingService` for a fixed time, samples RSS, on-disk size of the open file, level and battery once a minute, prints each sample as a CSV row, and reports the RSS slope after a 5-minute warm-up, first and last third means, peak, whole-file kbps, MB per hour and per 8 hours, stalled intervals, flat samples and battery drain. JSON, CSV and Markdown. Observations only.
+- Device test `integration_test/p0_10_long_run_test.dart` (Android, iOS, Windows) and manual steps MT-19 in `TEST_PLAN.md`.
+- ADR-015 recorded. `PLATFORM_FEASIBILITY.md` 1 and 2.4.2, `TEST_PLAN.md` and `ARCHITECTURE.md` 8.5 updated. No new packages.
+- **No audio captured.** The device test was run on the build host with `-d windows` for 1 minute: start failed with "No audio recording device was found." (Remote Desktop session). Battery unknown, the PC reports no system battery. P0-10 is blocked: needs real device on all three platforms.
+
+Test results on phase-0/P0-10-long-run-spike (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 309 passed, 0 failed (18 new, P0-10, in `test/spikes/long_run_spike_test.dart`).
+- `integration_test/p0_10_long_run_test.dart -d windows`: failed as expected, no microphone (blocked, not a code fault).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -322,4 +341,5 @@ Test results on phase-0/P0-12-profile-switch-spike (Windows 11 build host):
 | P1-04 | done (real capture unverified) | RecordingService, state machine, serial lock, media paths, 28 new tests (265 total). ADR-012 |
 | P0-04 | blocked: needs real device | Harness, device test and MT-17 steps built, 10 unit tests with fakes pass (275 total). ADR-013. Android rerun needed after P1-11 |
 | P0-12 | blocked: needs real device | Harness, `RecordingService.changeProfile`, device test and MT-18 steps built, 16 unit tests with fakes pass (291 total). ADR-014. Windows run on build host blocked (no capture device) |
-| P0-05, P0-07, P0-10, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these |
+| P0-10 | blocked: needs real device | Harness, memory and battery probes, device test and MT-19 steps built, 18 unit tests with fakes pass (309 total). ADR-015. Windows run on build host blocked (no capture device) |
+| P0-05, P0-07, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these |
