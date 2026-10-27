@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** draft from task P0-01, 27 October 2026, Claude Code (Opus 5.5). No app code exists yet. This describes the planned design. Update it as each task lands.
+**Status:** draft from task P0-01, updated in P0-02 (27 October 2026, Claude Code, Opus 5.5). The scaffold exists (section 8). The rest describes the planned design. Update it as each task lands.
 **Spec:** `docs/BUILD_GUIDE.md` sections 9 and 12. Platform evidence: `docs/PLATFORM_FEASIBILITY.md`.
 
 ---
@@ -163,12 +163,40 @@ A = Android, I = iOS, W = Windows.
 
 ## 7. Tested versions
 
-None yet. P0-02 fills this table from `pubspec.lock` after the first passing `flutter analyze`, `flutter test`, Windows build and Android build.
+Versions from `pubspec.lock` on `main` after P0-02. "Tested" means `flutter analyze` clean, `flutter test` passing (Dart VM, Windows host), `flutter build windows --debug` and `flutter build apk --debug` succeeding. No real-device run yet: every platform is **unverified** at runtime, except that the Windows debug build was launched on the build PC and opened a window titled "Attenlume". iOS has not been built (no Mac).
 
 | Package | Version | Tested on | Date |
 |---|---|---|---|
+| Flutter / Dart | 3.47.8 / 3.13.7 | Windows 11 Pro 10.0.26200 build host | 2026-10-27 |
+| flutter_riverpod (riverpod) | 3.4.3 | Unit and widget tests, Windows and APK builds | 2026-10-27 |
+| drift | 2.35.3 | In-memory DB tests, schema verifier | 2026-10-27 |
+| drift_flutter | 0.3.1 | Builds only (on-device open not yet exercised) | 2026-10-27 |
+| sqlite3 | 3.8.0 | Build hooks bundle SQLite for tests and both builds | 2026-10-27 |
+| path_provider | 2.1.6 | Builds only | 2026-10-27 |
+| path | 1.9.1 | Builds only | 2026-10-27 |
+| uuid | 4.6.0 | Builds only | 2026-10-27 |
+| drift_dev (dev) | 2.35.2 | Codegen, `make-migrations`, `schema generate` | 2026-10-27 |
+| build_runner (dev) | 2.17.1 | Codegen | 2026-10-27 |
+| flutter_lints (dev) | 6.0.0 | `flutter analyze` | 2026-10-27 |
+| mocktail (dev) | 1.0.5 | Added, not used yet | 2026-10-27 |
 
-## 8. Open risks
+Build notes: Gradle installed CMake 3.22.1 into the Android SDK on the first APK build. Montserrat static TTFs (400, 500, 600, 700) come from the upstream Montserrat Project repo (`JulietaUla/Montserrat`, `fonts/ttf`), because the Google Fonts repo now ships only the variable font. SHA-256:
+
+```text
+3e8abe50c44c82e2242e97d1ec8c0d385c4890cdc50447bcdb8605c81a38cfb2  Montserrat-Regular.ttf
+dae47428bb041f9716604e0e07b5b0c8585b3bdd8183362f75c69fe7bb3cfaf4  Montserrat-Medium.ttf
+b4e1563393d73fdff491a869441245aef31add2ec03d9c97a6dae4de07c52fd0  Montserrat-SemiBold.ttf
+bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bold.ttf
+```
+
+## 8. Code layout so far (P0-02)
+
+- `lib/app/theme/tokens.dart`: generated from `design/tokens.json` by `tool/gen_tokens.dart`. Never edit by hand.
+- `lib/app/theme/app_theme.dart`: `AppTheme.light()`, `.dark()`, `.live()` and the `AttenlumeColors` theme extension.
+- `lib/data/local_database/app_database.dart`: Drift `AppDatabase`, schema v1 with `app_settings` only. DateTimes stored as UTC ISO 8601 text (`build.yaml`). Foreign keys on.
+- `drift_schemas/`: schema dumps for migration tests. `test/data/local_database/generated/`: generated schema helpers.
+
+## 9. Open risks
 
 | Risk | Where | Mitigation |
 |---|---|---|
