@@ -245,6 +245,45 @@ class ConferenceRepository {
     );
   }
 
+  /// Aggregates activity count, total recorded duration and storage used for this conference (FR-ACT-01).
+  Future<ConferenceStats> stats(String id) async {
+    final row = await _statsQuery(id).getSingle();
+    return _parseStats(row);
+  }
+
+  /// Watches aggregate stats for this conference (FR-ACT-01).
+  Stream<ConferenceStats> watchStats(String id) {
+    return _statsQuery(id).watchSingle().map(_parseStats);
+  }
+
+  Selectable<QueryRow> _statsQuery(String id) {
+    return _db.customSelect(
+      'SELECT '
+      '(SELECT COUNT(*) FROM activities a WHERE a.conference_id = ?1) AS activity_count, '
+      '(SELECT COALESCE(SUM(s.duration_ms), 0) FROM recording_segments s '
+      '  JOIN activities a ON a.id = s.activity_id '
+      '  WHERE a.conference_id = ?1) AS total_duration_ms, '
+      '((SELECT COALESCE(SUM(s.bytes), 0) FROM recording_segments s '
+      '   JOIN activities a ON a.id = s.activity_id '
+      '   WHERE a.conference_id = ?1) + '
+      ' (SELECT COALESCE(SUM(p.bytes), 0) FROM photos p '
+      '   JOIN activities a ON a.id = p.activity_id '
+      '   WHERE a.conference_id = ?1)) AS total_storage_bytes',
+      variables: [Variable.withString(id)],
+      readsFrom: {_db.activities, _db.recordingSegments, _db.photos},
+    );
+  }
+
+  ConferenceStats _parseStats(QueryRow row) {
+    return ConferenceStats(
+      activityCount: row.read<int>('activity_count'),
+      totalRecordedDuration: Duration(
+        milliseconds: row.read<int>('total_duration_ms'),
+      ),
+      totalStorageBytes: row.read<int>('total_storage_bytes'),
+    );
+  }
+
   /// Deletes the conference and, by cascade, its goals, activities, media
   /// rows and export jobs. Files on disk are not touched here.
   Future<void> delete(String id) =>

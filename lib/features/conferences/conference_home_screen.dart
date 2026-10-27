@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme/app_theme.dart';
 import '../../app/theme/tokens.dart';
 import '../../data/repositories/repository_providers.dart';
+import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
+import '../../presentation/components/activity_card.dart';
+import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
+import 'activity_detail_sheet.dart';
 import 'conference_delete_dialog.dart';
 import 'conference_wizard_screen.dart';
+import 'start_activity_sheet.dart';
 
-/// Conference Home landing screen (FR-ACT-01, FR-CONF-01, FR-CONF-08).
+/// Conference Home landing screen (FR-ACT-01, FR-ACT-02, FR-ACT-03).
 ///
-/// Shows conference details, role, goals, outputs, and the dominant
-/// "Start activity" action.
+/// Shows conference details, activity counts, total recorded time, local
+/// storage used, dominant "Start activity" action, quick-start type buttons,
+/// chronological activity list, and conference goals/outputs.
 class ConferenceHomeScreen extends ConsumerStatefulWidget {
   const ConferenceHomeScreen({super.key, required this.conferenceId});
 
@@ -26,6 +33,8 @@ class ConferenceHomeScreen extends ConsumerStatefulWidget {
 class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
   Conference? _conference;
   List<Goal> _goals = [];
+  ConferenceStats _stats = ConferenceStats.zero;
+  List<ActivitySummary> _activities = [];
   bool _isLoading = true;
 
   @override
@@ -35,19 +44,29 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
   }
 
   Future<void> _loadConference() async {
-    final repo = ref.read(conferenceRepositoryProvider);
-    final conf = await repo.get(widget.conferenceId);
+    final confRepo = ref.read(conferenceRepositoryProvider);
+    final actRepo = ref.read(activityRepositoryProvider);
+
+    final conf = await confRepo.get(widget.conferenceId);
     if (conf == null) {
       if (mounted) {
         Navigator.of(context).pop();
       }
       return;
     }
-    final goals = await repo.goalsFor(widget.conferenceId);
+
+    final goals = await confRepo.goalsFor(widget.conferenceId);
+    final stats = await confRepo.stats(widget.conferenceId);
+    final activities = await actRepo.listSummariesForConference(
+      widget.conferenceId,
+    );
+
     if (mounted) {
       setState(() {
         _conference = conf;
         _goals = goals;
+        _stats = stats;
+        _activities = activities;
         _isLoading = false;
       });
     }
@@ -96,9 +115,53 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     await _loadConference();
   }
 
+  Future<void> _quickStartActivity(String typeKey) async {
+    final actRepo = ref.read(activityRepositoryProvider);
+    final type = await actRepo.typeByKey(typeKey);
+    if (type == null) return;
+
+    try {
+      final activity = await actRepo.create(
+        conferenceId: widget.conferenceId,
+        typeId: type.id,
+      );
+      await _loadConference();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Started ${activity.title}')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not start activity: $e')));
+    }
+  }
+
+  Future<void> _openStartActivitySheet() async {
+    final created = await StartActivitySheet.show(
+      context,
+      conferenceId: widget.conferenceId,
+    );
+    if (created != null && mounted) {
+      await _loadConference();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Started ${created.title}')));
+    }
+  }
+
+  void _openActivityDetails(ActivitySummary summary) {
+    ActivityDetailSheet.show(
+      context,
+      summary: summary,
+      timezone: _conference?.timezone ?? 'Europe/London',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final attenlume = theme.extension<AttenlumeColors>();
 
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -203,7 +266,7 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                     ),
                   ],
 
-                  // Conference Header Card
+                  // Conference Header Card (FR-ACT-01)
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(TokenSpace.space4),
@@ -291,22 +354,190 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
 
                   const SizedBox(height: TokenSpace.space4),
 
+                  // Conference Stats Card (FR-ACT-01: activity count, recorded time, storage used)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: TokenSpace.space4,
+                        horizontal: TokenSpace.space3,
+                      ),
+                      child: Row(
+                        children: [
+                          _buildStatColumn(
+                            theme,
+                            attenlume,
+                            label: 'Activities',
+                            value: '${_stats.activityCount}',
+                          ),
+                          Container(
+                            width: 1,
+                            height: 36,
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                          _buildStatColumn(
+                            theme,
+                            attenlume,
+                            label: 'Recorded',
+                            value: formatDuration(_stats.totalRecordedDuration),
+                          ),
+                          Container(
+                            width: 1,
+                            height: 36,
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                          _buildStatColumn(
+                            theme,
+                            attenlume,
+                            label: 'Storage used',
+                            value: formatStorageBytes(_stats.totalStorageBytes),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: TokenSpace.space4),
+
                   // Dominant Start Activity Action (FR-ACT-01)
-                  FilledButton.icon(
+                  AttenlumeButton(
                     key: const Key('start-activity-button'),
-                    icon: const Icon(Icons.mic, size: 24),
-                    label: const Text('Start activity'),
-                    onPressed: () {
-                      // Activity start flow arrives in P1-02.
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Activity capture will be enabled in P1-02.',
+                    variant: AttenlumeButtonVariant.primary,
+                    label: 'Start activity',
+                    leading: const Icon(Icons.mic_rounded, size: 24),
+                    onPressed: _openStartActivitySheet,
+                  ),
+
+                  const SizedBox(height: TokenSpace.space4),
+
+                  // Quick-start buttons (FR-ACT-02: Session, Conversation, Exhibit, Reflection)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Quick start',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: TokenSpace.space2),
+                      Wrap(
+                        spacing: TokenSpace.space2,
+                        runSpacing: TokenSpace.space2,
+                        children: [
+                          _buildQuickStartButton(
+                            label: 'Session',
+                            icon: Icons.slideshow_rounded,
+                            keyName: 'quick-start-session',
+                            typeKey: 'session',
+                          ),
+                          _buildQuickStartButton(
+                            label: 'Conversation',
+                            icon: Icons.handshake_rounded,
+                            keyName: 'quick-start-conversation',
+                            typeKey: 'business_conversation',
+                          ),
+                          _buildQuickStartButton(
+                            label: 'Exhibit',
+                            icon: Icons.store_rounded,
+                            keyName: 'quick-start-exhibit',
+                            typeKey: 'exhibit',
+                          ),
+                          _buildQuickStartButton(
+                            label: 'Reflection',
+                            icon: Icons.lightbulb_rounded,
+                            keyName: 'quick-start-reflection',
+                            typeKey: 'personal_reflection',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: TokenSpace.space4),
+
+                  // Chronological Activity List (FR-ACT-03)
+                  if (_activities.isEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(TokenSpace.space6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainer,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(TokenRadius.radiusMd),
+                        ),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.mic_none_rounded,
+                            size: 40,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: TokenSpace.space3),
+                          Text(
+                            'Nothing captured yet. Start your first activity when the session begins.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Text(
+                          'Activities',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
-                  ),
+                        const SizedBox(width: TokenSpace.space2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(TokenRadius.radiusPill),
+                            ),
+                          ),
+                          child: Text(
+                            '${_activities.length}',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: TokenSpace.space3),
+                    for (final summary in _activities)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: TokenSpace.space3,
+                        ),
+                        child: ActivityCard.fromSummary(
+                          key: Key('activity-card-${summary.activity.id}'),
+                          summary: summary,
+                          formattedStartTime: formatTimeOfDayInTimezone(
+                            summary.activity.actualStart ??
+                                summary.activity.plannedStart ??
+                                summary.activity.createdAt,
+                            conf.timezone,
+                          ),
+                          formattedDuration: formatDuration(summary.duration),
+                          onOpen: () => _openActivityDetails(summary),
+                        ),
+                      ),
+                  ],
 
                   const SizedBox(height: TokenSpace.space4),
 
@@ -420,6 +651,67 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStatColumn(
+    ThemeData theme,
+    AttenlumeColors? attenlume, {
+    required String label,
+    required String value,
+  }) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style:
+                attenlume?.stat ??
+                theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: TokenSpace.space1),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStartButton({
+    required String label,
+    required IconData icon,
+    required String keyName,
+    required String typeKey,
+  }) {
+    return OutlinedButton.icon(
+      key: Key(keyName),
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, TokenSize.tapMin),
+        padding: const EdgeInsets.symmetric(
+          horizontal: TokenSpace.space3,
+          vertical: TokenSpace.space2,
+        ),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(
+            Radius.circular(TokenRadius.radiusPill),
+          ),
+        ),
+      ),
+      onPressed: () => _quickStartActivity(typeKey),
     );
   }
 }

@@ -81,3 +81,50 @@ class Activity {
   final DateTime createdAt;
   final DateTime updatedAt;
 }
+
+/// The visual state displayed in a [StatusPill] for an activity (DESIGN_GUIDE StatusPill).
+enum StatusPillStatus {
+  recording('Recording'),
+  paused('Paused'),
+  interrupted('Interrupted'),
+  saved('Saved'),
+  exported('Exported'),
+  verified('Verified'),
+  private('Private'),
+  draft('Draft');
+
+  const StatusPillStatus(this.label);
+  final String label;
+}
+
+/// Rich activity summary for activity list and timeline views (FR-ACT-03).
+///
+/// Combines the activity metadata with its resolved type, effective recording
+/// profile, recording state, duration, and asset counts.
+class ActivitySummary {
+  const ActivitySummary({
+    required this.activity,
+    required this.type,
+    required this.effectiveProfile,
+    required this.statusPillStatus,
+    required this.duration,
+    required this.photoCount,
+    required this.bookmarkCount,
+    this.segmentCount = 0,
+    this.audioBytes = 0,
+    this.photoBytes = 0,
+    this.hasActiveRecording = false,
+  });
+
+  final Activity activity;
+  final ActivityType type;
+  final RecordingProfile effectiveProfile;
+  final StatusPillStatus statusPillStatus;
+  final Duration duration;
+  final int photoCount;
+  final int bookmarkCount;
+  final int segmentCount;
+  final int audioBytes;
+  final int photoBytes;
+  final bool hasActiveRecording;
+}
