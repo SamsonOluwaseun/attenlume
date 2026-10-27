@@ -655,6 +655,7 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - Before changes: `flutter analyze` clean, `flutter test` 681 passed.
 - ADR-037: `Mp4SampleTrimmer` rewrites the MP4 sample tables in Dart and copies the kept AAC frames byte for byte (no re-encode), on every platform, behind `AudioTrimmer`. `PermanentTrimService` plans pieces per segment from merged cuts, writes and verifies one file per kept piece, then swaps the rows in one transaction (`MediaAssetRepository.replaceWithTrimmed`), shifting stored offsets if the first segment now starts later. Originals no other row names move to `audio/originals/`; a second dialog offers Remove or Keep. Waveform summaries are sliced. Review screen: "Apply trims permanently" in the trim panel, confirm dialog with removed and kept time and space needed, then the originals dialog.
 - Tests: 22 new (10 trimmer and sample table, 9 service, 3 widget). `flutter test` 703 passed, `flutter analyze` clean, `dart format` clean, no new packages.
+- `integration_test/app_capture_journey_test.dart` on Windows passed. Windows release preview (`build_windows_preview.ps1 -SkipTests`) and `flutter build apk --debug` succeed on `main` after the merge.
 - Real recordings from Android, iOS and Windows have not been trimmed: tests use synthetic MP4 files shaped like them. MT-26 written.
 
 ## Task status
