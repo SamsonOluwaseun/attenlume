@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/conference.dart';
 import '../local_database/database_provider.dart';
 import 'activity_repository.dart';
 import 'conference_repository.dart';
@@ -33,3 +34,21 @@ final cutRangeRepositoryProvider = Provider<CutRangeRepository>(
 final exportJobRepositoryProvider = Provider<ExportJobRepository>(
   (ref) => ExportJobRepository(ref.watch(appDatabaseProvider)),
 );
+
+final activeConferencesProvider = StreamProvider<List<Conference>>((ref) {
+  return ref.watch(conferenceRepositoryProvider).watchAll();
+});
+
+final recentConferencesProvider = FutureProvider<List<Conference>>((ref) {
+  return ref.watch(conferenceRepositoryProvider).getRecent(limit: 3);
+});
+
+final allConferencesProvider = StreamProvider<List<Conference>>((ref) {
+  return ref
+      .watch(conferenceRepositoryProvider)
+      .watchAll(includeArchived: true);
+});
+
+final allConferencesFutureProvider = FutureProvider<List<Conference>>((ref) {
+  return ref.watch(conferenceRepositoryProvider).getAll(includeArchived: true);
+});

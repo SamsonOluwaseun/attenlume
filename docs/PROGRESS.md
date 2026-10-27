@@ -149,6 +149,31 @@ Test results on phase-0/P0-14-trimming (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
 - flutter build windows --release and flutter build apk --debug: both built successfully.
 
+## 2026-10-27, Google Antigravity: P1-01 conference wizard and quick start
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 179 passed.
+- Quick start inline on WelcomeScreen (`lib/features/onboarding/welcome_screen.dart`, FR-CONF-01, FR-CONF-06): creates a named conference in under 30 seconds with exactly one text field and one button interaction. Shows recording policy notice, inherits global default profile (Balanced), detects device timezone, stamps policy acknowledgement, and navigates directly to `ConferenceHomeScreen`.
+- Device timezone detection (`lib/domain/services/device_timezone.dart`, FR-CONF-02): added `flutter_timezone` 5.1.1 (Apache 2.0, audited in P0-01) with 500 ms timeout and graceful offline fallback to `Europe/London` and `Etc/UTC`. Available IANA timezones loaded offline from bundled `timezone` package.
+- Full conference set-up wizard and editor (`lib/features/conferences/conference_wizard_screen.dart`, FR-CONF-02 to 08):
+  - Section 1: Details (name required, venue, start/end dates with date pickers, timezone dropdown, description).
+  - Section 2: Role (`RoleType` choice chips: attendee, speaker, exhibitor, student, journalist, custom; free-text organisational role).
+  - Section 3: Goals (3 priority goals with tap-to-populate example chips; unlimited optional goals with add/remove actions).
+  - Section 4: Expected outputs (multi-select filter chips for all 7 `RequestedOutput` values).
+  - Section 5: Default recording profile (`RadioGroup` with Economy 32 kbps, Balanced 48 kbps, Enhanced 64 kbps, showing MB/h estimates).
+  - Section 6: Recording policy notice with required acknowledgement checkbox.
+- Conference home landing screen (`lib/features/conferences/conference_home_screen.dart`, FR-ACT-01): displays conference metadata, role, priority goals, outputs, profile badge, archive status banner, and dominant "Start activity" action.
+- Conference list & archive (`lib/features/conferences/conference_list_screen.dart`, FR-CONF-08, NFR-02): tabbed views for active and archived conferences, cards with dates/venue/profile, and FAB to create new conferences.
+- Deletion confirmation dialog (`lib/features/conferences/conference_delete_dialog.dart`, FR-CONF-08): queries `deletionSummary` and presents itemized counts of activities, segments, audio MB, photos, photo MB, and bookmarks before confirming deletion.
+- Architecture Decision Record: ADR-009 recorded in `docs/DECISIONS.md`.
+
+Test results on phase-1/P1-01-conference-wizard (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 190 passed, 0 failed (11 new, P1-01).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool: clean.
+- flutter build windows --release and flutter build apk --debug: both built successfully.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -161,3 +186,4 @@ Test results on phase-0/P0-14-trimming (Windows 11 build host):
 | P0-08 | done (licence choice awaits owner) | `THIRD_PARTY_NOTICES.md` generated and tested (117 total), ADR-007 recommends Apache 2.0 |
 | P0-11 | done | Windows probe, thresholds, preflight, folder and ZIP streaming exports pass 33 tests (150 total). 1 GiB RAM benchmark: 10.3 MB / 5.6 MB peak RSS delta. ADR-008 |
 | P0-14 | done | Cut-range maths, split logic, cuts.json manifest, M4A container trimmer, failure rollback pass 29 tests (179 total). ADR-003 |
+| P1-01 | done | Quick start (<30 s, 1 field + 1 button), wizard, role, goals, outputs, profile, policy notice, archive, deletion summary pass 11 tests (190 total). ADR-009 |

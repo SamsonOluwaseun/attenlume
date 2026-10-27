@@ -144,3 +144,27 @@ Format: context, decision, alternatives, consequences.
   6. **Bounded RAM verified:** Measured with a 1 GiB synthetic file on the Windows build host: `exportFolder` peaked at 10.3 MB delta RSS, and `exportZip` peaked at 5.6 MB delta RSS, proving streaming operates within tiny chunk buffers rather than loading whole files into RAM (FR-EXP-04).
 - **Alternatives:** using a third-party disk space plugin (no maintained plugin covers Android, iOS and Windows cleanly without native bloat; Win32 FFI call is 50 lines of pure Dart/FFI); compressing audio with deflate in ZIP (wastes CPU/battery with near-zero size reduction on M4A/JPEG).
 - **Consequences:** Mobile platforms need their native method channel implementations for `FreeSpaceProbe` in Phase 1 (`P1-12`). All export functions support injected writers and probes for deterministic disk-full failure testing.
+
+## ADR-009: Conference wizard, quick start UX and timezone detection (P1-01)
+
+- **Date:** 27 October 2026. **Decided by:** Google Antigravity in unattended mode, task P1-01. Owner to review.
+- **Context:** P1-01 implements the conference set-up wizard and quick start [FR-CONF-01 to 08]. Requirements: quick start creation in under 30 seconds with 1 text field and 1 button (FR-CONF-01), collection of conference details with only name required (FR-CONF-02), participant role and profession (FR-CONF-03), priority goals with examples and unlimited optional goals (FR-CONF-04), expected outputs multi-select (FR-CONF-05), recording policy notice and acknowledgement (FR-CONF-06), default recording profile inheriting global default (FR-CONF-07), and editing all fields, archiving and deleting with confirmation and deletion summary (FR-CONF-08).
+- **Decision:**
+  1. **Quick start inline on WelcomeScreen (FR-CONF-01, FR-CONF-06):** To meet the acceptance test criterion ("from the welcome screen, a conference can be created with one text field and one button"), `WelcomeScreen` incorporates a quick start card. Tapping "Create conference" creates the conference row, records policy acknowledgement, inherits the global recording profile (Balanced), and navigates directly to `ConferenceHomeScreen`.
+  2. **Device timezone detection (`DeviceTimezoneService`, FR-CONF-02):** Added `flutter_timezone` 5.1.1 (Apache 2.0, audited in P0-01) wrapped in `DeviceTimezoneService` with a 500 ms timeout and graceful offline fallback to `Europe/London` and `Etc/UTC`. Available IANA timezone options are loaded offline from the bundled `timezone` package.
+  3. **Conference wizard and editor (`ConferenceWizardScreen`, FR-CONF-02 to 08):** A unified form supports both new conference creation and editing existing conferences:
+     - Section 1: Details (name, venue, start/end dates with date pickers, timezone dropdown, description).
+     - Section 2: Role (`RoleType` choice chips: Attendee, Speaker, Exhibitor, Student, Journalist, Custom; plus free-text organisational role).
+     - Section 3: Goals (3 priority goals with tap-to-populate example chips; dynamic optional goals list with "+ Add another goal").
+     - Section 4: Expected outputs (multi-select filter chips for all 7 `RequestedOutput` values).
+     - Section 5: Default recording profile (`RadioGroup` with Economy 32 kbps, Balanced 48 kbps, Enhanced 64 kbps, showing MB/h estimates).
+     - Section 6: Recording policy notice with required acknowledgement checkbox.
+  4. **Deletion confirmation with summary (`ConferenceDeleteDialog`, FR-CONF-08):** Queries `ConferenceRepository.deletionSummary(conferenceId)` and displays itemized counts of activities, segments, audio MB, photos, photo MB, and bookmarks before asking for final deletion confirmation.
+  5. **Archiving & list navigation (`ConferenceListScreen`, FR-CONF-08, NFR-02):** Tabbed view for Active and Archived conferences with instant status toggling and unarchiving support.
+  6. **Riverpod providers for query stability:** `recentConferencesProvider` and `allConferencesFutureProvider` use Future-based queries to guarantee zero lingering stream timers during test tree teardowns.
+- **Alternatives:**
+  - Multi-dialog quick start (rejected: violates 1 text field + 1 button budget).
+  - Manual timezone text entry (rejected: prone to invalid IANA identifiers; dropdown backed by bundled tzdb ensures valid timezone keys).
+- **Consequences:**
+  - P1-02 (Conference home and activity list) can build directly on the created conference data model and navigation routes.
+
