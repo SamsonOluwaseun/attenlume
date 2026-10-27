@@ -12,6 +12,7 @@ import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
 import '../../data/repositories/repository_support.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
+import '../../platform/audio_route/audio_route_probe.dart';
 import '../../shared/utilities/serial_lock.dart';
 import '../models/enums.dart';
 import 'capture_settings.dart';
@@ -77,6 +78,42 @@ class ProfileChangeResult {
   String toString() => 'ProfileChangeResult(${outcome.name}, $reason)';
 }
 
+/// Result of [RecordingService.routeChanged].
+enum RouteChangeOutcome {
+  /// The open segment ended with reason `route_change` and a new one is
+  /// recording from the input now in use (FR-REC-03, FR-REC-07).
+  switched,
+
+  /// The input in use is the one the open segment started with.
+  unchanged,
+
+  /// Nothing is recording. The next segment reads the route when it
+  /// starts.
+  notRecording,
+
+  /// No input could take over. The segment was saved and the recorder is
+  /// in [RecordingState.userResumeRequired] (FR-REC-07: pause with a
+  /// prompt). See [RouteChangeResult.reason].
+  resumeRequired,
+}
+
+/// What [RecordingService.routeChanged] did, with the routes either side.
+class RouteChangeResult {
+  const RouteChangeResult(this.outcome, {this.from, this.to, this.reason});
+
+  final RouteChangeOutcome outcome;
+
+  /// The input the open segment was recorded from. Null when unknown.
+  final InputRoute? from;
+
+  /// The input the new segment records from. Null when unknown.
+  final InputRoute? to;
+  final String? reason;
+
+  @override
+  String toString() => 'RouteChangeResult(${outcome.name}, $from -> $to)';
+}
+
 /// SHA-256 of a file, streamed off the UI isolate (BUILD_GUIDE 12.4).
 Future<String> sha256OfFileInIsolate(File file) {
   final path = file.path;
@@ -101,6 +138,7 @@ class RecordingService {
     required this._media,
     required this._mediaRoot,
     required this._platform,
+    this._routes = const NoAudioRouteProbe(),
     this._inspector = const M4aInspector(),
     this._clock = systemUtcClock,
     this._hashFile = sha256OfFileInIsolate,
@@ -111,6 +149,7 @@ class RecordingService {
   final MediaAssetRepository _media;
   final Future<Directory> Function() _mediaRoot;
   final CapturePlatform _platform;
+  final AudioRouteProbe _routes;
   final M4aInspector _inspector;
   final UtcClock _clock;
   final Future<String> Function(File) _hashFile;
@@ -254,6 +293,64 @@ class RecordingService {
     });
   });
 
+  /// Rolls to a new segment when the input in use has changed (FR-REC-03,
+  /// FR-REC-07) [P0-07].
+  ///
+  /// Call on any audio device event. Reads the active input; if it differs
+  /// from the one the open segment started with, or [force] is true (for
+  /// platforms that do not report the active input), the open segment ends
+  /// with reason `route_change` and a new one starts on whatever input the
+  /// system now gives. The running encoder is never redirected. If no
+  /// input can start, the segment is saved and the recorder waits in
+  /// [RecordingState.userResumeRequired] for the user.
+  Future<RouteChangeResult> routeChanged({bool force = false}) => _lock.run(
+    () async {
+      if (_status.state != RecordingState.recording) {
+        return const RouteChangeResult(RouteChangeOutcome.notRecording);
+      }
+      final from = _open!.route;
+      final now = await _readRoute();
+      if (!force && now == from) {
+        return RouteChangeResult(
+          RouteChangeOutcome.unchanged,
+          from: from,
+          to: now,
+        );
+      }
+      final activityId = _status.activityId!;
+      final profile = _status.profile!;
+      return _guard(() async {
+        _moveTo(_copyStatus(RecordingState.switchingSegment));
+        await _finishSegment(SegmentEndReason.routeChange);
+        final conferenceId = (await _activities.get(activityId))!.conferenceId;
+        final error = await _tryBeginSegment(activityId, conferenceId, profile);
+        if (error == null) {
+          return RouteChangeResult(
+            RouteChangeOutcome.switched,
+            from: from,
+            to: _open!.route,
+          );
+        }
+        final reason =
+            'No microphone could take over ($error). Connect one and '
+            'tap resume.';
+        _moveTo(
+          RecordingStatus(
+            state: RecordingState.userResumeRequired,
+            activityId: activityId,
+            profile: profile,
+            errorMessage: reason,
+          ),
+        );
+        return RouteChangeResult(
+          RouteChangeOutcome.resumeRequired,
+          from: from,
+          reason: reason,
+        );
+      });
+    },
+  );
+
   /// Stops and saves the current recording. Returns the saved activity ID,
   /// or null if nothing was held (repeat stops are harmless).
   Future<String?> stop() => _lock.run(() async {
@@ -343,6 +440,7 @@ class RecordingService {
     await file.parent.create(recursive: true);
 
     final settings = effectiveCaptureSettings(profile, _platform);
+    final route = await _readRoute();
     final segment = await _media.startSegment(
       activityId: activityId,
       filePath: relative,
@@ -352,6 +450,7 @@ class RecordingService {
       channelCount: settings.channelCount,
       sampleRateHz: settings.sampleRateHz,
       requestedBitrateBps: settings.bitrateBps,
+      inputRoute: route?.key,
     );
     try {
       await _engine.start(
@@ -372,7 +471,7 @@ class RecordingService {
       );
       return error;
     }
-    _open = _OpenSegment(segment.id, file);
+    _open = _OpenSegment(segment.id, file, route);
     _moveTo(
       RecordingStatus(
         state: RecordingState.recording,
@@ -381,9 +480,20 @@ class RecordingService {
         segmentId: segment.id,
         segmentSequence: segment.sequence,
         segmentStartUtc: segment.startUtc,
+        inputRoute: route?.key,
       ),
     );
     return null;
+  }
+
+  /// The input in use, or null when the platform does not say or the
+  /// probe fails. Never guessed (ADR-016).
+  Future<InputRoute?> _readRoute() async {
+    try {
+      return await _routes.activeInput();
+    } on Object {
+      return null;
+    }
   }
 
   /// Stops the encoder and records what the file really holds
@@ -494,8 +604,9 @@ class RecordingService {
 }
 
 class _OpenSegment {
-  _OpenSegment(this.segmentId, this.file);
+  _OpenSegment(this.segmentId, this.file, this.route);
 
   final String segmentId;
   final File file;
+  final InputRoute? route;
 }

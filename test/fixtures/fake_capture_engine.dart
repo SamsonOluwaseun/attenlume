@@ -23,6 +23,16 @@ class FakeCaptureEngine implements AudioCaptureEngine {
   /// ignores the request, as a fixed-rate encoder would.
   int Function(CaptureRequest request) deliveredBitrateBps = (_) => 48000;
 
+  /// Channels and sample rate the finished file holds for a request. The
+  /// default gives what was asked for.
+  int Function(CaptureRequest request) deliveredChannels = (r) =>
+      r.channelCount;
+  int Function(CaptureRequest request) deliveredSampleRateHz = (r) =>
+      r.sampleRateHz;
+
+  /// What [listInputs] reports.
+  List<CaptureInput> inputs = const [];
+
   /// When it returns an error for a request, [start] throws it, as an
   /// encoder refusing that setting would.
   Object? Function(CaptureRequest request) refuse = (_) => null;
@@ -43,7 +53,7 @@ class FakeCaptureEngine implements AudioCaptureEngine {
   bool get isCapturing => _path != null;
 
   @override
-  Future<List<CaptureInput>> listInputs() async => const [];
+  Future<List<CaptureInput>> listInputs() async => inputs;
 
   @override
   Future<bool> supportsAacLc() async => true;
@@ -78,6 +88,8 @@ class FakeCaptureEngine implements AudioCaptureEngine {
     final delivered = deliveredBitrateBps(_request!);
     await File(path).writeAsBytes(
       buildM4a(
+        channels: deliveredChannels(_request!),
+        sampleRateHz: deliveredSampleRateHz(_request!),
         includeMoov: finaliseValidFile,
         durationUnits: 48000 * durationSeconds,
         avgBitrateBps: delivered,
