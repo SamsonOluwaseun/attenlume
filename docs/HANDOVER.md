@@ -1,11 +1,16 @@
 # Handover
 
-Date and agent: 27 October 2026, Google Antigravity, unattended run
+Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended session after the Antigravity P1-12 run
 Branch: main (merged from `phase-1/P1-12-storage-budget`)
 Current task ID: P1-12 (done). Next: P1-13
 Status: done
 
 ## Done in this session
+
+- Owner-requested Android preview (not a build guide task): MIT `LICENSE`, release signing with a keystore outside the repo, universal release APK, README download link, repo pushed to `https://github.com/SamsonOluwaseun/attenlume`. ADR-007 accepted (MIT), ADR-027. Details in `docs/PROGRESS.md`.
+- To ship a new APK: raise the build number in `pubspec.yaml`, run `flutter build apk --release` on the PC that holds the keystore, and attach it to a new GitHub Release as `attenlume-android.apk` with `SHA256SUMS.txt`. Never use `--split-per-abi` for this channel (ADR-027).
+
+Earlier in the day (Antigravity, P1-12):
 
 - Completed **P1-12: StorageBudgetService and live budget UI** [FR-STO-01 to 04, FR-UI-07]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` and ADR-026.
   - Native platform free space channels:
@@ -98,7 +103,7 @@ None failing in `flutter test` (all 578 tests pass). Device tests unchanged from
 - **ADR-021:** Non-camera interruptions are logged as `system` ("a call or another app") because Android audio focus and iOS interruptions do not say what caused them.
 - **ADR-020:** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing.
 - **ADR-019:** Segments roll every 10 minutes (the build guide minimum).
-- **Project licence:** ADR-007 recommends Apache 2.0. Waiting for your choice between Apache 2.0 and MIT, the copyright holder ("Samlytics Data Services") and whether to exclude brand assets.
+- **Signing key (ADR-027):** back up `%USERPROFILE%ttenlume-signing\` (keystore and `key.properties.backup` with the password) somewhere safe off this PC. Losing it means testers must uninstall, and lose their data, to update.
 - **Device testing:** Outstanding for real devices (MT-16 to MT-22).
 
 ## Commands to run

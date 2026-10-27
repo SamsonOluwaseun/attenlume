@@ -111,7 +111,7 @@ Format: context, decision, alternatives, consequences.
 
 ## ADR-007: Dependency licence review and project licence (P0-08)
 
-- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-08. **Status: proposed.** The licence choice waits for the owner (build guide: "decided after the dependency licence review").
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-08. **Status: accepted (MIT), 27 October 2026.** The owner chose MIT over the recommended Apache 2.0 when publishing the repository.
 - **Context:** The build guide asks for MIT or Apache 2.0, chosen after reviewing every dependency and model licence. The review covers `pubspec.lock` (115 packages: 108 from pub.dev, 7 from the Flutter SDK), native code fetched at build time, fonts and brand assets. No AI models are used yet (Phase 2).
 - **Findings:**
   1. Of the 115 packages, 77 are reachable from the app's `dependencies` and 38 only from `dev_dependencies`. Packages in the app: BSD-3-Clause 62, MIT 9, Apache-2.0 4, BSD-2-Clause 1, Flutter engine bundle 1. **No copyleft (GPL, LGPL, MPL) and no unrecognised licence**, in the app or in the tools.
@@ -129,6 +129,7 @@ Format: context, decision, alternatives, consequences.
   3. Brand assets in `assets/brand/` and `design/` are excluded from the project licence ("all rights reserved, Samlytics Data Services"). Forks must replace them.
   4. **No `LICENSE` file is added in this task.** The owner asked to choose after P0-08. Once confirmed, add the standard Apache 2.0 text as `LICENSE`, a short `NOTICE` (copyright Samlytics Data Services, pointer to `THIRD_PARTY_NOTICES.md`, brand exclusion) and set the licence in `README.md`.
 - **Alternatives:** MIT (shorter and more familiar, but no patent grant and silent on trademarks; fully acceptable if the owner prefers simplicity); a hand-written notices file (drifts from the lock file); counting only packages that survive tree shaking (needs a release build per platform, and is fragile).
+- **Owner decision (27 October 2026):** MIT. `LICENSE` holds the standard MIT text, Copyright (c) 2026 Samlytics Data Services, with a closing note that the brand assets are not covered. No `NOTICE` file (MIT has no NOTICE convention). Points 1 and 3 above stand. Point 4 is replaced by this decision.
 - **Consequences:** a new package fails `flutter test` until the notices file is regenerated, which forces a licence look at every addition. Any future copyleft dependency fails the test and needs an ADR. Model licences (Phase 2) need their own section when models are added.
 
 ## ADR-008: Free-space probing, storage thresholds and streaming export (P0-11)
@@ -510,3 +511,14 @@ Format: context, decision, alternatives, consequences.
   - *BroadcastReceiver for notification actions*: Rejected. `PendingIntent.getService` routes actions directly to the already-running foreground service without registering extra manifest receivers.
 - **Consequences:** Offline background capture on Android is fully backed by an ongoing foreground service and notification with interactive actions. Verified locally with Windows release and Android debug APK builds. Real device validation (MT-17) remains outstanding.
 
+## ADR-027: Android release signing and APK preview on GitHub Releases
+
+- **Date:** 27 October 2026. **Decided by:** the owner, with Claude Code (Opus 5.5) in an attended session.
+- **Context:** The owner wants testers to install the Android app from a link in `README.md` before a Play developer account exists. Release builds were signed with the debug key, which differs per machine. Moving testers from a debug-signed APK to a properly signed one would force an uninstall, and uninstalling deletes their recordings.
+- **Decision:**
+  1. Release builds are signed with an upload keystore kept outside the repository (`%USERPROFILE%ttenlume-signingttenlume-release.jks`, RSA 4096, alias `attenlume`). `android/key.properties` points to it and is gitignored (`android/.gitignore`). `android/app/build.gradle.kts` uses it when present and falls back to the debug key otherwise, so builds on other machines and in CI still work.
+  2. The preview is distributed as one universal release APK (`flutter build apk --release`, all ABIs) attached to a GitHub Release as `attenlume-android.apk`, with `SHA256SUMS.txt`. The README links to `releases/latest/download/attenlume-android.apk`, so the link always serves the newest release.
+  3. Universal rather than per-ABI APKs: one link works on every device, and per-ABI builds add 1000 times the ABI number to the version code, which would block later installs of a universal APK. Always ship the universal APK on this channel.
+  4. Every release raises the build number in `pubspec.yaml` so updates install over the old version and keep data.
+- **Alternatives:** Google Play internal testing (no warnings, automatic updates, needs a US$25 Play account; still the plan for wider testing, `RELEASE_PLAN.md` 4.2); Firebase App Distribution (needs a Google account per tester); debug APK (about 190 MB, debug-signed).
+- **Consequences:** Losing the keystore or its password means testers must uninstall, and lose data, to move to a new key. The owner must back up the keystore folder somewhere safe outside this PC. Play App Signing can adopt this key as the upload key later. Sideloading always shows Android's unknown-sources and Play Protect prompts. No real-device install has been observed yet.

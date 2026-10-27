@@ -568,6 +568,18 @@ Test results on `phase-1/P1-12-storage-budget` (Windows 11 build host):
 - `flutter build windows --release` and `flutter build apk --debug`: both built locally. Device free space verification remains unverified on physical phones.
 
 
+## 27 October 2026: Android preview release, signing and MIT licence (Claude Code, Opus 5.5, attended)
+
+Owner request: publish to `https://github.com/SamsonOluwaseun/attenlume` under MIT, with a README link that installs the app on Android.
+
+- Before changes: `flutter test` 578 passed.
+- `LICENSE` (MIT, Copyright (c) 2026 Samlytics Data Services, brand assets excluded). ADR-007 accepted as MIT. `tool/licence_audit.dart` wording updated and `THIRD_PARTY_NOTICES.md` regenerated (129 packages, 0 flagged).
+- Release signing: upload keystore created outside the repo, `android/key.properties` (gitignored) points to it, `android/app/build.gradle.kts` uses it with debug-key fallback. ADR-027.
+- `flutter build apk --release`: universal APK built, 63.9 MB, signer `CN=Samlytics Data Services` (SHA-256 aa55cabbf285ce80592bfc20253b36e2bed37b01028a6f95675e680c14b17315), checked with `apksigner verify`.
+- README: "Try it on Android" section with the `releases/latest/download/attenlume-android.apk` link and install steps. `RELEASE_PLAN.md` 4.2 updated.
+- After changes: `flutter analyze` no issues, `flutter test` 578 passed, `dart format` clean.
+- Not yet observed: installing the APK on a real phone or tablet.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -598,4 +610,4 @@ Test results on `phase-1/P1-12-storage-budget` (Windows 11 build host):
 | P1-10 | done (device capture unverified) | Recording screen UI, 96px record button, debounce, tabular timer, level meter, mic test, photo, bookmarks, quick thought, 26 new tests (530 total). ADR-024 |
 | P1-11 | done (real device unverified) | Native Android foreground service (type microphone), ongoing notification, chronometer, actions (pause/resume, stop, bookmark, photo), 20 new tests (550 total). ADR-025 |
 | P1-12 | done (device storage unverified) | StorageBudgetService, rolling write rate, 30s checks, 100 MB hard reserve stop (storage_low), native Android/iOS free space channels, live StorageMeter compact/expanded UI, 28 new tests (578 total). ADR-026 |
-
+| Android preview | done (device install unverified) | MIT `LICENSE`, release signing, universal release APK 63.9 MB, README download link. ADR-007 accepted, ADR-027 |

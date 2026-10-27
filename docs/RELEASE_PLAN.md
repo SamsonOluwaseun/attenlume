@@ -59,8 +59,9 @@ Workflow: `.github/workflows/ci.yml` (P0-02). Dormant until the owner adds a Git
 
 - Development: debug APK from CI or a local build, installed by hand on test phones.
 - Testing: Google Play internal testing track once a Play developer account exists.
-- Release: Google Play. An APK on GitHub Releases is also possible for people without Play.
-- Signing: release builds need an upload keystore. It must never be committed. CI would read it from repository secrets, which do not exist yet.
+- Preview: universal release APK on GitHub Releases as `attenlume-android.apk`, linked from `README.md` (ADR-027).
+- Release: Google Play. The GitHub Releases APK stays for people without Play.
+- Signing: release builds use the upload keystore outside the repo, through the gitignored `android/key.properties` (ADR-027). It must never be committed. CI would read it from repository secrets, which do not exist yet.
 - Play listing: data safety form stating no data collected, and a justification for the microphone foreground service.
 - Status: `flutter build apk --debug` works on the build PC. Not installed on any phone.
 
