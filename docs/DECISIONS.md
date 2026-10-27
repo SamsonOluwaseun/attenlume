@@ -63,3 +63,18 @@ Format: context, decision, alternatives, consequences.
   12. **Export enums.** `audio_mode` is `original`, `trimmed`, `original_with_cuts` or `none` (for text or photo scopes). `state` is `pending`, `running`, `completed`, `failed` or `cancelled`. The scope JSON shape is set in P1-21.
 - **Alternatives:** redefining v1 (simpler history, but no tested upgrade path); a separate mapping layer between Drift rows and domain models (more code, no gain yet); storing the effective profile on every activity at creation (needs a new column the guide does not list).
 - **Consequences:** every schema change is a new version with a dump and a migration test. Renaming an enum key needs a data migration.
+
+## ADR-006: Capture interface, file inspection and folder export (P0-06)
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-06. Owner to review.
+- **Context:** P0-06 needs Windows capture, a way to know what the encoder really wrote, and export to a folder. The `record` package does not report output bitrate, and its Windows code silently picks the nearest supported AAC setting. The build host's microphone is not reachable from the agent's Remote Desktop session, so the real-capture run is blocked.
+- **Decision:**
+  1. Capture goes through `AudioCaptureEngine` (`lib/platform/audio_capture/`). `RecordCaptureEngine` wraps `record` 7.1.2. The request (`CaptureRequest`) and the result are kept apart.
+  2. Segment quality fields (FR-QUAL-06) come from the finished file, read by our own pure-Dart `M4aInspector`: codec from the `esds` AudioSpecificConfig, channels and sample rate from the `mp4a` entry, duration from `mdhd`. `observed_bitrate_bps` is the whole-file figure (bytes x 8 / duration), as ARCHITECTURE 3 says. The declared and payload bitrates are reported alongside in spikes. No media library is added for this.
+  3. A file without a `moov` box is not finalised and is never marked good (FR-REC-08). Crash recovery (P1-08) can reuse the inspector.
+  4. `effectiveCaptureSettings` requests 48 kHz mono everywhere, the profile target on phones and at least 96 kbps on Windows (ADR-002). The sample rate is a starting point until P0-12.
+  5. Folder export (`exportFolder`) streams each file through SHA-256, writes `<name>.tmp` then renames, builds the export in `<folder>.partial` and renames it when complete, refuses to overwrite and re-hashes every copy. On failure only the partial copy is removed. This is the seed of P1-21. The user-chosen folder picker is left to P1-21.
+  6. Spike harnesses live in `lib/spikes/` so integration tests can run them on devices. They are not reachable from the app UI and can be removed after Phase 0.
+  7. Added `crypto` 3.0.8 (dart.dev, BSD-3, pure Dart) and the SDK's `integration_test`.
+- **Alternatives:** trust the requested bitrate (rejected: the Windows plugin changes it silently); a media library such as `media_kit` or FFmpeg to probe files (large native dependency and licence review for one small job); copy with `File.copy` (no hash in the same pass, no partial-folder protection).
+- **Consequences:** every format we write must stay parseable by `M4aInspector` (M4A/AAC now). If the owner later chooses another container, the inspector needs extending. Windows capture remains unverified until MT-16 is run in a console session or on a Surface.

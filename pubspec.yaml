@@ -41,9 +41,13 @@ dependencies:
   path: ^1.9.1
   uuid: ^4.6.0
   timezone: ^0.11.2
+  record: ^7.1.2
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
