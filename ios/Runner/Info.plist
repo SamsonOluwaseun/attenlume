@@ -60,6 +60,8 @@
 	</array>
 	<key>FlutterDeepLinkingEnabled</key>
 	<false/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attenlume lists the photos you took during an activity so you can choose which to add to it. It copies only the photos you pick and never changes your library.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Attenlume takes photos of slides and posters for the activity you are capturing. Photos stay on this device unless you export them.</string>
 	<key>NSMicrophoneUsageDescription</key>

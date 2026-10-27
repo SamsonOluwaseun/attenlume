@@ -103,7 +103,7 @@ Toolchain: Flutter 3.47.8 stable, Dart 3.13.7. Every package below accepts Dart 
 | audioplayers | 6.8.1 | 2026-06-27 | blue-fire.xyz | MIT | A, I, W | Review playback (P1-17, ADR-034). Replaces the planned `just_audio` + `just_audio_windows` pair |
 | camera | 0.12.1 | 2026-09-03 | flutter.dev | BSD-3 | A, I | Photos |
 | camera_windows | 0.3.0+1 | 2026-10-21 | flutter.dev | BSD-3 | W | Photos on Windows, add explicitly |
-| photo_manager | 3.12.0 | 2026-08-09 | fluttercandies.com | Apache-2.0 | A, I | Gallery time-window import |
+| photo_manager | 3.12.0 | 2026-08-09 | fluttercandies.com | Apache-2.0 | A, I | Gallery time-window import (P1-15, ADR-035) behind `GallerySource`. Windows uses `FolderGallerySource` (folder pick, EXIF time) |
 | image | 4.12.0 | 2026-10-11 | taosengine.com | MIT | all | Resize, thumbnails, in an isolate |
 | archive | 4.5.2 | 2026-10-13 | taosengine.com | MIT | all | Streaming ZIP with ZIP64 |
 | audio_session | 0.2.4 | Adopted in P0-04 behind `AudioInterruptionSource` (ADR-013). Unit tests use a fake. Android and iOS: builds only (APK), iOS not built | 2026-10-27 |
@@ -325,7 +325,7 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 | No Mac: iOS unbuildable here | all iOS | Prepare code, mark iOS blocked until the owner has a Mac or CI with signing |
 | Windows AAC bitrate silently snapped to 96 kbps by `record_windows` | P0-06 | Store bitrate read from the file, never the request (ADR-006) |
 | No Windows playback package from a big publisher | P0-06 | `PlaybackEngine` interface, `audioplayers` fallback |
-| No Windows gallery API | P1-15 | Folder pick plus EXIF time filter |
+| No Windows gallery API | P1-15 | Folder pick plus EXIF time filter (`FolderGallerySource`, ADR-035) |
 | A shortcut cannot start the microphone from the background | P0-13 | Default opens the app first (tile, Start intent), ADR-018. Direct mode measured in MT-22 |
 | Hand-edited `project.pbxproj` and unbuilt Swift for App Intents | P0-13 | First Mac build checks it; the files are self-contained and can be re-added in Xcode |
 | Android and Windows packages do not report which mic is recording | P0-07 | Cut a boundary on every device change (ADR-016); add `AudioRecord.getRoutedDevice` and a Windows default-device query in P1-07 |

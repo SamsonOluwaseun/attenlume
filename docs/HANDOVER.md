@@ -1,34 +1,37 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), overnight relay
-Branch: main (merged from `phase-1/P1-17-player-timeline`)
-Current task ID: P1-17 (done). Next: P1-15
+Branch: main (merged from `phase-1/P1-15-gallery-import`)
+Current task ID: P1-15 (done). Next: P1-18
 Status: done
 
 ## Done in this session
 
-- ADR-034 (P1-17 done): review screen opened with "Play and review" in the activity details. Player joins an activity's segments (play/pause, tap or drag to scrub, 15 s skips in audio time, speeds 0.75 to 2), timeline strip with segments, gaps, interruptions, photos and bookmarks at their offsets, paged waveform (2-minute pages that read only their bytes), Key moments list that jumps to bookmarks and photos.
-- `audioplayers` 6.8.1 behind `AudioPlaybackEngine`; `WaveformSummaryRecorder` writes `waveforms/<segment_id>.wave` while each segment records.
-- 28 new tests; `flutter test` 648 passed, analyze and format clean, notices regenerated. Windows release and Android debug builds succeed. J2 journey test passes on Windows.
+- ADR-035 (P1-15 done): "Import photos taken during this activity" in the activity details. Lists gallery photos from the activity's recorded span (or actual start and end) with a margin (none, 2 min default, 5, 10), marks likely duplicates (unticked) and large files, asks "Import anyway?" for either, and imports the chosen photos as `gallery_import` with their gallery time, so offsets line up with the recording. Originals are copied, never moved or changed.
+- `GallerySource` interface in `lib/platform/gallery/`: `PhotoManagerGallerySource` (Android, iOS, `photo_manager` 3.12.0, Apache-2.0) and `FolderGallerySource` (Windows: folder pick, EXIF `DateTimeOriginal`, modified-time fallback, background isolate). `PhotoCaptureService.importFile` now shared with manual import.
+- Android `READ_MEDIA_IMAGES` and `READ_MEDIA_VISUAL_USER_SELECTED`, iOS `NSPhotoLibraryUsageDescription`.
+- 17 new tests; `flutter test` 665 passed (twice), analyze and format clean, notices regenerated (147 packages, 0 flagged). Windows release and Android debug builds succeed. J2 journey test passes on Windows.
 
 ## Left to do on this task
 
-- Nothing in code. Device checks in MT-23 (playback, seeking accuracy in M4A, speed, gap handling, lock screen). The design board's Highlights / Timeline / Photos tabs can come with P1-18, which adds trim and split to `ReviewScreen`.
+- Nothing in code. Device checks in MT-24 (phone permissions including partial access, HEIC on iPhone and Android, Windows Camera Roll folder).
 
 ## Exact next step
 
-Start **P1-15 Gallery import by time window** on branch `phase-1/P1-15-gallery-import` (FR-PHO-05 in `docs/BUILD_GUIDE.md`): "Import photos taken during this activity" lists camera-roll photos between the activity's start and end with a 2-minute margin, confirm before import, warn on large or duplicate files. Check `photo_manager` (planned, Apache-2.0, no Windows support: on Windows fall back to the existing `file_selector` import, ADR-031) before adopting it; reuse `PhotoCaptureService.importFiles` for copying, compression and thumbnails. Then P1-18 (trim with undo and split) builds on `lib/features/playback_review/review_screen.dart` and `lib/domain/services/cut_range_math.dart`. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tool\build_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
+Start **P1-18 Non-destructive trim with undo, split activity** on branch `phase-1/P1-18-trim-split` (FR-REV-04, FR-REV-05 in `docs/BUILD_GUIDE.md`). Build on `lib/features/playback_review/review_screen.dart`, `lib/domain/services/cut_range_math.dart`, `lib/domain/services/activity_split_service.dart` and `lib/data/repositories/cut_range_repository.dart` (inspect them first; much of the maths and storage already exists from P0-14 and P0-09). Trim start and end, exclude middle ranges stored in `cut_ranges` with soft-delete undo, show cuts on the timeline strip, and "Split at playhead" moving media and bookmarks by offset. The design board's Highlights / Timeline / Photos tabs can come with it. Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tooluild_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish.
 
 ## Files touched
 
-New: `lib/domain/services/review_timeline.dart`, `lib/domain/services/waveform_summary_recorder.dart`, `lib/data/filesystem/waveform_summary.dart`, `lib/platform/audio_playback/audio_playback_engine.dart`, `lib/platform/audio_playback/audioplayers_playback_engine.dart`, `lib/features/playback_review/` (`review_screen.dart`, `review_player_controller.dart`, `timeline_strip.dart`, `waveform_pages.dart`, `waveform_view.dart`), tests `test/domain/review_timeline_test.dart`, `test/domain/waveform_summary_recorder_test.dart`, `test/data/filesystem/waveform_summary_test.dart`, `test/features/playback_review/`, fixture `test/fixtures/fake_playback_engine.dart`.
-Changed: `pubspec.yaml`, `pubspec.lock`, `THIRD_PARTY_NOTICES.md`, `lib/data/filesystem/media_paths.dart`, `lib/features/capture/recording_providers.dart`, `lib/features/conferences/activity_detail_sheet.dart`, docs (ARCHITECTURE, PLATFORM_FEASIBILITY, TEST_PLAN, DECISIONS, PROGRESS, HANDOVER).
+New: `lib/platform/gallery/gallery_source.dart`, `lib/platform/gallery/photo_manager_gallery_source.dart`, `lib/platform/gallery/folder_gallery_source.dart`, `lib/domain/services/gallery_import_service.dart`, `lib/features/photos/gallery_import_sheet.dart`, tests `test/domain/gallery_import_service_test.dart`, `test/platform/folder_gallery_source_test.dart`, `test/features/photos/gallery_import_sheet_test.dart`, fixture `test/fixtures/fake_gallery_source.dart`.
+Changed: `lib/domain/services/photo_capture_service.dart` (`importFile`), `lib/features/photos/activity_photos_section.dart` (new button, `timezone`), `lib/features/conferences/activity_detail_sheet.dart`, `android/app/src/main/AndroidManifest.xml`, `ios/Runner/Info.plist`, `pubspec.yaml`, `pubspec.lock`, `THIRD_PARTY_NOTICES.md`, `windows/flutter/` generated files, docs (ARCHITECTURE, PLATFORM_FEASIBILITY, TEST_PLAN, DECISIONS, PROGRESS, HANDOVER).
 
 ## Failing or skipped tests
 
-None failing: `flutter test` 648 passed. The P0 device spikes and MT-23 still need real hardware.
+None failing: `flutter test` 665 passed. The P0 device spikes, MT-23 and MT-24 still need real hardware.
 
 ## Open questions for the owner
+
+- **ADR-035 (new):** gallery import needs Android `READ_MEDIA_IMAGES`. Google Play only allows it for apps whose core use needs broad photo access; before a Play listing, decide whether to argue the case or switch Android to the system photo picker (no time-window filter). HEIC originals on Android are skipped (iOS hands over a JPEG). Duplicates are judged by time (within 1 s), large means over 15 MB or 24 MP. Say if you want different rules.
 
 - **ADR-034 (new):** playback uses `audioplayers` (one publisher for Android, iOS and Windows) instead of the planned `just_audio` + `just_audio_windows`. The waveform is drawn from the input level sampled while recording (200 ms), not decoded from the audio, so it shows loudness rather than exact peaks, and recordings made before this change show a flat line. Say if you want decoded waveforms (needs a native decoder or FFmpeg).
 - **ADR-033 (new):** Ctrl+B adds a bookmark only while the Attenlume window has focus. A system-wide hotkey needs a new native package (for example `hotkey_manager`) and is left for Phase 2 or P1-27. Notes are shown as plain Markdown text, not rendered. Say if you want either sooner.

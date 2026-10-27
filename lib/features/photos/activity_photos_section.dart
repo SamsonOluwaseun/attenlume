@@ -9,6 +9,7 @@ import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/media.dart';
 import '../capture/recording_providers.dart';
+import 'gallery_import_sheet.dart';
 
 /// Lets the user pick image files to import. Tests replace it.
 final photoFilePickerProvider = Provider<Future<List<String>> Function()>(
@@ -35,10 +36,14 @@ class ActivityPhotosSection extends ConsumerStatefulWidget {
   const ActivityPhotosSection({
     super.key,
     required this.activityId,
+    this.timezone = 'UTC',
     this.onChanged,
   });
 
   final String activityId;
+
+  /// Conference timezone for the gallery import window (FR-PHO-05).
+  final String timezone;
 
   /// Called after photos are imported or edited.
   final VoidCallback? onChanged;
@@ -100,6 +105,31 @@ class _ActivityPhotosSectionState extends ConsumerState<ActivityPhotosSection> {
     }
   }
 
+  Future<void> _importTaken() async {
+    setState(() => _importing = true);
+    try {
+      final result = await GalleryImportSheet.show(
+        context,
+        activityId: widget.activityId,
+        timezone: widget.timezone,
+      );
+      if (result == null || !mounted) return;
+      final n = result.saved.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${n == 1 ? '1 photo' : '$n photos'} imported'
+            '${result.skipped > 0 ? ', ${result.skipped} could not be read' : ''}.',
+          ),
+        ),
+      );
+      await _load();
+      widget.onChanged?.call();
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
   /// Returns the label ('' for none), or null if the user cancelled.
   Future<String?> _askLabel(int count) => showDialog<String>(
     context: context,
@@ -146,6 +176,15 @@ class _ActivityPhotosSectionState extends ConsumerState<ActivityPhotosSection> {
               label: const Text('Import photos'),
             ),
           ],
+        ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            key: const Key('activity-photos-import-taken-button'),
+            onPressed: _importing ? null : _importTaken,
+            icon: const Icon(Icons.schedule_outlined),
+            label: const Text('Import photos taken during this activity'),
+          ),
         ),
         if (_photos.isEmpty)
           Text(
