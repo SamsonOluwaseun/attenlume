@@ -26,6 +26,24 @@ IconData activityTypeIconData(String? iconKey) {
       return Icons.people_rounded;
     case 'lightbulb':
       return Icons.lightbulb_rounded;
+    case 'tag':
+      return Icons.label_rounded;
+    case 'sparkles':
+      return Icons.auto_awesome_rounded;
+    case 'coffee':
+      return Icons.coffee_rounded;
+    case 'camera':
+      return Icons.camera_alt_rounded;
+    case 'school':
+      return Icons.school_rounded;
+    case 'folder':
+      return Icons.folder_rounded;
+    case 'book':
+      return Icons.menu_book_rounded;
+    case 'chat':
+      return Icons.chat_bubble_outline_rounded;
+    case 'help':
+      return Icons.help_outline_rounded;
     default:
       return Icons.label_rounded;
   }

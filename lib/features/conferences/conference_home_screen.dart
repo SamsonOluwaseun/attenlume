@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_theme.dart';
 import '../../app/theme/tokens.dart';
+import '../../data/local_database/builtin_activity_types.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
@@ -10,6 +11,7 @@ import '../../domain/models/enums.dart';
 import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../activities/consent_check_dialog.dart';
 import 'activity_detail_sheet.dart';
 import 'conference_delete_dialog.dart';
 import 'conference_wizard_screen.dart';
@@ -118,13 +120,23 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
   Future<void> _quickStartActivity(String typeKey) async {
     final actRepo = ref.read(activityRepositoryProvider);
     final type = await actRepo.typeByKey(typeKey);
-    if (type == null) return;
+    if (type == null || !mounted) return;
+
+    RecordingPermissionStatus permissionStatus =
+        RecordingPermissionStatus.unknown;
+    if (consentCheckTypeKeys.contains(typeKey)) {
+      final consent = await ConsentCheckDialog.show(context);
+      if (consent == null || !mounted) return;
+      permissionStatus = consent;
+    }
 
     try {
       final activity = await actRepo.create(
         conferenceId: widget.conferenceId,
         typeId: type.id,
+        recordingPermissionStatus: permissionStatus,
       );
+      if (!mounted) return;
       await _loadConference();
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -150,12 +162,19 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     }
   }
 
-  void _openActivityDetails(ActivitySummary summary) {
-    ActivityDetailSheet.show(
+  Future<void> _openActivityDetails(ActivitySummary summary) async {
+    final res = await ActivityDetailSheet.show(
       context,
       summary: summary,
       timezone: _conference?.timezone ?? 'Europe/London',
     );
+    if (!mounted) return;
+    await _loadConference();
+    if (!mounted) return;
+    if (res is Map && res['deleted'] == true) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Activity deleted')));
+    }
   }
 
   @override

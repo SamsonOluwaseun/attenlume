@@ -101,14 +101,21 @@ class ActivityRepository {
     String? title,
     DateTime? at,
     DateTime? plannedStart,
+    DateTime? actualStart,
+    DateTime? actualEnd,
     List<String> speakerNames = const [],
     String? organisation,
     String? room,
+    String? notesMd,
     List<String> tags = const [],
+    ActivityStatus status = ActivityStatus.draft,
     RecordingPermissionStatus recordingPermissionStatus =
         RecordingPermissionStatus.unknown,
     RecordingProfile? recordingProfileOverride,
     bool? isPrivate,
+    String? contactName,
+    String? contactDetails,
+    String? followUpText,
   }) => _db.transaction(() async {
     final conference = await (_db.select(
       _db.conferences,
@@ -150,12 +157,18 @@ class ActivityRepository {
             speakerNames: speakerNames,
             organisation: Value(organisation),
             room: Value(room),
+            notesMd: Value(notesMd),
             tags: tags,
             plannedStart: Value(plannedStart),
-            status: ActivityStatus.draft,
+            actualStart: Value(actualStart),
+            actualEnd: Value(actualEnd),
+            status: status,
             recordingPermissionStatus: recordingPermissionStatus,
             recordingProfileOverride: Value(recordingProfileOverride),
             isPrivate: isPrivate ?? type.key == reflectionTypeKey,
+            contactName: Value(contactName),
+            contactDetails: Value(contactDetails),
+            followUpText: Value(followUpText),
             createdAt: now,
             updatedAt: now,
           ),
@@ -166,6 +179,17 @@ class ActivityRepository {
   Future<Activity?> get(String id) => (_db.select(
     _db.activities,
   )..where((a) => a.id.equals(id))).getSingleOrNull();
+
+  /// Gets the [ActivitySummary] for [activityId], or null if not found.
+  Future<ActivitySummary?> getSummary(String activityId) async {
+    final activity = await get(activityId);
+    if (activity == null) return null;
+    final summaries = await listSummariesForConference(activity.conferenceId);
+    return summaries.cast<ActivitySummary?>().firstWhere(
+      (s) => s?.activity.id == activityId,
+      orElse: () => null,
+    );
+  }
 
   /// Activities of a conference in chronological order (FR-ACT-03): by
   /// actual start, else planned start, else creation time.
