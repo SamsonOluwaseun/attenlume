@@ -63,7 +63,7 @@ Notes for widget tests: any widget that shows `RecordingProfileSelector` needs `
 ## Commands to run
 
 ```powershell
-cd C:\devttenlume
+cd C:\dev\attenlume
 flutter pub get
 dart run build_runner build
 flutter analyze
