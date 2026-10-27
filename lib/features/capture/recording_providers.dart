@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/services/capture_settings.dart';
+import '../../domain/services/crash_recovery_service.dart';
 import '../../domain/services/interruption_coordinator.dart';
 import '../../domain/services/one_active_coordinator.dart';
 import '../../domain/services/recording_service.dart';
@@ -124,3 +125,19 @@ final oneActiveCoordinatorProvider = Provider<OneActiveCoordinator>((ref) {
     confirmations: ref.watch(triggerConfirmationsProvider),
   );
 });
+
+/// Reconciles the database with segment files (FR-REC-08) [P1-08].
+final crashRecoveryServiceProvider = Provider<CrashRecoveryService>(
+  (ref) => CrashRecoveryService(
+    activities: ref.watch(activityRepositoryProvider),
+    media: ref.watch(mediaAssetRepositoryProvider),
+    mediaRoot: ref.watch(mediaRootProvider),
+    recorderStatus: () => ref.read(recordingServiceProvider).status,
+  ),
+);
+
+/// Runs recovery once per app start. The `CrashRecoveryGate` shows the
+/// result.
+final crashRecoveryReportProvider = FutureProvider<RecoveryReport>(
+  (ref) => ref.watch(crashRecoveryServiceProvider).reconcile(),
+);

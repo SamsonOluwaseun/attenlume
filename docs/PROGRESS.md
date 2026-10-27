@@ -447,6 +447,24 @@ Test results on phase-1/P1-07-interruptions (Windows 11 build host):
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P1-08 crash recovery and reconciliation
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 455 passed.
+- `CrashRecoveryService.reconcile()` (`lib/domain/services/crash_recovery_service.dart`) [FR-REC-08, AT-REC-03]: every `writing` row is checked at its path and, for a partial path, under the final name (ADR-019 rename-before-row case). Parsing files become `recovered` with fields read from the file and their final name; anything else becomes `damaged`, zero span (a gap), file kept under its partial name. Nothing deleted, no rename over an existing file (NFR-07).
+- Open interruption rows closed (next segment start, else their own start). Activities left `active` become `completed`, or `draft` with no audio. The activity the recorder holds is skipped. Unlinked `.m4a` files in activity audio folders are listed and kept.
+- `CrashRecoveryDialog` and `CrashRecoveryGate` (`lib/features/capture/crash_recovery_dialog.dart`): shown once per start when something was recovered; "Carry on recording" through the one-active coordinator when one activity was recording. `AttenlumeApp` wraps the welcome screen in the gate.
+- Repository helpers: `MediaPaths.finalName`, `MediaAssetRepository.openInterruptions` and `segmentPaths`, `ActivityRepository.listByStatus`. `test/app/app_test.dart` overrides the report provider.
+- ADR-022 recorded. `ARCHITECTURE.md` (3, 8.12) and `TEST_PLAN.md` (2.1 to 2.3) updated. No new packages.
+- Not checked on a device: how a real encoder leaves its file after a force-kill (expected: no `moov`, so damaged) and whether the prompt appears on the next launch (MT-13, AT-REC-03). Unverified.
+
+Test results on phase-1/P1-08-crash-recovery (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 481 passed, 0 failed (26 new: 20 in `test/domain/crash_recovery_service_test.dart`, 5 in `test/features/capture/crash_recovery_dialog_test.dart`, 1 in `test/data/filesystem/segment_commit_test.dart`).
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -472,3 +490,4 @@ Test results on phase-1/P1-07-interruptions (Windows 11 build host):
 | P1-05 | done (device timing unverified) | 10-minute roll timer, partial names, flush then rename, 20 new tests (392 total). ADR-019. Interruption rolls come with P1-07 |
 | P1-06 | done (device triggers unverified) | `switchTo`, `OneActiveCoordinator`, prompt dialog, 27 new tests (419 total). ADR-020 |
 | P1-07 | done (device interruptions unverified) | `interrupt`, `interruptionEnded`, `InterruptionCoordinator`, camera and route events, 36 new tests (455 total). ADR-021 |
+| P1-08 | done (device crash unverified) | `CrashRecoveryService`, recovery prompt and gate, 26 new tests (481 total). ADR-022 |

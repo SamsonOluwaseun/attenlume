@@ -1,6 +1,8 @@
 import 'package:attenlume/app/app.dart';
 import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
+import 'package:attenlume/domain/services/crash_recovery_service.dart';
+import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/onboarding/welcome_screen.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +22,12 @@ void main() {
 
   Widget createSubject() {
     return ProviderScope(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        crashRecoveryReportProvider.overrideWith(
+          (ref) async => RecoveryReport.empty,
+        ),
+      ],
       child: const AttenlumeApp(),
     );
   }

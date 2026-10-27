@@ -187,6 +187,16 @@ class MediaAssetRepository {
     _db.recordingSegments,
   )..where((s) => s.state.equalsValue(SegmentState.writing))).get();
 
+  /// Every stored segment path, to find audio files no row names
+  /// (FR-REC-08) [P1-08].
+  Future<Set<String>> segmentPaths() async {
+    final path = _db.recordingSegments.filePath;
+    final rows = await (_db.selectOnly(
+      _db.recordingSegments,
+    )..addColumns([path])).map((r) => r.read(path)!).get();
+    return rows.toSet();
+  }
+
   Future<DateTime?> firstSegmentStart(String activityId) async {
     final first =
         await (_db.select(_db.recordingSegments)
@@ -239,6 +249,10 @@ class MediaAssetRepository {
       updatedAt: Value(_clock()),
     ),
   );
+
+  /// Interruptions with no end, across all activities (FR-REC-08) [P1-08].
+  Future<List<Interruption>> openInterruptions() =>
+      (_db.select(_db.interruptions)..where((i) => i.endUtc.isNull())).get();
 
   Future<List<Interruption>> interruptionsFor(String activityId) =>
       (_db.select(_db.interruptions)
