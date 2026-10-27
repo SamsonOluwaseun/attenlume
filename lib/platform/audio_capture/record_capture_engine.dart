@@ -26,8 +26,10 @@ class RecordCaptureEngine implements AudioCaptureEngine {
   Future<bool> supportsAacLc() =>
       _recorder.isEncoderSupported(AudioEncoder.aacLc);
 
+  /// Asks the user when permission has not been decided yet. On Android
+  /// and iOS that shows the system prompt; on Windows it only checks.
   @override
-  Future<bool> hasPermission() => _recorder.hasPermission(request: false);
+  Future<bool> hasPermission() => _recorder.hasPermission();
 
   @override
   Future<void> start(CaptureRequest request, String path) async {

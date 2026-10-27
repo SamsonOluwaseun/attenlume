@@ -227,6 +227,30 @@ void main() {
       expect(find.text('Undo'), findsOneWidget);
       await disposeService(tester);
     });
+
+    testWidgets(
+      'FR-UI-01 says microphone access is needed when permission is refused',
+      (tester) async {
+        fakeEngine.permission = false;
+        final conf = await t.conference();
+        final act = await t.activity(conf.id, title: 'Session');
+
+        await tester.pumpWidget(
+          buildSubject(activityId: act.id, tester: tester),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('record-button-start')));
+        await settleAsync(tester, const Duration(milliseconds: 700));
+
+        expect(recordingService.status.state, isNot(RecordingState.recording));
+        expect(
+          find.textContaining('Attenlume needs microphone access'),
+          findsOneWidget,
+        );
+        await disposeService(tester);
+      },
+    );
   });
 
   group('FR-UI-03 Photo capture', () {

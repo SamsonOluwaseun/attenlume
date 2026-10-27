@@ -580,6 +580,19 @@ Owner request: publish to `https://github.com/SamsonOluwaseun/attenlume` under M
 - After changes: `flutter analyze` no issues, `flutter test` 578 passed, `dart format` clean.
 - Not yet observed: installing the APK on a real phone or tablet.
 
+## 27 October 2026: capture entry, permission prompts, Windows data location (Claude Code, Opus 5.5, attended)
+
+Owner report from the first Android tablet install: microphone, camera preview and the rest "not working". Findings and fixes in ADR-028.
+
+- Before changes: `flutter test` 578 passed, `flutter analyze` clean.
+- Microphone permission was never requested (`request: false`). Fixed; the mic test sheet checks permission first.
+- Quick start and the Start activity sheet now open the recording screen (PRODUCT_SPEC J2).
+- The recording screen says why a start was refused instead of "Couldn't start recording.".
+- Windows data moved from `Documents` (OneDrive-synced on this PC) to `%LOCALAPPDATA%\Samlytics\Attenlume`.
+- New: `integration_test/app_capture_journey_test.dart`, the J2 journey in the real app with real plugins, and `tool/build_windows_preview.ps1`.
+- Windows run of the journey on this PC (Remote Desktop, no microphone redirected): conference created, Session opened the recording screen, Record refused with a visible message. Recording, photo, bookmark and stop steps not run: no microphone. Blocked: needs a microphone.
+- Still open: Android 13+ notification permission is never requested; no camera viewfinder (P1-14).
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -611,3 +624,4 @@ Owner request: publish to `https://github.com/SamsonOluwaseun/attenlume` under M
 | P1-11 | done (real device unverified) | Native Android foreground service (type microphone), ongoing notification, chronometer, actions (pause/resume, stop, bookmark, photo), 20 new tests (550 total). ADR-025 |
 | P1-12 | done (device storage unverified) | StorageBudgetService, rolling write rate, 30s checks, 100 MB hard reserve stop (storage_low), native Android/iOS free space channels, live StorageMeter compact/expanded UI, 28 new tests (578 total). ADR-026 |
 | Android preview | done (device install unverified) | MIT `LICENSE`, release signing, universal release APK 63.9 MB, README download link. ADR-007 accepted, ADR-027 |
+| Capture entry fixes | done (Android device check pending) | Mic permission prompt, quick start opens recorder, refusal messages, Windows data in local app data, J2 journey test on Windows, preview build script. ADR-028 |

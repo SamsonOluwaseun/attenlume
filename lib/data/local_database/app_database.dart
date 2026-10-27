@@ -6,6 +6,7 @@ import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../domain/models/export_job.dart';
 import '../../domain/models/media.dart';
+import '../filesystem/app_data_directory.dart';
 import 'app_database.steps.dart';
 import 'builtin_activity_types.dart';
 import 'converters.dart';
@@ -39,7 +40,12 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
   /// Opens the on-device database file `attenlume.sqlite`.
-  factory AppDatabase.open() => AppDatabase(driftDatabase(name: 'attenlume'));
+  factory AppDatabase.open() => AppDatabase(
+    driftDatabase(
+      name: 'attenlume',
+      native: const DriftNativeOptions(databaseDirectory: appDataDirectory),
+    ),
+  );
 
   @override
   int get schemaVersion => 2;

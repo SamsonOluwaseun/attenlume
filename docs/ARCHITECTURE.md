@@ -68,7 +68,7 @@ RecordingService  (one instance, mutex around every command, FR-REC-09)
 
 ## 4. Storage and files
 
-- Media root: `<app documents>/media/`. Paths in the database are relative to it (build guide 9.5) so iOS container moves do not break them.
+- Media root: `<app data>/media/`, where app data is the app documents folder on Android and iOS and `%LOCALAPPDATA%\Samlytics\Attenlume` on Windows (ADR-028). The database `attenlume.sqlite` sits in the same app data folder. Paths in the database are relative to it (build guide 9.5) so iOS container moves do not break them.
 - Atomic writes for every metadata file and every export member: write `name.tmp`, flush, rename.
 - Export temp folder `<app cache>/exports-temp/<job_id>/` is tracked in `export_jobs` and safe to clear.
 - `FreeSpaceProbe` per platform (see `PLATFORM_FEASIBILITY.md` 2.9). `StorageBudgetService` estimates minutes left from measured growth of the current segment, falling back to the profile's nominal rate.

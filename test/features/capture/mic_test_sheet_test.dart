@@ -127,5 +127,29 @@ void main() {
       // Finished state reached
       expect(find.byKey(const Key('mic-test-done-button')), findsOneWidget);
     });
+
+    testWidgets(
+      'FR-UI-06 asks for microphone access and does not capture without it',
+      (tester) async {
+        fakeEngine.permission = false;
+
+        await tester.pumpWidget(
+          wrapSheet(
+            const MicTestSheet(
+              testDuration: Duration(seconds: 1),
+              sampleInterval: Duration(milliseconds: 100),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(fakeEngine.startedPaths, isEmpty);
+        expect(
+          find.textContaining('Attenlume needs microphone access'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }

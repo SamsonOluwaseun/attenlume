@@ -147,7 +147,10 @@ void main() {
         await tester.pumpWidget(
           buildSubject(
             tester: tester,
-            child: ConferenceHomeScreen(conferenceId: conf.id),
+            child: ConferenceHomeScreen(
+              conferenceId: conf.id,
+              openRecorder: (_, _) async {},
+            ),
           ),
         );
         await tester.pumpAndSettle();
@@ -181,7 +184,10 @@ void main() {
         await tester.pumpWidget(
           buildSubject(
             tester: tester,
-            child: ConferenceHomeScreen(conferenceId: conf.id),
+            child: ConferenceHomeScreen(
+              conferenceId: conf.id,
+              openRecorder: (_, _) async {},
+            ),
           ),
         );
         await tester.pumpAndSettle();
@@ -210,7 +216,10 @@ void main() {
         await tester.pumpWidget(
           buildSubject(
             tester: tester,
-            child: ConferenceHomeScreen(conferenceId: conf.id),
+            child: ConferenceHomeScreen(
+              conferenceId: conf.id,
+              openRecorder: (_, _) async {},
+            ),
           ),
         );
         await tester.pumpAndSettle();

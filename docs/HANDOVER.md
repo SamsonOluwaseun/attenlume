@@ -1,95 +1,35 @@
 # Handover
 
-Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended session after the Antigravity P1-12 run
-Branch: main (merged from `phase-1/P1-12-storage-budget`)
-Current task ID: P1-12 (done). Next: P1-13
-Status: done
+Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended
+Branch: main (merged from `fix/P1-capture-entry`)
+Current task ID: capture entry fixes (owner request, ADR-028). Next: P1-13
+Status: done (Android device check pending)
 
 ## Done in this session
 
-- Owner-requested Android preview (not a build guide task): MIT `LICENSE`, release signing with a keystore outside the repo, universal release APK, README download link, repo pushed to `https://github.com/SamsonOluwaseun/attenlume`. ADR-007 accepted (MIT), ADR-027. Details in `docs/PROGRESS.md`.
-- To ship a new APK: raise the build number in `pubspec.yaml`, run `flutter build apk --release` on the PC that holds the keystore, and attach it to a new GitHub Release as `attenlume-android.apk` with `SHA256SUMS.txt`. Never use `--split-per-abi` for this channel (ADR-027).
-
-Earlier in the day (Antigravity, P1-12):
-
-- Completed **P1-12: StorageBudgetService and live budget UI** [FR-STO-01 to 04, FR-UI-07]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` and ADR-026.
-  - Native platform free space channels:
-    - Android: `android/app/src/main/kotlin/com/samlytics/attenlume/FreeSpaceChannel.kt` querying `StatFs.availableBytes` and `StatFs.totalBytes` over `com.samlytics.attenlume/free_space`. Attached to `MainActivity.kt`.
-    - iOS: `ios/Runner/FreeSpaceChannel.swift` querying `URLResourceKey.volumeAvailableCapacityForImportantUsageKey` and `volumeTotalCapacityKey` with fallback to `fileSystemFreeSize`. Registered in `AppDelegate.swift`.
-    - `lib/platform/storage/method_channel_free_space_probe.dart`: Unified Dart implementation for Android and iOS dispatching in `FreeSpaceProbe.forPlatform()` alongside `WindowsFreeSpaceProbe`.
-  - `RecordingService` storage preflight and stop reason:
-    - Injected `FreeSpaceProbe` and `StorageThresholds`. In `_refusal`, if `probe.availableBytes()` <= `thresholds.hardStopBytes` (100 MB), start is refused with `StartOutcome.storageFull`.
-    - Added `SegmentEndReason.storageLow` (`storage_low` in database schema) for hard reserve stops.
-    - Exposes `currentSegmentFile` and `currentSegmentStartUtc` for live rate measurement.
-    - `OneActiveCoordinator` translates `StartOutcome.storageFull` to: "Cannot start recording: storage is nearly full (under 100 MB remaining)."
-  - `StorageBudgetService` (`lib/domain/services/storage_budget_service.dart`):
-    - Periodic 30-second timer (`_startPeriodicCheck` / `_stopPeriodicCheck`) while recording.
-    - Rolling write rate calculation: uses active segment file growth on disk when elapsed >= 5s; else prior segment history; else nominal profile rate.
-    - Computes remaining minutes above 100 MB hard reserve (`hardStopBytes`).
-    - Conference folder disk usage calculation via recursive directory sizing (`MediaPaths.conferenceFolder`).
-    - Hard stop enforcement: stops recording safely with `SegmentEndReason.storageLow` when space drops <= 100 MB and notifies via `hardStopNoticeStream`.
-    - Protected with `SerialLock` to avoid race conditions.
-  - `StorageMeter` component (`lib/presentation/components/storage_meter.dart`):
-    - Conforms to `docs/design/components/StorageMeter.md`.
-    - Compact mode: single muted line under timer on `RecordingScreen` when OK; staged warning banner when <1 GB or <60 min; danger banner when <= 300 MB or <= 100 MB.
-    - Expanded mode: used/free progress bar, conference usage, and optional `onManage` action.
-  - `RecordingScreen` integration:
-    - Embedded compact `StorageMeter` inside `RecordButton` below timer.
-    - Storage check pre-record, post-photo, and every 30s.
-    - Alert SnackBar on hard stop reserve trigger.
-  - 28 new automated unit and widget tests (578 total in the repository, all passing). Windows release and debug APK builds both succeeded locally. ADR-026 recorded in `docs/DECISIONS.md`.
+- Earlier: Android preview release on GitHub, MIT licence, release signing (ADR-007, ADR-027).
+- Owner's first Android tablet install: microphone, camera preview and other features did not work. Fixed in ADR-028: microphone permission prompt, quick start opens the recording screen, specific refusal messages, Windows data moved out of the OneDrive-synced Documents folder into `%LOCALAPPDATA%\Samlytics\Attenlume`.
+- `integration_test/app_capture_journey_test.dart`: the J2 capture journey in the real app with real plugins. On this PC it reaches the recording screen and checks that a refused start is explained (no microphone in the RDP session).
+- `tool/build_windows_preview.ps1`: versioned Windows preview build outside the repo plus a desktop shortcut, for the owner to test while work continues.
+- Agreed working loop with the owner: build and check on the Windows laptop first, then ship to Android.
 
 ## Left to do on this task
 
-- Nothing in code for P1-12. Real device free space channel verification on physical Android and iOS devices is unverified on physical hardware.
+- Ship 0.1.1 to Android (raise the build number in `pubspec.yaml`, `flutter build apk --release`, new GitHub Release) once the owner has checked the Windows preview.
+- Android 13+ notification permission is never requested (needs a small native method or `permission_handler`).
 
 ## Exact next step
 
-Start **P1-13 Safety prompts (duration, silence, battery) [FR-REC-06]** on branch `phase-1/P1-13-safety-prompts`.
-- Read requirement `FR-REC-06` in `docs/BUILD_GUIDE.md`:
-  - Safety prompts (configurable):
-    1. Recording longer than 2 hours ("Still in 'Keynote'?").
-    2. Near-silence for 10 minutes ("No sound detected. Still in the session?").
-    3. Low battery below 15% (connect to `BatteryProbe`, Android/iOS battery channels).
-  - Prompts never stop recording on their own (only the 100 MB storage hard limit from P1-12 stops recording).
-  - Configurable prompt thresholds in app settings (or sensible defaults).
-  - Visual non-intrusive banner on the recording screen with dismiss / confirm actions.
+Ask the owner how the Windows preview went. Then either ship 0.1.1 to Android or start **P1-13 Safety prompts** on branch `phase-1/P1-13-safety-prompts` (see `FR-REC-06` in `docs/BUILD_GUIDE.md`). P1-14 (photo screen with viewfinder) is the next most visible gap for the owner.
 
 ## Files touched
 
-New:
-- `android/app/src/main/kotlin/com/samlytics/attenlume/FreeSpaceChannel.kt`
-- `ios/Runner/FreeSpaceChannel.swift`
-- `lib/domain/services/storage_budget_service.dart`
-- `lib/platform/storage/method_channel_free_space_probe.dart`
-- `lib/presentation/components/storage_meter.dart`
-- `test/domain/recording_service_storage_test.dart`
-- `test/domain/storage_budget_service_test.dart`
-- `test/features/capture/recording_screen_storage_test.dart`
-- `test/platform/storage/method_channel_free_space_probe_test.dart`
-- `test/presentation/components/storage_meter_test.dart`
-
-Changed:
-- `android/app/src/main/kotlin/com/samlytics/attenlume/MainActivity.kt`
-- `ios/Runner/AppDelegate.swift`
-- `lib/data/filesystem/media_paths.dart`
-- `lib/domain/services/one_active_coordinator.dart`
-- `lib/domain/services/recording_service.dart`
-- `lib/features/capture/recording_providers.dart`
-- `lib/features/capture/recording_screen.dart`
-- `lib/platform/storage/free_space_probe.dart`
-- `lib/presentation/components/record_button.dart`
-- `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md` (ADR-026)
-- `docs/PROGRESS.md`
-- `docs/HANDOVER.md`
+New: `lib/data/filesystem/app_data_directory.dart`, `integration_test/app_capture_journey_test.dart`, `test/data/filesystem/app_data_directory_test.dart`, `tool/build_windows_preview.ps1`.
+Changed: `lib/platform/audio_capture/record_capture_engine.dart`, `lib/features/conferences/conference_home_screen.dart`, `lib/features/capture/recording_screen.dart`, `lib/features/capture/mic_test_sheet.dart`, `lib/features/capture/recording_providers.dart`, `lib/data/local_database/app_database.dart`, tests for these, `README.md`, `docs/ARCHITECTURE.md`, `docs/PRIVACY_AND_SAFETY.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`.
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (all 578 tests pass). Device tests unchanged from prior sessions:
-- `integration_test/p0_13_shortcut_trigger_test.dart` fails on Windows by design (no Windows shortcut bridge; Android tile/shortcuts verified in APK build).
-- `integration_test/p0_05_photo_during_recording_test.dart`, `p0_07_bluetooth_routing_test.dart`, `p0_10_long_run_test.dart`, `p0_12_profile_switch_test.dart`, `p0_06_windows_mic_test.dart` fail on this build host because the headless/RDP session has no physical microphone or camera (expected, blocked: needs real device).
-- `integration_test/p0_04_background_recording_test.dart` skipped on Windows (Android/iOS only; needs real Android device for MT-17 rerun).
+None failing in `flutter test`. Device tests: the spikes in `integration_test/` still need a real microphone or camera (unchanged). `app_capture_journey_test.dart` passes on this PC but only up to Record, because there is no microphone.
 
 ## Open questions for the owner
 

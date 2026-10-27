@@ -522,3 +522,20 @@ Format: context, decision, alternatives, consequences.
   4. Every release raises the build number in `pubspec.yaml` so updates install over the old version and keep data.
 - **Alternatives:** Google Play internal testing (no warnings, automatic updates, needs a US$25 Play account; still the plan for wider testing, `RELEASE_PLAN.md` 4.2); Firebase App Distribution (needs a Google account per tester); debug APK (about 190 MB, debug-signed).
 - **Consequences:** Losing the keystore or its password means testers must uninstall, and lose data, to move to a new key. The owner must back up the keystore folder somewhere safe outside this PC. Play App Signing can adopt this key as the upload key later. Sideloading always shows Android's unknown-sources and Play Protect prompts. No real-device install has been observed yet.
+
+## ADR-028: Capture entry, permission prompts and Windows data location
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5), attended, after the owner's first Android tablet test found the microphone and camera "not working".
+- **Context:** Four defects, found by the first real-device test and by a new end-to-end test of the real Windows app (`integration_test/app_capture_journey_test.dart`):
+  1. `RecordCaptureEngine.hasPermission` called `record` with `request: false`, so Android never showed the microphone prompt and every start was refused as `microphoneDenied`. Unit tests use a fake engine and the device spikes asked for permission themselves, which hid it.
+  2. Quick start (Session, Conversation, Exhibit, Reflection) and the Start activity sheet created the activity but stayed on conference home. Recording needed four taps through the activity card and "Open recorder". PRODUCT_SPEC J2 has the user land on the recording screen.
+  3. The recording screen showed "Couldn't start recording." for every refusal, because the coordinator only fills `confirmation` for non-visual triggers.
+  4. On Windows, `getApplicationDocumentsDirectory()` is the user's Documents folder, which on the build PC is `OneDrive\Documents`. The database and every recording would have synced to the cloud, against the offline-first and privacy rules.
+- **Decision:**
+  1. `hasPermission` uses `record`'s default `request: true`: Android and iOS show the system prompt the first time; Windows only checks. The mic test sheet checks permission before opening the microphone.
+  2. A started activity opens its recording screen (`ConferenceHomeScreen.openRecorder`, replaceable in tests). Recording still starts only when the user taps Record, so the quality can be chosen first (J2 step 2).
+  3. The recording screen maps `StartOutcome` to a specific message (microphone access, no microphone or in use, storage full, not recording audio).
+  4. `appDataDirectory()` (`lib/data/filesystem/app_data_directory.dart`) is the single data location: app documents on Android and iOS (private to the app), `%LOCALAPPDATA%\Samlytics\Attenlume` on Windows (local, not roamed, not synced). Both `AppDatabase.open()` and `mediaRootProvider` use it. No migration: the only existing Windows data was the owner's test data from earlier the same day, left in place in `Documents`.
+- **Not fixed here:** Android 13+ notification permission is still never requested, so the recording notification stays hidden until the user allows it in Settings. The camera has no viewfinder; P1-14 builds the photo screen.
+- **Alternatives:** `permission_handler` for prompts (new dependency, not needed for the microphone); auto-starting recording on quick start (skips the quality choice and could record before the user is ready); migrating the Documents data (not worth the risk for one day of test data).
+- **Consequences:** Windows previews start with an empty app. `tool/build_windows_preview.ps1` builds a versioned Windows preview outside the repo for hands-on testing.
