@@ -19,6 +19,14 @@ class FakeCaptureEngine implements AudioCaptureEngine {
   /// What [levelDbfs] reports. Set very low to act as a muted mic.
   double level = -30;
 
+  /// Audio bitrate the finished file holds for a request. The default
+  /// ignores the request, as a fixed-rate encoder would.
+  int Function(CaptureRequest request) deliveredBitrateBps = (_) => 48000;
+
+  /// When it returns an error for a request, [start] throws it, as an
+  /// encoder refusing that setting would.
+  Object? Function(CaptureRequest request) refuse = (_) => null;
+
   /// When set, [start] waits for it, so tests can overlap commands.
   Completer<void>? startGate;
 
@@ -30,6 +38,7 @@ class FakeCaptureEngine implements AudioCaptureEngine {
   int stopCalls = 0;
   bool disposed = false;
   String? _path;
+  CaptureRequest? _request;
 
   bool get isCapturing => _path != null;
 
@@ -47,11 +56,14 @@ class FakeCaptureEngine implements AudioCaptureEngine {
     await onStart?.call(path);
     if (startGate != null) await startGate!.future;
     if (startError != null) throw startError!;
+    final refusal = refuse(request);
+    if (refusal != null) throw refusal;
     if (_path != null) throw StateError('Fake engine already capturing');
     startedPaths.add(path);
     requests.add(request);
     await File(path).writeAsBytes(const []);
     _path = path;
+    _request = request;
   }
 
   @override
@@ -63,11 +75,14 @@ class FakeCaptureEngine implements AudioCaptureEngine {
     final path = _path;
     _path = null;
     if (path == null) return null;
+    final delivered = deliveredBitrateBps(_request!);
     await File(path).writeAsBytes(
       buildM4a(
         includeMoov: finaliseValidFile,
         durationUnits: 48000 * durationSeconds,
-        mediaDataBytes: durationSeconds * 6000,
+        avgBitrateBps: delivered,
+        maxBitrateBps: delivered,
+        mediaDataBytes: delivered ~/ 8 * durationSeconds,
       ),
     );
     return path;

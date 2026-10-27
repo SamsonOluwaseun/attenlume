@@ -55,7 +55,7 @@ RecordingService  (one instance, mutex around every command, FR-REC-09)
    +-- ForegroundServiceBridge  Android only: notification, actions
 ```
 
-- **Built in P1-04 (ADR-012):** `RecordingService` in `lib/domain/services/recording_service.dart`, states and transitions in `recording_state.dart`, commands serialised by `SerialLock`. Pause and resume, start-failure handling and finalisation from the inspected file are in. The 10-minute roll, interruptions and route changes are not yet.
+- **Built in P1-04 (ADR-012):** `RecordingService` in `lib/domain/services/recording_service.dart`, states and transitions in `recording_state.dart`, commands serialised by `SerialLock`. Pause and resume, start-failure handling, finalisation from the inspected file and mid-recording profile change (P0-12, ADR-014) are in. The 10-minute roll, interruptions and route changes are not yet.
 - **One active recording (FR-REC-04):** `RecordingService` holds at most one active activity ID. A start request for another activity returns a `ConflictPending` result for the UI to resolve. Non-visual triggers use the documented default (stop old, start new) and post a notification.
 - **Segment rolling (FR-REC-03):** roll on pause, interruption, profile change, route change and a 10-minute timer. Each roll is stop then start of a new file. The gap between them is recorded as real time (offset rule, build guide 9.4).
 - **Crash recovery (FR-REC-08):** on launch, every segment with `state=writing` is checked. If its file exists and parses as a valid container, mark it `recovered`. If not, mark it `damaged` and keep the file. Never mark a damaged file as good.
@@ -222,6 +222,11 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/platform/interruptions/`: `AudioInterruptionSource` interface (began, ended with `shouldResume`, becoming noisy, devices changed), `AudioSessionInterruptionSource` (`audio_session`, Android and iOS) and `NoAudioInterruptions` (Windows). Seed of the `InterruptionCoordinator` (P1-07).
 - `lib/spikes/background_recording_spike.dart`: drives `RecordingService` for a fixed time and logs lifecycle, audio session events, states, level samples, segments and interruption rows. Device test `integration_test/p0_04_background_recording_test.dart` (MT-17).
 - Android manifest: `RECORD_AUDIO`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS` declared. No service yet (P1-11). iOS `Info.plist`: `NSMicrophoneUsageDescription` and `UIBackgroundModes: audio`.
+
+### 8.4 Added in P0-12
+
+- `RecordingService.changeProfile` (FR-QUAL-04, ADR-014): while recording, goes through `switchingSegment`, ends the segment with reason `quality_change` and starts a new one with the new profile. A refused profile restarts with the previous one and returns `declined` with a reason. While paused, only the activity override changes. A successful change is stored as `activity.recording_profile_override`.
+- `lib/spikes/profile_switch_spike.dart`: records one segment per profile through `changeProfile`, reinspects every file and reports requested, declared, payload and whole-file bitrate, deviation, MB per hour and the gap per switch. Device test `integration_test/p0_12_profile_switch_test.dart` (MT-18).
 
 ## 9. Open risks
 

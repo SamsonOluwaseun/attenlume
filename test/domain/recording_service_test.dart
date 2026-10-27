@@ -352,4 +352,160 @@ void main() {
       expect(seg.state, SegmentState.finalised);
     });
   });
+
+  group('FR-QUAL-04 quality change mid-recording', () {
+    test('FR-QUAL-04 change finalises the segment and starts a new one '
+        'with the new profile', () async {
+      final seen = <RecordingState>[];
+      final sub = service.statusStream.listen((s) => seen.add(s.state));
+      await service.start(keynote.id);
+      t.clock.advance(const Duration(minutes: 4));
+
+      final result = await service.changeProfile(RecordingProfile.enhanced);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(result.outcome, ProfileChangeOutcome.changed);
+      expect(seen, [
+        RecordingState.starting,
+        RecordingState.recording,
+        RecordingState.switchingSegment,
+        RecordingState.recording,
+      ]);
+      expect(service.status.profile, RecordingProfile.enhanced);
+      expect(service.status.segmentSequence, 2);
+      expect(engine.requests.map((r) => r.bitrateBps), [48000, 64000]);
+
+      await service.stop();
+      await sub.cancel();
+      final segs = await t.media.segmentsFor(keynote.id);
+      expect(segs.map((s) => s.endReason), [
+        SegmentEndReason.qualityChange,
+        SegmentEndReason.userStop,
+      ]);
+      expect(segs.map((s) => s.requestedProfile), [
+        RecordingProfile.balanced,
+        RecordingProfile.enhanced,
+      ]);
+      expect(segs.every((s) => s.state == SegmentState.finalised), isTrue);
+    });
+
+    test('FR-QUAL-04 the earlier file is kept unchanged, never '
+        'transcoded', () async {
+      await service.start(keynote.id);
+      await service.changeProfile(RecordingProfile.economy);
+      final first = (await t.media.segmentsFor(keynote.id)).first;
+      final file = MediaPaths.resolve(root, first.filePath);
+      final before = file.readAsBytesSync();
+
+      await service.changeProfile(RecordingProfile.enhanced);
+      await service.stop();
+
+      expect(file.readAsBytesSync(), before);
+      expect(engine.startedPaths.toSet(), hasLength(3));
+    });
+
+    test('FR-QUAL-04 a successful change is kept for the next resume '
+        '(FR-QUAL-02)', () async {
+      await service.start(keynote.id);
+      await service.changeProfile(RecordingProfile.economy);
+      await service.pause();
+      await service.resume();
+
+      expect(service.status.profile, RecordingProfile.economy);
+      expect(engine.requests.last.bitrateBps, 32000);
+      expect(
+        (await t.activities.get(keynote.id))!.recordingProfileOverride,
+        RecordingProfile.economy,
+      );
+    });
+
+    test('FR-QUAL-04 change while paused sets the profile of the next '
+        'segment without starting the encoder', () async {
+      await service.start(keynote.id);
+      await service.pause();
+
+      final result = await service.changeProfile(RecordingProfile.enhanced);
+
+      expect(result.outcome, ProfileChangeOutcome.changed);
+      expect(engine.isCapturing, isFalse);
+      expect(service.status.state, RecordingState.paused);
+      await service.resume();
+      expect(engine.requests.last.bitrateBps, 64000);
+    });
+
+    test('FR-QUAL-04 refused profile is declined with a reason and '
+        'recording carries on with the previous one', () async {
+      engine.refuse = (r) =>
+          r.bitrateBps == 64000 ? StateError('64 kbps not supported') : null;
+      await service.start(keynote.id);
+
+      final result = await service.changeProfile(RecordingProfile.enhanced);
+
+      expect(result.outcome, ProfileChangeOutcome.declined);
+      expect(result.reason, contains('Enhanced'));
+      expect(result.reason, contains('64 kbps not supported'));
+      expect(result.reason, contains('Still recording with Balanced'));
+      expect(service.status.state, RecordingState.recording);
+      expect(service.status.profile, RecordingProfile.balanced);
+      expect(
+        (await t.activities.get(keynote.id))!.recordingProfileOverride,
+        isNull,
+      );
+
+      await service.stop();
+      final segs = await t.media.segmentsFor(keynote.id);
+      expect(segs.map((s) => (s.requestedProfile, s.state)), [
+        (RecordingProfile.balanced, SegmentState.finalised),
+        (RecordingProfile.enhanced, SegmentState.damaged),
+        (RecordingProfile.balanced, SegmentState.finalised),
+      ]);
+    });
+
+    test('FR-QUAL-04 when neither profile starts, earlier audio is kept '
+        'and the recorder can be saved', () async {
+      await service.start(keynote.id);
+      engine.refuse = (_) => StateError('encoder gone');
+
+      final result = await service.changeProfile(RecordingProfile.economy);
+
+      expect(result.outcome, ProfileChangeOutcome.failed);
+      expect(service.status.state, RecordingState.errorRecoverable);
+      expect(await service.stop(), keynote.id);
+      final first = (await t.media.segmentsFor(keynote.id)).first;
+      expect(first.state, SegmentState.finalised);
+      expect(first.endReason, SegmentEndReason.qualityChange);
+    });
+
+    test('FR-QUAL-04 same profile or nothing recording changes '
+        'nothing', () async {
+      expect(
+        (await service.changeProfile(RecordingProfile.economy)).outcome,
+        ProfileChangeOutcome.notRecording,
+      );
+      await service.start(keynote.id);
+
+      expect(
+        (await service.changeProfile(RecordingProfile.balanced)).outcome,
+        ProfileChangeOutcome.alreadyInUse,
+      );
+      expect(engine.startedPaths, hasLength(1));
+    });
+
+    test('FR-QUAL-04 rapid changes run one at a time (FR-REC-09)', () async {
+      await service.start(keynote.id);
+
+      final results = await Future.wait([
+        service.changeProfile(RecordingProfile.enhanced),
+        service.changeProfile(RecordingProfile.enhanced),
+        service.changeProfile(RecordingProfile.economy),
+      ]);
+
+      expect(results.map((r) => r.outcome), [
+        ProfileChangeOutcome.changed,
+        ProfileChangeOutcome.alreadyInUse,
+        ProfileChangeOutcome.changed,
+      ]);
+      expect(engine.requests.map((r) => r.bitrateBps), [48000, 64000, 32000]);
+    });
+  });
 }

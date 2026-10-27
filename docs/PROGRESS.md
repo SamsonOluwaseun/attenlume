@@ -284,6 +284,26 @@ Test results on phase-0/P0-04-background-spike (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built. APK not installed on a phone. iOS not built (no Mac).
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-12 per-segment profile switching and observed bitrate spike harness
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 275 passed.
+- Picked P0-12 over P1-05 because the agent prompt puts Phase 0 first and P0-12's dependency (P0-04) is blocked-on-device.
+- `RecordingService.changeProfile` (`lib/domain/services/recording_service.dart`) with `ProfileChangeOutcome` and `ProfileChangeResult` [FR-QUAL-04]: recording goes through `switchingSegment`, the segment ends with `quality_change`, a new one starts with the new profile. A refused profile restarts with the previous one and is `declined` with the encoder's reason. Success stores the activity override. `_beginSegment` split into `_tryBeginSegment` (no state change on refusal) and `_beginSegment`.
+- `ProfileSwitchSpike` (`lib/spikes/profile_switch_spike.dart`): Economy, Balanced, Enhanced, Economy through `changeProfile`, reinspects each file, reports requested, declared, payload and whole-file kbps, deviation, MB per hour, gap per switch and the start error. Observations only.
+- Device test `integration_test/p0_12_profile_switch_test.dart` (Android, iOS, Windows) and manual steps MT-18 in `TEST_PLAN.md`.
+- `FakeCaptureEngine` gained `deliveredBitrateBps` and `refuse`.
+- ADR-014 recorded. `PLATFORM_FEASIBILITY.md` 1 and 2.3.1, `TEST_PLAN.md` and `ARCHITECTURE.md` 3 and 8.4 updated. No new packages.
+- **No audio captured.** The device test was run on the build host with `-d windows`: start failed with "No audio recording device was found." (Remote Desktop session, same as P0-06). P0-12 is blocked: needs real device on all three platforms.
+
+Test results on phase-0/P0-12-profile-switch-spike (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 291 passed, 0 failed (16 new: 8 FR-QUAL-04 in `recording_service_test.dart`, 8 P0-12 in `profile_switch_spike_test.dart`).
+- `integration_test/p0_12_profile_switch_test.dart -d windows`: failed as expected, no microphone (blocked, not a code fault).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -301,4 +321,5 @@ Test results on phase-0/P0-04-background-spike (Windows 11 build host):
 | P1-03 | done | Activity CRUD editor, custom types, awareness consent check, contact fields, 19 new tests (237 total). ADR-011 |
 | P1-04 | done (real capture unverified) | RecordingService, state machine, serial lock, media paths, 28 new tests (265 total). ADR-012 |
 | P0-04 | blocked: needs real device | Harness, device test and MT-17 steps built, 10 unit tests with fakes pass (275 total). ADR-013. Android rerun needed after P1-11 |
-| P0-05, P0-07, P0-10, P0-12, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these (rows added in P1-04 so the table matches the handover) |
+| P0-12 | blocked: needs real device | Harness, `RecordingService.changeProfile`, device test and MT-18 steps built, 16 unit tests with fakes pass (291 total). ADR-014. Windows run on build host blocked (no capture device) |
+| P0-05, P0-07, P0-10, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these |
