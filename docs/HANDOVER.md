@@ -103,7 +103,7 @@ None failing in `flutter test` (all 578 tests pass). Device tests unchanged from
 - **ADR-021:** Non-camera interruptions are logged as `system` ("a call or another app") because Android audio focus and iOS interruptions do not say what caused them.
 - **ADR-020:** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing.
 - **ADR-019:** Segments roll every 10 minutes (the build guide minimum).
-- **Signing key (ADR-027):** back up `%USERPROFILE%ttenlume-signing\` (keystore and `key.properties.backup` with the password) somewhere safe off this PC. Losing it means testers must uninstall, and lose their data, to update.
+- **Signing key (ADR-027):** back up `%USERPROFILE%\attenlume-signing\` (keystore and `key.properties.backup` with the password) somewhere safe off this PC. Losing it means testers must uninstall, and lose their data, to update.
 - **Device testing:** Outstanding for real devices (MT-16 to MT-22).
 
 ## Commands to run
