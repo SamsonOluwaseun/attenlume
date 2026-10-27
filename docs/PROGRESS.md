@@ -610,6 +610,13 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - Tests: 4 new (2 service, 2 widget). `flutter test` 600 passed, `flutter analyze` clean, notices up to date (131 packages incl. file_selector family).
 - P1-14 done in code. Devices unverified.
 
+## 27 October 2026: P1-13 safety prompts (Claude Code, Opus 5.5, owner away)
+
+- Before changes: `flutter test` 600 passed.
+- ADR-032: `SafetyPromptService` (2 hours, 10 minutes near-silence at -55 dBFS, battery under 15 % and not charging; never stops recording), banner on the recording screen with Keep recording and Stop and save, Android `BatteryChannel.kt` and `MethodChannelBatteryProbe`. iOS battery stays unknown.
+- Tests: 12 new (8 service, 2 battery channel, 2 recording screen). `flutter test` 612 passed, `flutter analyze` clean.
+- Devices unverified (thresholds and battery channel).
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -645,3 +652,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-14 | in progress (device camera unverified) | Camera screen with viewfinder, compression, thumbnails, SHA-256, 15 new tests (596 total). ADR-030. FR-PHO-06 still to do |
 | Notification permission | done (device unverified) | Android 13+ POST_NOTIFICATIONS requested on first recording. ADR-029 |
 | P1-14 | done (device camera unverified) | Camera screen, compression, thumbnails, SHA-256, import with labels, captions. 19 new tests (600 total). ADR-030, ADR-031 |
+| P1-13 | done (device thresholds unverified) | SafetyPromptService, recording screen banner, Android battery channel, 12 new tests (612 total). ADR-032 |

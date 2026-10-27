@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'method_channel_battery_probe.dart';
 import 'windows_battery_probe.dart';
 
 /// One battery reading.
@@ -18,16 +19,19 @@ class BatteryReading {
 /// Battery level for the P0-10 long run and, later, the low-battery
 /// safety prompt (FR-REC-06, P1-13) [P0-10].
 ///
-/// No package is adopted for this yet (ADR-015): Windows asks the OS
-/// directly, Android and iOS answer null until P1-13 adds a method
-/// channel. The P0-10 tester reads the phone's battery by hand instead.
+/// No package is adopted for this (ADR-015, ADR-032): Windows asks the OS
+/// directly, Android uses `BatteryChannel.kt`, iOS answers null until its
+/// channel is built on a Mac.
 abstract interface class BatteryProbe {
   /// The current reading, or null when the platform cannot tell or the
   /// device has no battery. Callers must treat null as "unknown".
   Future<BatteryReading?> read();
 
-  factory BatteryProbe.forPlatform() =>
-      Platform.isWindows ? WindowsBatteryProbe() : const UnknownBatteryProbe();
+  factory BatteryProbe.forPlatform() => Platform.isWindows
+      ? WindowsBatteryProbe()
+      : Platform.isAndroid
+      ? const MethodChannelBatteryProbe()
+      : const UnknownBatteryProbe();
 }
 
 /// Used where no native probe exists yet.
