@@ -602,6 +602,14 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - `integration_test/app_capture_journey_test.dart` on Windows: Session opens the recorder, Record refused with a microphone message, Photo opens the camera screen, which says "No camera found on this device.", Close returns. Passed. No microphone or camera on this PC (Remote Desktop), so recording and shots are unverified here.
 - Left in P1-14: FR-PHO-06 manual import with labels and captions.
 
+## 27 October 2026: P1-14 photo import, captions and labels (Claude Code, Opus 5.5, owner away)
+
+- Before changes: `flutter test` 596 passed.
+- ADR-031: `file_selector` 1.1.0 (BSD-3); `importFiles` copies, compresses and thumbnails picked JPEG and PNG files with a batch label; photos section with thumbnails, photo sheet with caption and label; `updatePhotoText`.
+- Fixed during testing: the import label dialog disposed its text controller while closing (crash in debug builds); it now owns the controller.
+- Tests: 4 new (2 service, 2 widget). `flutter test` 600 passed, `flutter analyze` clean, notices up to date (131 packages incl. file_selector family).
+- P1-14 done in code. Devices unverified.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -636,3 +644,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | Capture entry fixes | done (Android device check pending) | Mic permission prompt, quick start opens recorder, refusal messages, Windows data in local app data, J2 journey test on Windows, preview build script. ADR-028 |
 | P1-14 | in progress (device camera unverified) | Camera screen with viewfinder, compression, thumbnails, SHA-256, 15 new tests (596 total). ADR-030. FR-PHO-06 still to do |
 | Notification permission | done (device unverified) | Android 13+ POST_NOTIFICATIONS requested on first recording. ADR-029 |
+| P1-14 | done (device camera unverified) | Camera screen, compression, thumbnails, SHA-256, import with labels, captions. 19 new tests (600 total). ADR-030, ADR-031 |

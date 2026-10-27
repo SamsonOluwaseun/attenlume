@@ -113,6 +113,68 @@ class PhotoCaptureService {
     );
   }
 
+  /// Imports image files the user picked into [activityId], with an
+  /// optional [label] for all of them (FR-PHO-06) [P1-14].
+  ///
+  /// Each file is copied, never moved, then compressed and thumbnailed
+  /// like a camera shot. Its time is the file's last-modified time, so
+  /// the offset lines up when the photo was taken during the recording.
+  /// Returns the saved photos; a file that cannot be read is skipped.
+  Future<List<Photo>> importFiles(
+    String activityId,
+    List<String> paths, {
+    String? label,
+  }) async {
+    final activity = await _activities.get(activityId);
+    if (activity == null) throw StateError('Activity $activityId not found');
+    final root = await _mediaRoot();
+    final saved = <Photo>[];
+    for (final source in paths) {
+      final photoId = uuidV4();
+      final photoPath = MediaPaths.photo(
+        activity.conferenceId,
+        activityId,
+        photoId,
+      );
+      final thumbPath = MediaPaths.thumbnail(
+        activity.conferenceId,
+        activityId,
+        photoId,
+      );
+      final file = MediaPaths.resolve(root, photoPath);
+      try {
+        await file.parent.create(recursive: true);
+        final original = File(source);
+        final takenUtc = original.lastModifiedSync().toUtc();
+        await original.copy(file.path);
+        final processed = await _process(
+          photo: file,
+          thumbnail: MediaPaths.resolve(root, thumbPath),
+          quality: quality,
+        );
+        saved.add(
+          await _media.addPhoto(
+            id: photoId,
+            activityId: activityId,
+            filePath: photoPath,
+            thumbnailPath: processed.thumbnailWritten ? thumbPath : null,
+            takenUtc: takenUtc,
+            source: PhotoSource.manualImport,
+            label: label,
+            width: processed.width,
+            height: processed.height,
+            bytes: processed.bytes,
+            sha256: processed.sha256,
+            originalKept: quality.keepOriginal,
+          ),
+        );
+      } on FileSystemException {
+        if (file.existsSync()) await file.delete();
+      }
+    }
+    return saved;
+  }
+
   /// Releases the camera.
   Future<void> close() => _camera.close();
 }

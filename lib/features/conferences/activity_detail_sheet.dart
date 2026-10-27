@@ -17,6 +17,7 @@ import '../activities/activity_editor_screen.dart';
 import '../capture/recording_profile_selector.dart';
 import '../capture/recording_providers.dart';
 import '../capture/recording_screen.dart';
+import '../photos/activity_photos_section.dart';
 
 /// Modal bottom sheet displaying detailed activity metadata, contact details,
 /// and captured assets (FR-ACT-03, FR-ACT-04, FR-ACT-08).
@@ -548,6 +549,12 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                   style: theme.textTheme.bodyMedium,
                 ),
               ],
+
+              const SizedBox(height: TokenSpace.space3),
+              ActivityPhotosSection(
+                activityId: act.id,
+                onChanged: _refreshSummary,
+              ),
 
               const SizedBox(height: TokenSpace.space4),
 
