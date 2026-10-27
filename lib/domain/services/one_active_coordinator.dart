@@ -311,6 +311,7 @@ class OneActiveCoordinator {
           "'$title' is set to not record audio.",
         StartOutcome.microphoneDenied =>
           "Couldn't record '$title'. Allow microphone access in Settings.",
+        StartOutcome.storageFull => "Couldn't start '$title'. Storage is full.",
         StartOutcome.activityNotFound =>
           "Couldn't find that activity. Open the app to choose one.",
         StartOutcome.conflict =>

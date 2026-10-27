@@ -291,6 +291,23 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - iOS: `ShortcutCommandCenter.swift` (in-app plugin, scene URL events through `addSceneDelegate`), `ShortcutIntents.swift` (App Intents and Siri phrases), `CFBundleURLTypes`, `FlutterDeepLinkingEnabled` off. Not built yet (needs a Mac).
 - `lib/spikes/shortcut_trigger_spike.dart`: commands drive `RecordingService` with the one-active rule; lifecycle, tap-to-recording time and level after each start. Device test `integration_test/p0_13_shortcut_trigger_test.dart` (MT-22). The app itself does not listen to the bridge yet (P2-01, P2-03).
 
+### 8.14 Added in P1-10
+
+- `lib/features/capture/recording_screen.dart`: `RecordingScreen` (FR-UI-01 to 06, 08). Live "house lights down" navy surface (`#00212B`), 96px debounced `RecordButton`, live timer with tabular figures, lime `LevelMeter` audio visualizer, one-tap photo button, `BookmarkChip` row with lime flash, quick thought reflection sheet, and `MicTestSheet` 10-second microphone diagnostics.
+
+### 8.15 Added in P1-11
+
+- `android/app/src/main/kotlin/com/samlytics/attenlume/RecordingForegroundService.kt`: Android foreground service typed `microphone` (`android:foregroundServiceType="microphone"`) with live zero-CPU notification chronometer, Pause/Resume, Stop, Bookmark, and Photo notification actions.
+- `lib/platform/foreground_service/`: `ForegroundServiceBridge` with `MethodChannelForegroundServiceBridge` and `NoopForegroundServiceBridge`.
+- `lib/domain/services/foreground_service_coordinator.dart`: `ForegroundServiceCoordinator` wiring recording status changes to native ongoing notifications and dispatching notification action triggers.
+
+### 8.16 Added in P1-12
+
+- `lib/platform/storage/`: `FreeSpaceProbe` with `WindowsFreeSpaceProbe` (Win32 FFI) and `MethodChannelFreeSpaceProbe` connected to Android `FreeSpaceChannel.kt` (`StatFs`) and iOS `FreeSpaceChannel.swift` (`volumeAvailableCapacityForImportantUsageKey`).
+- `lib/domain/services/storage_budget_service.dart`: `StorageBudgetService` (FR-STO-01 to 04), rolling write rate measurement from active segment file growth or prior segment history, periodic 30-second recording checks, conference folder size calculation, and automatic hard stop enforcement at 100 MB reserve (`SegmentEndReason.storageLow`).
+- `lib/presentation/components/storage_meter.dart`: `StorageMeter` (FR-UI-07), compact single-line gauge under timer on `RecordingScreen` with staged warning (<1 GB / <60 min) and critical (<300 MB / <=100 MB) banners; expanded mode with progress bar and conference usage stats.
+
+
 ## 9. Open risks
 
 | Risk | Where | Mitigation |

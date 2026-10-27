@@ -19,6 +19,7 @@ import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
 import '../../presentation/components/bookmark_chip.dart';
 import '../../presentation/components/record_button.dart';
+import '../../presentation/components/storage_meter.dart';
 import 'mic_test_sheet.dart';
 import 'one_active_prompt_dialog.dart';
 import 'quick_thought_sheet.dart';
@@ -59,15 +60,30 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   String _inputDeviceLabel = 'Microphone';
   int _photoCount = 0;
   int _bookmarkCount = 0;
+  StreamSubscription<String>? _hardStopSub;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _hardStopSub = ref
+        .read(storageBudgetServiceProvider)
+        .hardStopNoticeStream
+        .listen((notice) {
+          if (!mounted) return;
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(
+              content: Text(notice),
+              backgroundColor: const Color(0xFFC42B36),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        });
   }
 
   @override
   void dispose() {
+    _hardStopSub?.cancel();
     _ticker?.cancel();
     super.dispose();
   }
@@ -77,6 +93,11 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     final confRepo = ref.read(conferenceRepositoryProvider);
     final mediaRepo = ref.read(mediaAssetRepositoryProvider);
     final routeProbe = ref.read(audioRouteProbeProvider);
+    unawaited(
+      ref
+          .read(storageBudgetServiceProvider)
+          .checkNow(activityId: widget.activityId),
+    );
 
     final act = await actRepo.get(widget.activityId);
     if (act == null) {
@@ -249,6 +270,11 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
           source: PhotoSource.inApp,
           bytes: captured.bytes,
         );
+        unawaited(
+          ref
+              .read(storageBudgetServiceProvider)
+              .checkNow(activityId: widget.activityId),
+        );
       });
 
       if (mounted) {
@@ -378,6 +404,10 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         : (act.recordingProfileOverride ??
               conf?.defaultRecordingProfile ??
               RecordingProfile.balanced);
+
+    final budgetSnapshot =
+        ref.watch(storageBudgetSnapshotProvider).value ??
+        ref.watch(storageBudgetServiceProvider).currentSnapshot;
 
     return Theme(
       data: AppTheme.live(),
@@ -527,6 +557,16 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
                   elapsed: _elapsed,
                   activityTitle: act.title,
                   levelDbfs: _currentLevelDbfs,
+                  storageMeter: StorageMeter(
+                    key: const Key('recording-screen-storage-meter'),
+                    freeBytes: budgetSnapshot.freeBytes,
+                    totalBytes: budgetSnapshot.totalBytes,
+                    minutesLeft: budgetSnapshot.minutesLeft,
+                    profile: profileInUse,
+                    level: budgetSnapshot.level,
+                    conferenceBytes: budgetSnapshot.conferenceBytes,
+                    compact: true,
+                  ),
                   clock: widget.clock,
                   onRecord: _handleStartRecord,
                   onPause: _handlePause,

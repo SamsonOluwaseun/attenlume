@@ -1,70 +1,96 @@
 # Handover
 
 Date and agent: 27 October 2026, Google Antigravity, unattended run
-Branch: main (merged from `phase-1/P1-11-android-notification`)
-Current task ID: P1-11 (done). Next: P1-12
+Branch: main (merged from `phase-1/P1-12-storage-budget`)
+Current task ID: P1-12 (done). Next: P1-13
 Status: done
 
 ## Done in this session
 
-- Completed **P1-11: Android foreground service and notification actions** [FR-REC-10]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` and ADR-025.
-  - `android/app/src/main/kotlin/com/samlytics/attenlume/RecordingForegroundService.kt`: Native Android foreground service declared with type `microphone` (`android:foregroundServiceType="microphone"`, `ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE`). Posts ongoing notification to `attenlume_recording_channel` (importance `LOW` to prevent audio chime loops) displaying activity title, state, and zero-CPU live chronometer (`setUsesChronometer(true)`) while actively recording.
-  - Compact and expanded notification actions: Pause/Resume, Stop, Bookmark, and Photo. Actions dispatch via `PendingIntent.getService` directly to `onStartCommand` of `RecordingForegroundService`, which forwards them over `ForegroundServiceChannel.deliverAction` to Dart.
-  - Photo action: Dispatches an activity `PendingIntent` launching `MainActivity` with deep link `attenlume://photo?source=notification`.
-  - `lib/platform/foreground_service/foreground_service_bridge.dart`: `ForegroundServiceBridge` platform bridge with `MethodChannelForegroundServiceBridge` connecting to `com.samlytics.attenlume/foreground_service`, and `NoopForegroundServiceBridge` fallback on Windows and iOS.
-  - `lib/domain/services/foreground_service_coordinator.dart`: Listens to `RecordingService.statusStream`, starting the foreground service on transition into `RecordingState.recording`, updating notification across segment rolls, pauses, resumes, and interruptions, and stopping service on `saved`, `idle`, `stopping`, or `errorRecoverable`. Action taps invoke `recorder.pause()`, `recorder.resume()`, `recorder.stop()`, or `media.addBookmark(source: BookmarkSource.notification)`. Implements `InterruptionNoticeSink` to update ongoing notification content on interruption events, while multiplexing notices to `InAppInterruptionNotices`.
-  - `lib/features/capture/recording_providers.dart`: Added `foregroundServiceBridgeProvider` and `foregroundServiceCoordinatorProvider`. Wired `interruptionCoordinatorProvider` notices sink to `foregroundServiceCoordinatorProvider` and watched in `oneActiveCoordinatorProvider`.
-  - 20 new automated unit and widget tests (550 total in the repository, all passing). Windows release and debug APK builds both succeeded locally. ADR-025 recorded in `docs/DECISIONS.md`.
+- Completed **P1-12: StorageBudgetService and live budget UI** [FR-STO-01 to 04, FR-UI-07]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` and ADR-026.
+  - Native platform free space channels:
+    - Android: `android/app/src/main/kotlin/com/samlytics/attenlume/FreeSpaceChannel.kt` querying `StatFs.availableBytes` and `StatFs.totalBytes` over `com.samlytics.attenlume/free_space`. Attached to `MainActivity.kt`.
+    - iOS: `ios/Runner/FreeSpaceChannel.swift` querying `URLResourceKey.volumeAvailableCapacityForImportantUsageKey` and `volumeTotalCapacityKey` with fallback to `fileSystemFreeSize`. Registered in `AppDelegate.swift`.
+    - `lib/platform/storage/method_channel_free_space_probe.dart`: Unified Dart implementation for Android and iOS dispatching in `FreeSpaceProbe.forPlatform()` alongside `WindowsFreeSpaceProbe`.
+  - `RecordingService` storage preflight and stop reason:
+    - Injected `FreeSpaceProbe` and `StorageThresholds`. In `_refusal`, if `probe.availableBytes()` <= `thresholds.hardStopBytes` (100 MB), start is refused with `StartOutcome.storageFull`.
+    - Added `SegmentEndReason.storageLow` (`storage_low` in database schema) for hard reserve stops.
+    - Exposes `currentSegmentFile` and `currentSegmentStartUtc` for live rate measurement.
+    - `OneActiveCoordinator` translates `StartOutcome.storageFull` to: "Cannot start recording: storage is nearly full (under 100 MB remaining)."
+  - `StorageBudgetService` (`lib/domain/services/storage_budget_service.dart`):
+    - Periodic 30-second timer (`_startPeriodicCheck` / `_stopPeriodicCheck`) while recording.
+    - Rolling write rate calculation: uses active segment file growth on disk when elapsed >= 5s; else prior segment history; else nominal profile rate.
+    - Computes remaining minutes above 100 MB hard reserve (`hardStopBytes`).
+    - Conference folder disk usage calculation via recursive directory sizing (`MediaPaths.conferenceFolder`).
+    - Hard stop enforcement: stops recording safely with `SegmentEndReason.storageLow` when space drops <= 100 MB and notifies via `hardStopNoticeStream`.
+    - Protected with `SerialLock` to avoid race conditions.
+  - `StorageMeter` component (`lib/presentation/components/storage_meter.dart`):
+    - Conforms to `docs/design/components/StorageMeter.md`.
+    - Compact mode: single muted line under timer on `RecordingScreen` when OK; staged warning banner when <1 GB or <60 min; danger banner when <= 300 MB or <= 100 MB.
+    - Expanded mode: used/free progress bar, conference usage, and optional `onManage` action.
+  - `RecordingScreen` integration:
+    - Embedded compact `StorageMeter` inside `RecordButton` below timer.
+    - Storage check pre-record, post-photo, and every 30s.
+    - Alert SnackBar on hard stop reserve trigger.
+  - 28 new automated unit and widget tests (578 total in the repository, all passing). Windows release and debug APK builds both succeeded locally. ADR-026 recorded in `docs/DECISIONS.md`.
 
 ## Left to do on this task
 
-- Nothing in code for P1-11. Real Android phone verification of background recording with screen locked and notification interaction (MT-17) is unverified on physical hardware.
+- Nothing in code for P1-12. Real device free space channel verification on physical Android and iOS devices is unverified on physical hardware.
 
 ## Exact next step
 
-Start **P1-12 StorageBudgetService and live budget UI** [FR-STO-01 to 04, FR-UI-07] on branch `phase-1/P1-12-storage-budget`.
-- Read requirements `FR-STO-01` to `FR-STO-04` and `FR-UI-07` in `docs/BUILD_GUIDE.md`.
-- Implement `StorageBudgetService`:
-  - 30-second ticks while recording (measuring growth of the current segment file vs nominal profile rate).
-  - Storage threshold warnings: low storage warning at 500 MB (prompting user), critical warning at 200 MB, and hard stop at 100 MB (`STORAGE_STOP` -> `saved`).
-- Build live budget UI component on recording screen showing estimated time remaining and storage gauge.
-- Connect platform `FreeSpaceProbe` (`lib/platform/storage/free_space_probe.dart`) to `StorageBudgetService`.
+Start **P1-13 Safety prompts (duration, silence, battery) [FR-REC-06]** on branch `phase-1/P1-13-safety-prompts`.
+- Read requirement `FR-REC-06` in `docs/BUILD_GUIDE.md`:
+  - Safety prompts (configurable):
+    1. Recording longer than 2 hours ("Still in 'Keynote'?").
+    2. Near-silence for 10 minutes ("No sound detected. Still in the session?").
+    3. Low battery below 15% (connect to `BatteryProbe`, Android/iOS battery channels).
+  - Prompts never stop recording on their own (only the 100 MB storage hard limit from P1-12 stops recording).
+  - Configurable prompt thresholds in app settings (or sensible defaults).
+  - Visual non-intrusive banner on the recording screen with dismiss / confirm actions.
 
 ## Files touched
 
 New:
-- `android/app/src/main/kotlin/com/samlytics/attenlume/ForegroundServiceChannel.kt`
-- `android/app/src/main/kotlin/com/samlytics/attenlume/RecordingForegroundService.kt`
-- `lib/domain/services/foreground_service_coordinator.dart`
-- `lib/platform/foreground_service/foreground_service_bridge.dart`
-- `test/domain/foreground_service_coordinator_test.dart`
-- `test/features/capture/recording_providers_foreground_test.dart`
-- `test/fixtures/fake_foreground_service_bridge.dart`
-- `test/platform/foreground_service/foreground_service_bridge_test.dart`
+- `android/app/src/main/kotlin/com/samlytics/attenlume/FreeSpaceChannel.kt`
+- `ios/Runner/FreeSpaceChannel.swift`
+- `lib/domain/services/storage_budget_service.dart`
+- `lib/platform/storage/method_channel_free_space_probe.dart`
+- `lib/presentation/components/storage_meter.dart`
+- `test/domain/recording_service_storage_test.dart`
+- `test/domain/storage_budget_service_test.dart`
+- `test/features/capture/recording_screen_storage_test.dart`
+- `test/platform/storage/method_channel_free_space_probe_test.dart`
+- `test/presentation/components/storage_meter_test.dart`
 
 Changed:
-- `android/app/build.gradle.kts`
-- `android/app/src/main/AndroidManifest.xml`
 - `android/app/src/main/kotlin/com/samlytics/attenlume/MainActivity.kt`
-- `android/app/src/main/res/values/strings.xml`
+- `ios/Runner/AppDelegate.swift`
+- `lib/data/filesystem/media_paths.dart`
+- `lib/domain/services/one_active_coordinator.dart`
+- `lib/domain/services/recording_service.dart`
 - `lib/features/capture/recording_providers.dart`
+- `lib/features/capture/recording_screen.dart`
+- `lib/platform/storage/free_space_probe.dart`
+- `lib/presentation/components/record_button.dart`
 - `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md` (ADR-025)
+- `docs/DECISIONS.md` (ADR-026)
 - `docs/PROGRESS.md`
-- `docs/TEST_PLAN.md`
 - `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (all 550 tests pass). Device tests unchanged from prior sessions:
+None failing in `flutter test` (all 578 tests pass). Device tests unchanged from prior sessions:
 - `integration_test/p0_13_shortcut_trigger_test.dart` fails on Windows by design (no Windows shortcut bridge; Android tile/shortcuts verified in APK build).
 - `integration_test/p0_05_photo_during_recording_test.dart`, `p0_07_bluetooth_routing_test.dart`, `p0_10_long_run_test.dart`, `p0_12_profile_switch_test.dart`, `p0_06_windows_mic_test.dart` fail on this build host because the headless/RDP session has no physical microphone or camera (expected, blocked: needs real device).
 - `integration_test/p0_04_background_recording_test.dart` skipped on Windows (Android/iOS only; needs real Android device for MT-17 rerun).
 
 ## Open questions for the owner
 
-- **ADR-025 (new):** Android notification channel is configured with `NotificationManager.IMPORTANCE_LOW` so ongoing timer updates and state changes do not emit repeated audible chimes. Confirm this meets expectation.
-- **ADR-025 (new):** Notification actions include compact Pause/Resume, Stop, Bookmark, and Photo. Photo dispatches `MainActivity` with `attenlume://photo?source=notification` since opening the camera requires an active foreground activity.
+- **ADR-026 (new):** Free space calculation for Android queries `StatFs.availableBytes` on `context.filesDir`, and iOS queries `volumeAvailableCapacityForImportantUsageKey` on the documents directory. Measured file growth rate averages over the active segment (after 5s) or prior activity segments, falling back to nominal profile rate. Hard stop reserve is 100 MB (`storage_low`). Confirm this meets expectations.
+- **ADR-025:** Android notification channel is configured with `NotificationManager.IMPORTANCE_LOW` so ongoing timer updates and state changes do not emit repeated audible chimes. Confirm this meets expectation.
+- **ADR-025:** Notification actions include compact Pause/Resume, Stop, Bookmark, and Photo. Photo dispatches `MainActivity` with `attenlume://photo?source=notification` since opening the camera requires an active foreground activity.
 - **ADR-024:** Recording screen uses the navy `live-surface` (#00212B) in BOTH light and dark themes ('house lights down') to prevent screen glare in dark lecture halls.
 - **ADR-023:** WAV is not offered in v1 (FR-QUAL-07 allows "off by default"). Say if you want a specialist WAV option sooner.
 - **ADR-023:** On Windows every profile records at 96 kbps (encoder floor), so the selector shows 43.2 MB per hour for all three.

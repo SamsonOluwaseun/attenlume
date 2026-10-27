@@ -20,9 +20,11 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         ShortcutChannel.attach(flutterEngine.dartExecutor.binaryMessenger, this)
         ForegroundServiceChannel.attach(flutterEngine.dartExecutor.binaryMessenger, this)
+        FreeSpaceChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        FreeSpaceChannel.detach()
         ForegroundServiceChannel.detach()
         ShortcutChannel.detach()
         super.cleanUpFlutterEngine(flutterEngine)

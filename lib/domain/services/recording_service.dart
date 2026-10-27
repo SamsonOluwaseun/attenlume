@@ -15,10 +15,12 @@ import '../../data/repositories/repository_support.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
 import '../../platform/audio_route/audio_route_probe.dart';
 import '../../platform/interruptions/audio_interruption_source.dart';
+import '../../platform/storage/free_space_probe.dart';
 import '../../shared/utilities/serial_lock.dart';
 import '../models/enums.dart';
 import 'capture_settings.dart';
 import 'recording_state.dart';
+import 'storage_thresholds.dart';
 
 /// Result of [RecordingService.start].
 enum StartOutcome {
@@ -39,6 +41,9 @@ enum StartOutcome {
 
   /// The app may not use the microphone. Nothing was written.
   microphoneDenied,
+
+  /// Not enough disk space to start recording safely (FR-STO-04) [P1-12].
+  storageFull,
 
   /// Capture could not start. The segment row is kept as damaged and the
   /// recorder is in [RecordingState.errorRecoverable].
@@ -221,6 +226,8 @@ class RecordingService {
     this._commitFile = commitSegmentFile,
     this._rollTimer = Timer.new,
     this.segmentMaxDuration = defaultSegmentMaxDuration,
+    this.freeSpaceProbe = const UnknownFreeSpaceProbe(),
+    this.thresholds = const StorageThresholds(),
   });
 
   final AudioCaptureEngine _engine;
@@ -242,6 +249,9 @@ class RecordingService {
   /// The open segment ends with reason `roll` after this long.
   final Duration segmentMaxDuration;
 
+  final FreeSpaceProbe freeSpaceProbe;
+  final StorageThresholds thresholds;
+
   final _lock = SerialLock();
   final _statusController = StreamController<RecordingStatus>.broadcast();
   Directory? _resolvedRoot;
@@ -257,6 +267,13 @@ class RecordingService {
 
   /// Every status change, starting with the next one.
   Stream<RecordingStatus> get statusStream => _statusController.stream;
+
+  /// The file currently being written to by the capture engine, or null
+  /// when not recording (FR-STO-01) [P1-12].
+  File? get currentSegmentFile => _open?.file;
+
+  /// When the current open segment began, or null when not recording (FR-STO-01) [P1-12].
+  DateTime? get currentSegmentStartUtc => _open?.startUtc;
 
   /// Starts recording [activityId] in one call (FR-REC-01). After a failed
   /// start, calling it again for the same activity retries.
@@ -335,6 +352,11 @@ class RecordingService {
       return StartOutcome.recordingNotPermitted;
     }
     if (!await _engine.hasPermission()) return StartOutcome.microphoneDenied;
+    final root = await _mediaRoot();
+    final space = await freeSpaceProbe.query(root.path);
+    if (space != null && space.availableBytes <= thresholds.hardStopBytes) {
+      return StartOutcome.storageFull;
+    }
     return null;
   }
 
@@ -573,14 +595,17 @@ class RecordingService {
 
   /// Stops and saves the current recording. Returns the saved activity ID,
   /// or null if nothing was held (repeat stops are harmless).
-  Future<String?> stop() => _lock.run(_stopLocked);
+  Future<String?> stop({SegmentEndReason reason = SegmentEndReason.userStop}) =>
+      _lock.run(() => _stopLocked(reason: reason));
 
-  Future<String?> _stopLocked() async {
+  Future<String?> _stopLocked({
+    SegmentEndReason reason = SegmentEndReason.userStop,
+  }) async {
     if (!_status.state.holdsActivity) return null;
     final activityId = _status.activityId!;
     return _guard(() async {
       _moveTo(_copyStatus(RecordingState.stopping));
-      if (_open != null) await _finishSegment(SegmentEndReason.userStop);
+      if (_open != null) await _finishSegment(reason);
       await _closeInterruption(autoResumed: false);
       final segments = await _media.segmentsFor(activityId);
       final lastEnd = segments.isEmpty ? null : segments.last.endUtc;
@@ -754,7 +779,7 @@ class RecordingService {
       );
       return error;
     }
-    _open = _OpenSegment(segment.id, file, target, route);
+    _open = _OpenSegment(segment.id, file, target, route, segment.startUtc);
     _rollDue = _rollTimer(segmentMaxDuration, () => _onRollDue(segment.id));
     _moveTo(
       RecordingStatus(
@@ -935,7 +960,13 @@ class RecordingService {
 }
 
 class _OpenSegment {
-  _OpenSegment(this.segmentId, this.file, this.target, this.route);
+  _OpenSegment(
+    this.segmentId,
+    this.file,
+    this.target,
+    this.route,
+    this.startUtc,
+  );
 
   final String segmentId;
 
@@ -945,4 +976,5 @@ class _OpenSegment {
   /// The relative path the file gets once finalised.
   final String target;
   final InputRoute? route;
+  final DateTime startUtc;
 }
