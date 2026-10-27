@@ -24,6 +24,7 @@ class TrimPanel extends StatelessWidget {
     required this.onSplit,
     required this.onRemoveCut,
     required this.onSeek,
+    this.onApplyPermanently,
   });
 
   final int positionMs;
@@ -44,6 +45,9 @@ class TrimPanel extends StatelessWidget {
   final VoidCallback onSplit;
   final ValueChanged<CutRange> onRemoveCut;
   final ValueChanged<int> onSeek;
+
+  /// "Apply trims permanently" (FR-REV-06) [P1-19]. Hidden when null.
+  final VoidCallback? onApplyPermanently;
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +159,23 @@ class TrimPanel extends StatelessWidget {
               icon: const Icon(Icons.close_rounded),
             ),
           ),
+        if (cuts.isNotEmpty && onApplyPermanently != null) ...[
+          const SizedBox(height: TokenSpace.space2),
+          TextButton.icon(
+            key: const Key('trim-apply-permanently'),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(TokenSize.tapMin, TokenSize.tapMin),
+            ),
+            onPressed: enabled ? onApplyPermanently : null,
+            icon: const Icon(Icons.save_alt_rounded, size: 20),
+            label: const Text('Apply trims permanently'),
+          ),
+          Text(
+            'Writes new audio files without the cut parts. Your originals '
+            'are kept until you choose to remove them.',
+            style: muted,
+          ),
+        ],
       ],
     );
   }

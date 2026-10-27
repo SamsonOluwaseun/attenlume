@@ -650,6 +650,13 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - `integration_test/app_capture_journey_test.dart` on Windows passed. Windows release preview (`build_windows_preview.ps1 -SkipTests`) and `flutter build apk --debug` succeed on `main` after the merge.
 - Cut skipping and split on real devices are unverified. MT-25 written.
 
+## 27 October 2026: P1-19 permanent trim (Claude Code, Opus 5.5, overnight relay)
+
+- Before changes: `flutter analyze` clean, `flutter test` 681 passed.
+- ADR-037: `Mp4SampleTrimmer` rewrites the MP4 sample tables in Dart and copies the kept AAC frames byte for byte (no re-encode), on every platform, behind `AudioTrimmer`. `PermanentTrimService` plans pieces per segment from merged cuts, writes and verifies one file per kept piece, then swaps the rows in one transaction (`MediaAssetRepository.replaceWithTrimmed`), shifting stored offsets if the first segment now starts later. Originals no other row names move to `audio/originals/`; a second dialog offers Remove or Keep. Waveform summaries are sliced. Review screen: "Apply trims permanently" in the trim panel, confirm dialog with removed and kept time and space needed, then the originals dialog.
+- Tests: 22 new (10 trimmer and sample table, 9 service, 3 widget). `flutter test` 703 passed, `flutter analyze` clean, `dart format` clean, no new packages.
+- Real recordings from Android, iOS and Windows have not been trimmed: tests use synthetic MP4 files shaped like them. MT-26 written.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -690,3 +697,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-17 | done (playback unverified on devices) | Review timeline, player across segments and gaps, waveform summaries and paged view, review screen, 28 new tests (648 total). ADR-034. MT-23 for devices |
 | P1-15 | done (devices unverified) | Gallery import by time window: phones via `photo_manager`, Windows via folder and EXIF, margin, duplicate and large warnings, 17 new tests (665 total). ADR-035. MT-24 for devices |
 | P1-18 | done (devices unverified) | Trim start and end, middle cuts with undo, cut skipping in the player, split at the playhead with a shared segment and divided cuts, 16 new tests (681 total). ADR-036. MT-25 for devices |
+| P1-19 | done (devices unverified) | `Mp4SampleTrimmer` passthrough sample-table rewrite, permanent trim service with verified files then one transaction, originals kept in `audio/originals/` until removed, 22 new tests (703 total). ADR-037. MT-26 for devices |

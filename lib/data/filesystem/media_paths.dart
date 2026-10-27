@@ -94,6 +94,42 @@ abstract final class MediaPaths {
     '$segmentId.wave',
   );
 
+  /// `audio/segment-001-trim-2.m4a`: piece [piece] of segment [sequence]
+  /// written by a permanent trim (FR-REV-06, ADR-037) [P1-19]. A non-zero
+  /// [attempt] adds a suffix so an existing file is never overwritten.
+  static String trimmedSegment(
+    String conferenceId,
+    String activityId,
+    int sequence,
+    int piece, {
+    int attempt = 0,
+  }) {
+    final base =
+        'segment-${sequence.toString().padLeft(3, '0')}-trim-$piece'
+        '${attempt == 0 ? '' : '-${attempt + 1}'}';
+    return p.posix.join(
+      activityFolder(conferenceId, activityId),
+      'audio',
+      '$base.m4a',
+    );
+  }
+
+  /// `audio/originals/`: recordings a permanent trim replaced, kept until
+  /// the user removes them (FR-REV-06, ADR-037) [P1-19]. Crash recovery
+  /// only looks for unlinked files directly in `audio/`.
+  static String originalsFolder(String conferenceId, String activityId) => p
+      .posix
+      .join(activityFolder(conferenceId, activityId), 'audio', 'originals');
+
+  /// True for a path inside an activity's `audio/originals/` folder.
+  static bool isKeptOriginal(String relativePath) {
+    final parts = p.posix.split(relativePath);
+    return parts.length == 7 &&
+        parts[2] == 'activities' &&
+        parts[4] == 'audio' &&
+        parts[5] == 'originals';
+  }
+
   /// The absolute file for a stored relative path.
   static File resolve(Directory mediaRoot, String relativePath) =>
       File(p.joinAll([mediaRoot.path, ...p.posix.split(relativePath)]));
