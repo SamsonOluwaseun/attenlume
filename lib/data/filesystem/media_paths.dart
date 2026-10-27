@@ -81,6 +81,19 @@ abstract final class MediaPaths {
     '$photoId.jpg',
   );
 
+  /// `waveforms/<segment_id>.wave` in the activity folder: the level
+  /// summary drawn on the review screen (FR-REV-03, ADR-034) [P1-17].
+  /// Keyed by segment id because the audio file is renamed on finalising.
+  static String waveform(
+    String conferenceId,
+    String activityId,
+    String segmentId,
+  ) => p.posix.join(
+    activityFolder(conferenceId, activityId),
+    'waveforms',
+    '$segmentId.wave',
+  );
+
   /// The absolute file for a stored relative path.
   static File resolve(Directory mediaRoot, String relativePath) =>
       File(p.joinAll([mediaRoot.path, ...p.posix.split(relativePath)]));

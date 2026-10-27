@@ -246,6 +246,7 @@ No single maintained package covers Android, iOS and Windows:
 - Windows options: `just_audio_windows` 0.2.3 (MIT, community, last release April 2026), or `just_audio_media_kit` (Unlicense, no release since April 2025, bundles libmpv, which is large).
 - Fallback: `audioplayers` 6.8.1 (MIT, covers all three).
 - Decision: `just_audio` plus `just_audio_windows`, behind a `PlaybackEngine` interface so it can be swapped. Verify seeking accuracy in M4A on Windows: not done in P0-06 (no recording could be made on the build host), moved to P1-17.
+- **Changed in P1-17 (ADR-034):** `audioplayers` 6.8.1 adopted instead, because one publisher (Blue Fire) maintains all three platform implementations, Windows included (Media Foundation). Seeking accuracy is still unverified: the build host has no microphone to make a real M4A. Windows release and Android debug builds succeed with it.
 
 ### 2.11 Trimming (FR-REV-07, ADR-003 in P0-14)
 

@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 138 Dart and Flutter packages in `pubspec.lock`: 101 can be part of the app, 37 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (7), BSD-2-Clause (1), BSD-3-Clause (78), Flutter engine bundle (permissive, see note) (1), MIT (14).
+- 146 Dart and Flutter packages in `pubspec.lock`: 109 can be part of the app, 37 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (7), BSD-2-Clause (1), BSD-3-Clause (78), Flutter engine bundle (permissive, see note) (1), MIT (22).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -20,6 +20,13 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `args` | 2.7.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `async` | 2.13.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `audio_session` | 0.2.4 | pub.dev | direct main | MIT | Copyright (c) 2020 Ryan Heise and the project contributors. |
+| `audioplayers` | 6.8.1 | pub.dev | direct main | MIT | Copyright (c) 2017 Blue Fire |
+| `audioplayers_android` | 5.3.0 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
+| `audioplayers_darwin` | 6.5.0 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
+| `audioplayers_linux` | 4.3.0 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
+| `audioplayers_platform_interface` | 7.2.0 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
+| `audioplayers_web` | 5.3.0 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
+| `audioplayers_windows` | 4.4.1 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
 | `boolean_selector` | 2.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2016, the Dart project authors. |
 | `camera` | 0.12.1 | pub.dev | direct main | BSD-3-Clause | Copyright 2013 The Flutter Authors |
 | `camera_android_camerax` | 0.7.6 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
@@ -107,6 +114,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `stream_channel` | 2.1.4 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `stream_transform` | 2.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. |
 | `string_scanner` | 1.4.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
+| `synchronized` | 3.5.0 | pub.dev | transitive | MIT | Copyright (c) 2016, Alexandre Roux Tekartik. |
 | `term_glyph` | 1.2.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. |
 | `test_api` | 0.7.12 | pub.dev | transitive | BSD-3-Clause | Copyright 2018, the Dart project authors. |
 | `timezone` | 0.11.2 | pub.dev | direct main | BSD-2-Clause | Copyright (c) 2014, timezone project authors. |
@@ -395,6 +403,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 MIT License
 
 Copyright (c) 2020 Ryan Heise and the project contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### MIT: `audioplayers`, `audioplayers_android`, `audioplayers_darwin`, `audioplayers_linux`, `audioplayers_platform_interface`, `audioplayers_web`, `audioplayers_windows`
+
+```text
+MIT License
+
+Copyright (c) 2017 Blue Fire
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2126,6 +2160,32 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### MIT: `synchronized`
+
+```text
+MIT License
+
+Copyright (c) 2016, Alexandre Roux Tekartik.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### BSD-3-Clause: `test_api`

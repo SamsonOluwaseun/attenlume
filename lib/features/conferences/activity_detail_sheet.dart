@@ -20,6 +20,7 @@ import '../capture/recording_profile_selector.dart';
 import '../capture/recording_providers.dart';
 import '../capture/recording_screen.dart';
 import '../photos/activity_photos_section.dart';
+import '../playback_review/review_screen.dart';
 
 /// Modal bottom sheet displaying detailed activity metadata, contact details,
 /// and captured assets (FR-ACT-03, FR-ACT-04, FR-ACT-08).
@@ -559,6 +560,17 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
               ),
 
               const SizedBox(height: TokenSpace.space4),
+
+              if (_summary.segmentCount > 0 &&
+                  !_summary.hasActiveRecording) ...[
+                AttenlumeButton(
+                  key: const Key('activity-detail-review-button'),
+                  label: 'Play and review',
+                  leading: const Icon(Icons.play_arrow_rounded),
+                  onPressed: () => openReview(context, act.id),
+                ),
+                const SizedBox(height: TokenSpace.space3),
+              ],
 
               AttenlumeButton(
                 key: const Key('activity-detail-record-button'),
