@@ -45,6 +45,7 @@ Test results on `phase-0/P0-02-scaffold` (Windows 11 build host):
 - Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 12 passed.
 - New docs from build guide 1.6: `docs/PRODUCT_SPEC.md` (11 journeys, 18 user stories, edge cases, acceptance detail), `docs/PRIVACY_AND_SAFETY.md` (consent, stored data, retention, sharing, permission wording drafts, cloud and AI summaries), `docs/TEST_PLAN.md` (current suite, planned unit, widget and integration tests, manual tests MT-01 to 15, AT list with every device cell unverified, AT-CLD-01 to 10 and Phase 2 placeholders, device matrix, empty results log), `docs/RELEASE_PLAN.md` (milestones, versioning, CI, Windows, Android and iOS distribution, iOS blocked without a Mac, identifiers, checklist).
 - `README.md`: every 1.6 document linked, plus export format, caveats and Windows downloads sections.
+- `pubspec.lock`: `flutter pub get` dropped a stale `cupertino_icons` entry (removed from `pubspec.yaml` in P0-02 but left in the lock). No dependency change.
 - New test `test/docs/docs_index_test.dart` (P0-03, 2 tests): every 1.6 document exists and is linked from the README.
 
 Test results on `phase-0/P0-03-docs` (Windows 11 build host):
