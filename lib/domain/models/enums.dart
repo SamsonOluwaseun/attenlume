@@ -39,6 +39,41 @@ enum RecordingProfile implements KeyedEnum {
   static const RecordingProfile globalDefault = balanced;
 }
 
+extension RecordingProfileExtension on RecordingProfile {
+  String get label {
+    switch (this) {
+      case RecordingProfile.economy:
+        return 'Economy';
+      case RecordingProfile.balanced:
+        return 'Balanced';
+      case RecordingProfile.enhanced:
+        return 'Enhanced';
+    }
+  }
+
+  String get mbPerHourLabel {
+    switch (this) {
+      case RecordingProfile.economy:
+        return '~14.4 MB/h';
+      case RecordingProfile.balanced:
+        return '~21.6 MB/h';
+      case RecordingProfile.enhanced:
+        return '~28.8 MB/h';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case RecordingProfile.economy:
+        return 'Lowest file size, best for long events with limited space';
+      case RecordingProfile.balanced:
+        return 'Clear speech and balanced storage (default)';
+      case RecordingProfile.enhanced:
+        return 'Highest fidelity, best for keynotes';
+    }
+  }
+}
+
 /// Participant role at a conference (FR-CONF-03).
 enum RoleType implements KeyedEnum {
   attendee('attendee'),
@@ -51,6 +86,25 @@ enum RoleType implements KeyedEnum {
   const RoleType(this.key);
   @override
   final String key;
+}
+
+extension RoleTypeExtension on RoleType {
+  String get label {
+    switch (this) {
+      case RoleType.attendee:
+        return 'Attendee';
+      case RoleType.speaker:
+        return 'Speaker';
+      case RoleType.exhibitor:
+        return 'Exhibitor';
+      case RoleType.student:
+        return 'Student';
+      case RoleType.journalist:
+        return 'Journalist';
+      case RoleType.custom:
+        return 'Custom';
+    }
+  }
 }
 
 /// Outputs the user wants from a conference (FR-CONF-05).
@@ -66,6 +120,27 @@ enum RequestedOutput implements KeyedEnum {
   const RequestedOutput(this.key);
   @override
   final String key;
+}
+
+extension RequestedOutputExtension on RequestedOutput {
+  String get label {
+    switch (this) {
+      case RequestedOutput.personalNotes:
+        return 'Personal notes';
+      case RequestedOutput.briefing:
+        return 'Briefing';
+      case RequestedOutput.presentation:
+        return 'Presentation';
+      case RequestedOutput.linkedinPost:
+        return 'LinkedIn post';
+      case RequestedOutput.blog:
+        return 'Blog';
+      case RequestedOutput.researchSummary:
+        return 'Research summary';
+      case RequestedOutput.followUpList:
+        return 'Follow-up list';
+    }
+  }
 }
 
 enum ActivityStatus implements KeyedEnum {

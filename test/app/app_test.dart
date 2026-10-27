@@ -1,14 +1,35 @@
 import 'package:attenlume/app/app.dart';
+import 'package:attenlume/data/local_database/app_database.dart';
+import 'package:attenlume/data/local_database/database_provider.dart';
 import 'package:attenlume/features/onboarding/welcome_screen.dart';
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  late AppDatabase db;
+
+  setUp(() {
+    db = AppDatabase(NativeDatabase.memory());
+  });
+
+  tearDown(() async {
+    await db.close();
+  });
+
+  Widget createSubject() {
+    return ProviderScope(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      child: const AttenlumeApp(),
+    );
+  }
+
   testWidgets('P0-02 app starts on the welcome screen with the tagline', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: AttenlumeApp()));
+    await tester.pumpWidget(createSubject());
+    await tester.pumpAndSettle();
     expect(find.byType(WelcomeScreen), findsOneWidget);
     expect(find.text(WelcomeScreen.tagline), findsOneWidget);
     expect(
@@ -18,7 +39,8 @@ void main() {
   });
 
   testWidgets('NFR-01 no sign-in is offered in the free core', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: AttenlumeApp()));
+    await tester.pumpWidget(createSubject());
+    await tester.pumpAndSettle();
     expect(
       find.textContaining(RegExp('sign in', caseSensitive: false)),
       findsNothing,
@@ -28,7 +50,8 @@ void main() {
   testWidgets('P0-02 app follows the system theme with Montserrat', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: AttenlumeApp()));
+    await tester.pumpWidget(createSubject());
+    await tester.pumpAndSettle();
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.system);
     expect(app.theme!.textTheme.bodyLarge!.fontFamily, 'Montserrat');

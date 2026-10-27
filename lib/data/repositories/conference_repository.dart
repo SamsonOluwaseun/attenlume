@@ -39,6 +39,7 @@ class ConferenceRepository {
     String? roleText,
     List<RequestedOutput> requestedOutputs = const [],
     RecordingProfile? defaultRecordingProfile,
+    DateTime? policyAcknowledgedAt,
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
@@ -64,6 +65,7 @@ class ConferenceRepository {
             roleText: Value(roleText),
             requestedOutputs: requestedOutputs,
             defaultRecordingProfile: profile,
+            policyAcknowledgedAt: Value(policyAcknowledgedAt),
             createdAt: now,
             updatedAt: now,
           ),
@@ -74,6 +76,40 @@ class ConferenceRepository {
   Future<Conference?> get(String id) => (_db.select(
     _db.conferences,
   )..where((c) => c.id.equals(id))).getSingleOrNull();
+
+  /// All conferences, newest start date first (FR-CONF-08).
+  Future<List<Conference>> getAll({bool includeArchived = false}) {
+    final query = _db.select(_db.conferences);
+    if (!includeArchived) query.where((c) => c.archivedAt.isNull());
+    query.orderBy([
+      (c) => OrderingTerm(
+        expression: c.startDate,
+        mode: OrderingMode.desc,
+        nulls: NullsOrder.last,
+      ),
+      (c) => OrderingTerm.desc(c.createdAt),
+    ]);
+    return query.get();
+  }
+
+  /// Recent conferences, newest first (FR-CONF-01).
+  Future<List<Conference>> getRecent({
+    int limit = 5,
+    bool includeArchived = false,
+  }) {
+    final query = _db.select(_db.conferences);
+    if (!includeArchived) query.where((c) => c.archivedAt.isNull());
+    query.orderBy([
+      (c) => OrderingTerm(
+        expression: c.startDate,
+        mode: OrderingMode.desc,
+        nulls: NullsOrder.last,
+      ),
+      (c) => OrderingTerm.desc(c.createdAt),
+    ]);
+    query.limit(limit);
+    return query.get();
+  }
 
   /// Conferences, newest start date first. Archived ones are hidden unless
   /// [includeArchived] (NFR-02 keeps them accessible).
