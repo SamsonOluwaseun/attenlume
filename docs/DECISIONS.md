@@ -168,3 +168,34 @@ Format: context, decision, alternatives, consequences.
 - **Consequences:**
   - P1-02 (Conference home and activity list) can build directly on the created conference data model and navigation routes.
 
+
+
+## ADR-010: Conference home, activity list and reusable presentation components (P1-02)
+
+- **Date:** 27 October 2026. **Decided by:** Google Antigravity in unattended mode, task P1-02. Owner to review.
+- **Context:** P1-02 implements Conference home and the chronological activity list [FR-ACT-01 to 03]. Requirements:
+  1. *FR-ACT-01*: Conference home MUST show name, dates, activity count, total recorded time, local storage used and a single dominant "Start activity" action.
+  2. *FR-ACT-02*: MUST offer quick-start buttons for the most used types: Session, Conversation, Exhibit, Reflection.
+  3. *FR-ACT-03*: MUST list activities chronologically with type icon, title, start time, recording state, effective recording profile, photo count and bookmark count.
+  4. *Design specs*: ActivityCard (`docs/design/components/ActivityCard.md`), StatusPill (`docs/design/components/StatusPill.md`), Button (`docs/design/components/Button.md`), and empty conference messaging ("Nothing captured yet. Start your first activity when the session begins.").
+- **Decision:**
+  1. **Reusable Presentation Components (`lib/presentation/components/`)**:
+     - `StatusPill`: Complies with DESIGN_GUIDE status mapping. On cream surfaces, `recording` displays a navy pill (`paletteNavy`) with a lime dot (`live`) and cream text (`paletteCream`), adhering to the core brand requirement: "Never a lime mark on cream." Paused and interrupted render transparent pills with `lineStrong` borders and respective pause/phone-disabled icons. Saved/exported/verified render with `success` fill and check icon. Private renders with lock icon.
+     - `AttenlumeButton`: Implements primary (brand blue fill, cream 19px semibold label meeting the large-text contrast rule, min height 52px), secondary (transparent with 1.5px outline), ghost, and danger variants.
+     - `ActivityCard`: Implements the 4-row card anatomy (`surface-raised` background, `radius-md` 16px, padding `space-4` 16px). Row 1 displays type icon/label, optional private lock badge, and StatusPill. Row 2 displays title in Montserrat Semibold 20px heading (max 2 lines with ellipsis). Row 3 displays metadata formatted as "09:30 · Hall A · 47 min" in `body-small` `ink-muted`. Row 4 displays photo/bookmark counts with icons and effective profile pill. The whole card provides an accessible semantic tap target.
+  2. **High-performance summary and stats queries**:
+     - `ConferenceRepository.stats` and `watchStats` aggregate activity count, total duration (sum of segment milliseconds), and storage used (sum of segment audio bytes + photo bytes) in a single SQLite query without N+1 overhead (FR-ACT-01).
+     - `ActivityRepository.listSummariesForConference` and `watchSummariesForConference` build `ActivitySummary` models with duration, photo count, bookmark count, active segment detection, and effective profile resolution.
+     - **Elevation of active recordings**: An activity that is actively recording (`StatusPillStatus.recording`) moves to index 0 at the top of the timeline list, followed by remaining activities in chronological order.
+  3. **Conference home layout & quick-start flow (FR-ACT-01, FR-ACT-02, FR-ACT-03)**:
+     - Header: Displays conference name, formatted date range (`formatDateRange`), venue, timezone, description, and profile/role chips.
+     - Stats card: 3 columns displaying activities count, total recorded duration (`formatDuration`), and storage used (`formatStorageBytes`) using Montserrat Bold `stat` typography (FR-ACT-01).
+     - Dominant "Start activity" button: Prominent primary `AttenlumeButton` opening `StartActivitySheet`, enabling selection of any built-in or custom activity type or custom title entry.
+     - Quick-start section: 4 buttons with 48px touch targets for the most used types (Session, Conversation, Exhibit, Reflection). Tapping any button immediately creates an activity of that type, defaulting to "{Type} {n}, {HH:mm}" in conference local time (FR-ACT-05), stamps reflections as private (FR-EXP-10), and refreshes the timeline with confirmation feedback.
+     - Activity list: Renders chronological `ActivityCard` items. When empty, displays the design guide prompt ("Nothing captured yet. Start your first activity when the session begins."). Tapping any activity card opens `ActivityDetailSheet` showing detailed asset counts and metadata.
+- **Alternatives:**
+  - Launching directly into recording on dominant button tap without type choice (rejected: users frequently capture keynotes, panels, breakouts, workshops, or reflections).
+  - Floating action button (rejected: FR-ACT-01 specifies single dominant "Start activity" action).
+- **Consequences:**
+  - P1-03 (Activity CRUD, custom types, consent check) builds directly on `StartActivitySheet` and `ActivityDetailSheet`.
+  - P1-04 (RecordingService) can trigger live recording state, which automatically elevates the recording card to the top with `StatusPillStatus.recording`.

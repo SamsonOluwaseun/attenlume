@@ -1,6 +1,8 @@
 /// Pure Dart date formatting utilities in UK English (DESIGN_GUIDE, PRODUCT_SPEC).
 library;
 
+import '../../domain/services/activity_title.dart';
+
 const List<String> _monthsShort = [
   'Jan',
   'Feb',
@@ -73,4 +75,62 @@ String formatDateRange(DateTime? start, DateTime? end) {
   }
 
   return '${formatDateShort(s)} – ${formatDateShort(e)}';
+}
+
+/// Formats a duration in UK English (FR-ACT-01, FR-ACT-03):
+/// - 0 min: "0 min"
+/// - Under a minute (> 0): "< 1 min"
+/// - Under an hour: "47 min"
+/// - Exact hours: "2 h"
+/// - Hours and minutes: "1 h 12 min"
+String formatDuration(Duration duration) {
+  final totalMinutes = duration.inMinutes;
+  if (totalMinutes == 0) {
+    if (duration.inSeconds > 0) return '< 1 min';
+    return '0 min';
+  }
+  final hours = duration.inHours;
+  final minutes = totalMinutes % 60;
+  if (hours == 0) {
+    return '$minutes min';
+  }
+  if (minutes == 0) {
+    return '$hours h';
+  }
+  return '$hours h $minutes min';
+}
+
+/// Formats storage bytes cleanly (FR-ACT-01):
+/// - 0: "0 B"
+/// - < 1 KB: "512 B"
+/// - < 1 MB: "350.2 KB"
+/// - < 1 GB: "14.2 MB" (or "14 MB" if integer)
+/// - >= 1 GB: "1.2 GB"
+String formatStorageBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) {
+    final kb = bytes / 1024;
+    return '${kb.toStringAsFixed(1)} KB';
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    final mb = bytes / (1024 * 1024);
+    if (mb >= 10) {
+      final whole = mb.roundToDouble();
+      if ((mb - whole).abs() < 0.05) {
+        return '${whole.toInt()} MB';
+      }
+    }
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+  final gb = bytes / (1024 * 1024 * 1024);
+  return '${gb.toStringAsFixed(1)} GB';
+}
+
+/// Formats UTC instant as "HH:mm" in conference timezone (FR-ACT-03).
+String formatTimeOfDayInTimezone(DateTime utcTime, String timezone) {
+  final local = toConferenceTime(utcTime, timezone);
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }

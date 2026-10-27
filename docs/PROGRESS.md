@@ -110,11 +110,11 @@ Test results on `phase-0/P0-08-licences` (Windows 11 build host):
 
 ## 2026-10-27, Google Antigravity: P0-11 low storage and streaming export spike
 
-- Start-of-session check on main: lutter analyze no issues, lutter test 117 passed.
+- Start-of-session check on main: flutter analyze no issues, flutter test 117 passed.
 - Free space probing: FreeSpaceProbe interface (lib/platform/storage/free_space_probe.dart) and Win32 GetDiskFreeSpaceExW implementation (windows_free_space_probe.dart) via dart:ffi.
-- Storage thresholds: StorageThresholds and ssessStorage (lib/domain/services/storage_thresholds.dart) implementing FR-STO-01, FR-STO-02, and FR-STO-04 defaults (ok, warning, urgent, hardStop).
+- Storage thresholds: StorageThresholds and assessStorage (lib/domain/services/storage_thresholds.dart) implementing FR-STO-01, FR-STO-02, and FR-STO-04 defaults (ok, warning, urgent, hardStop).
 - Export preflight and estimation: preflightExport, estimateFolderExportBytes, and estimateZipExportBytes (lib/data/filesystem/export_space.dart) with defaultExportReserveBytes (256 MB) and InsufficientSpaceException (FR-EXP-05, AT-STO-03).
-- Streaming ZIP export: exportZip (lib/data/filesystem/zip_export.dart) using rchive 4.5.2 with store compression (ZipFileEncoder.store), embedded checksums.sha256 and companion <zipName>.sha256, and atomic rename from .partial (FR-EXP-02, FR-EXP-04, FR-EXP-06).
+- Streaming ZIP export: exportZip (lib/data/filesystem/zip_export.dart) using archive 4.5.2 with store compression (ZipFileEncoder.store), embedded checksums.sha256 and companion <zipName>.sha256, and atomic rename from .partial (FR-EXP-02, FR-EXP-04, FR-EXP-06).
 - Folder export update: exportFolder now includes preflight free space check and disk-full exception mapping (ExportOutOfSpaceException).
 - Failure injection: tested preflight rejection and mid-export disk full via injected writer (openSink), verifying partial targets are removed and source media is untouched.
 - Spike runner: StorageExportSpike (lib/spikes/storage_export_spike.dart).
@@ -125,8 +125,8 @@ Test results on `phase-0/P0-08-licences` (Windows 11 build host):
 
 Test results on phase-0/P0-11-storage-export (Windows 11 build host):
 
-- lutter analyze: no issues.
-- lutter test: 150 passed, 0 failed (33 new, P0-11).
+- flutter analyze: no issues.
+- flutter test: 150 passed, 0 failed (33 new, P0-11).
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
 - flutter build windows --release and flutter build apk --debug: both built successfully.
@@ -174,6 +174,42 @@ Test results on phase-1/P1-01-conference-wizard (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
 - flutter build windows --release and flutter build apk --debug: both built successfully.
 
+## 2026-10-27, Google Antigravity: P1-02 conference home and activity list
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 190 passed.
+- Conference home landing screen (`lib/features/conferences/conference_home_screen.dart`, FR-ACT-01):
+  - Displays conference name, formatted date range (`formatDateRange`), venue, timezone, description, and profile/role chips.
+  - Dedicated Stats Card in Montserrat Bold `stat` typography displaying activity count, formatted recorded duration (`formatDuration`), and formatted storage used (`formatStorageBytes`).
+  - Single dominant "Start activity" action (`AttenlumeButton` variant primary, 52px height, 19px semibold cream label on brand blue fill, mic icon). Opens `StartActivitySheet` where users can select any activity type or enter a custom title.
+- Quick-start activity buttons (`lib/features/conferences/conference_home_screen.dart`, FR-ACT-02):
+  - Offers 4 dedicated action buttons for the most used types: Session (`Icons.slideshow_rounded`), Conversation (`Icons.handshake_rounded`), Exhibit (`Icons.store_rounded`), and Reflection (`Icons.lightbulb_rounded`).
+  - Tapping any quick-start button creates an activity with default title "{Type} {n}, {HH:mm}" in conference local time (FR-ACT-05, FR-CONF-02), stamps reflections as private (FR-EXP-10), and updates the timeline instantly with confirmation feedback.
+- Chronological activity list and elevation of active recordings (`lib/presentation/components/activity_card.dart`, `lib/data/repositories/activity_repository.dart`, FR-ACT-03):
+  - Chronological ordering by actual start, else planned start, else creation time.
+  - Actively recording activity (`StatusPillStatus.recording`) automatically moves to index 0 at the top of the timeline list.
+  - Empty state displays design guide prompt: "Nothing captured yet. Start your first activity when the session begins."
+  - Activity details inspector: tapping an activity card opens `ActivityDetailSheet` showing detailed asset counts, metadata, and privacy notice.
+- Reusable presentation components:
+  - `StatusPill` (`lib/presentation/components/status_pill.dart`): implements exact status mapping per DESIGN_GUIDE. On light/cream surfaces, recording renders as navy pill with lime dot and cream text ("Never a lime mark on cream"); on navy surfaces uses live lime fill. Supports paused, interrupted, saved, exported, verified, private, and draft.
+  - `AttenlumeButton` (`lib/presentation/components/attenlume_button.dart`): implements primary (brand blue fill, cream 19px semibold text, 52px min height), secondary, ghost, and danger variants.
+  - `ActivityCard` (`lib/presentation/components/activity_card.dart`): 4-row card anatomy with type icon/label, optional lock badge, StatusPill, heading title (max 2 lines with ellipsis), "09:30 · Hall A · 47 min" metadata, asset counts with icons, and recording profile badge. Accessible semantic tap target with compound label.
+- Date, duration, and storage formatting utilities (`lib/shared/utilities/date_formatters.dart`):
+  - `formatDuration`: UK English formatted duration ("0 min", "< 1 min", "47 min", "1 h 12 min").
+  - `formatStorageBytes`: formatted byte representation ("0 B", "512 B", "350.0 KB", "14.2 MB", "1.2 GB").
+  - `formatTimeOfDayInTimezone`: local "HH:mm" time from UTC instant in conference timezone.
+- Aggregate summary and stats queries:
+  - `ConferenceRepository.stats` and `watchStats`: aggregates activity count, duration, and storage in a single query (FR-ACT-01).
+  - `ActivityRepository.listSummariesForConference` and `watchSummariesForConference`: compiles duration, photo counts, bookmark counts, active segments, and effective profile.
+- Architecture Decision Record: ADR-010 recorded in `docs/DECISIONS.md`.
+
+Test results on phase-1/P1-02-conference-home (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 218 passed, 0 failed (28 new, P1-02).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool: clean.
+- flutter build windows --release and flutter build apk --debug: both built successfully.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -187,3 +223,4 @@ Test results on phase-1/P1-01-conference-wizard (Windows 11 build host):
 | P0-11 | done | Windows probe, thresholds, preflight, folder and ZIP streaming exports pass 33 tests (150 total). 1 GiB RAM benchmark: 10.3 MB / 5.6 MB peak RSS delta. ADR-008 |
 | P0-14 | done | Cut-range maths, split logic, cuts.json manifest, M4A container trimmer, failure rollback pass 29 tests (179 total). ADR-003 |
 | P1-01 | done | Quick start (<30 s, 1 field + 1 button), wizard, role, goals, outputs, profile, policy notice, archive, deletion summary pass 11 tests (190 total). ADR-009 |
+| P1-02 | done | Conference home, stats card, dominant button, 4 quick-start buttons, chronological activity list, ActivityCard, StatusPill, AttenlumeButton, 28 new tests (218 total). ADR-010 |

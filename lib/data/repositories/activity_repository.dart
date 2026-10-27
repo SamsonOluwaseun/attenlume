@@ -169,21 +169,203 @@ class ActivityRepository {
 
   /// Activities of a conference in chronological order (FR-ACT-03): by
   /// actual start, else planned start, else creation time.
-  Stream<List<Activity>> watchForConference(String conferenceId) {
-    final a = _db.activities;
-    return (_db.select(a)
-          ..where((t) => t.conferenceId.equals(conferenceId))
-          ..orderBy([
-            (t) => OrderingTerm.asc(
-              coalesce([t.actualStart, t.plannedStart, t.createdAt]),
-            ),
-            (t) => OrderingTerm.asc(t.createdAt),
-          ]))
-        .watch();
-  }
+  Stream<List<Activity>> watchForConference(String conferenceId) =>
+      _conferenceActivitiesQuery(conferenceId).watch();
 
   Future<List<Activity>> listForConference(String conferenceId) =>
-      watchForConference(conferenceId).first;
+      _conferenceActivitiesQuery(conferenceId).get();
+
+  SimpleSelectStatement<$ActivitiesTable, Activity> _conferenceActivitiesQuery(
+    String conferenceId,
+  ) {
+    final a = _db.activities;
+    return _db.select(a)
+      ..where((t) => t.conferenceId.equals(conferenceId))
+      ..orderBy([
+        (t) => OrderingTerm.asc(
+          coalesce([t.actualStart, t.plannedStart, t.createdAt]),
+        ),
+        (t) => OrderingTerm.asc(t.createdAt),
+      ]);
+  }
+
+  /// Watches rich activity summaries for [conferenceId] (FR-ACT-03).
+  ///
+  /// Activities are sorted chronologically, except any currently recording
+  /// activity is elevated to the top of the list.
+  Stream<List<ActivitySummary>> watchSummariesForConference(
+    String conferenceId,
+  ) {
+    final mediaCountsQuery = _db.customSelect(
+      'SELECT '
+      'a.id AS activity_id, '
+      '(SELECT COUNT(*) FROM photos p WHERE p.activity_id = a.id) AS photo_count, '
+      '(SELECT COALESCE(SUM(p.bytes), 0) FROM photos p WHERE p.activity_id = a.id) AS photo_bytes, '
+      '(SELECT COUNT(*) FROM bookmarks b WHERE b.activity_id = a.id) AS bookmark_count, '
+      '(SELECT COUNT(*) FROM recording_segments s WHERE s.activity_id = a.id) AS segment_count, '
+      '(SELECT COALESCE(SUM(s.duration_ms), 0) FROM recording_segments s WHERE s.activity_id = a.id) AS total_duration_ms, '
+      '(SELECT COALESCE(SUM(s.bytes), 0) FROM recording_segments s WHERE s.activity_id = a.id) AS audio_bytes, '
+      '(SELECT COUNT(*) FROM recording_segments s WHERE s.activity_id = a.id AND s.state = ?2) AS active_segment_count, '
+      '(SELECT s.end_reason FROM recording_segments s WHERE s.activity_id = a.id ORDER BY s.sequence DESC LIMIT 1) AS last_end_reason, '
+      '(SELECT COUNT(*) FROM interruptions i WHERE i.activity_id = a.id AND i.end_utc IS NULL) AS active_interruption_count '
+      'FROM activities a '
+      'WHERE a.conference_id = ?1',
+      variables: [
+        Variable.withString(conferenceId),
+        Variable.withString(SegmentState.writing.key),
+      ],
+      readsFrom: {
+        _db.activities,
+        _db.recordingSegments,
+        _db.photos,
+        _db.bookmarks,
+        _db.interruptions,
+      },
+    );
+
+    return mediaCountsQuery.watch().asyncMap((mediaRows) async {
+      return _buildSummaries(conferenceId, mediaRows);
+    });
+  }
+
+  /// Lists rich activity summaries for [conferenceId] once (FR-ACT-03).
+  Future<List<ActivitySummary>> listSummariesForConference(
+    String conferenceId,
+  ) async {
+    final mediaRows = await _db
+        .customSelect(
+          'SELECT '
+          'a.id AS activity_id, '
+          '(SELECT COUNT(*) FROM photos p WHERE p.activity_id = a.id) AS photo_count, '
+          '(SELECT COALESCE(SUM(p.bytes), 0) FROM photos p WHERE p.activity_id = a.id) AS photo_bytes, '
+          '(SELECT COUNT(*) FROM bookmarks b WHERE b.activity_id = a.id) AS bookmark_count, '
+          '(SELECT COUNT(*) FROM recording_segments s WHERE s.activity_id = a.id) AS segment_count, '
+          '(SELECT COALESCE(SUM(s.duration_ms), 0) FROM recording_segments s WHERE s.activity_id = a.id) AS total_duration_ms, '
+          '(SELECT COALESCE(SUM(s.bytes), 0) FROM recording_segments s WHERE s.activity_id = a.id) AS audio_bytes, '
+          '(SELECT COUNT(*) FROM recording_segments s WHERE s.activity_id = a.id AND s.state = ?2) AS active_segment_count, '
+          '(SELECT s.end_reason FROM recording_segments s WHERE s.activity_id = a.id ORDER BY s.sequence DESC LIMIT 1) AS last_end_reason, '
+          '(SELECT COUNT(*) FROM interruptions i WHERE i.activity_id = a.id AND i.end_utc IS NULL) AS active_interruption_count '
+          'FROM activities a '
+          'WHERE a.conference_id = ?1',
+          variables: [
+            Variable.withString(conferenceId),
+            Variable.withString(SegmentState.writing.key),
+          ],
+          readsFrom: {
+            _db.activities,
+            _db.recordingSegments,
+            _db.photos,
+            _db.bookmarks,
+            _db.interruptions,
+          },
+        )
+        .get();
+
+    return _buildSummaries(conferenceId, mediaRows);
+  }
+
+  Future<List<ActivitySummary>> _buildSummaries(
+    String conferenceId,
+    List<QueryRow> mediaRows,
+  ) async {
+    final activities = await listForConference(conferenceId);
+    final conf = await (_db.select(
+      _db.conferences,
+    )..where((c) => c.id.equals(conferenceId))).getSingleOrNull();
+    if (conf == null) return [];
+
+    final typeMap = {for (final t in await types()) t.id: t};
+    final mediaMap = {
+      for (final r in mediaRows) r.read<String>('activity_id'): r,
+    };
+
+    final recording = <ActivitySummary>[];
+    final chronological = <ActivitySummary>[];
+
+    for (final a in activities) {
+      final type =
+          typeMap[a.typeId] ??
+          ActivityType(
+            id: a.typeId,
+            key: 'unknown',
+            label: 'Activity',
+            icon: 'tag',
+            isBuiltin: false,
+            sortOrder: 999,
+            createdAt: a.createdAt,
+            updatedAt: a.updatedAt,
+          );
+      final profile = effectiveRecordingProfile(
+        conferenceDefault: conf.defaultRecordingProfile,
+        activityOverride: a.recordingProfileOverride,
+      );
+
+      final media = mediaMap[a.id];
+      final photoCount = media?.read<int>('photo_count') ?? 0;
+      final photoBytes = media?.read<int>('photo_bytes') ?? 0;
+      final bookmarkCount = media?.read<int>('bookmark_count') ?? 0;
+      final segmentCount = media?.read<int>('segment_count') ?? 0;
+      final duration = Duration(
+        milliseconds: media?.read<int>('total_duration_ms') ?? 0,
+      );
+      final audioBytes = media?.read<int>('audio_bytes') ?? 0;
+      final activeSegments = media?.read<int>('active_segment_count') ?? 0;
+      final lastEndReasonKey = media?.readNullable<String>('last_end_reason');
+      final activeInterruptions =
+          media?.read<int>('active_interruption_count') ?? 0;
+
+      final StatusPillStatus status;
+      final bool hasActiveRecording;
+      if (activeSegments > 0) {
+        status = StatusPillStatus.recording;
+        hasActiveRecording = true;
+      } else if (a.status == ActivityStatus.active) {
+        if (activeInterruptions > 0) {
+          status = StatusPillStatus.interrupted;
+          hasActiveRecording = false;
+        } else if (lastEndReasonKey == SegmentEndReason.pause.key) {
+          status = StatusPillStatus.paused;
+          hasActiveRecording = false;
+        } else {
+          status = StatusPillStatus.recording;
+          hasActiveRecording = true;
+        }
+      } else if (a.status == ActivityStatus.completed || segmentCount > 0) {
+        status = StatusPillStatus.saved;
+        hasActiveRecording = false;
+      } else if (a.status == ActivityStatus.draft) {
+        status = a.isPrivate
+            ? StatusPillStatus.private
+            : StatusPillStatus.draft;
+        hasActiveRecording = false;
+      } else {
+        status = StatusPillStatus.draft;
+        hasActiveRecording = false;
+      }
+
+      final summary = ActivitySummary(
+        activity: a,
+        type: type,
+        effectiveProfile: profile,
+        statusPillStatus: status,
+        duration: duration,
+        photoCount: photoCount,
+        bookmarkCount: bookmarkCount,
+        segmentCount: segmentCount,
+        audioBytes: audioBytes,
+        photoBytes: photoBytes,
+        hasActiveRecording: hasActiveRecording,
+      );
+
+      if (hasActiveRecording) {
+        recording.add(summary);
+      } else {
+        chronological.add(summary);
+      }
+    }
+
+    return [...recording, ...chronological];
+  }
 
   /// Applies [changes] and stamps `updated_at`.
   Future<void> update(String id, ActivitiesCompanion changes) =>

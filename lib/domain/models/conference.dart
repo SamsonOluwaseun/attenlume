@@ -85,3 +85,22 @@ class ConferenceDeletionSummary {
   final int audioBytes;
   final int photoBytes;
 }
+
+/// Totals for conference home and storage overview (FR-ACT-01).
+class ConferenceStats {
+  const ConferenceStats({
+    required this.activityCount,
+    required this.totalRecordedDuration,
+    required this.totalStorageBytes,
+  });
+
+  final int activityCount;
+  final Duration totalRecordedDuration;
+  final int totalStorageBytes;
+
+  static const zero = ConferenceStats(
+    activityCount: 0,
+    totalRecordedDuration: Duration.zero,
+    totalStorageBytes: 0,
+  );
+}
