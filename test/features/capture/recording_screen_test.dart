@@ -10,11 +10,13 @@ import 'package:attenlume/domain/services/capture_settings.dart';
 import 'package:attenlume/domain/services/one_active_coordinator.dart';
 import 'package:attenlume/domain/services/recording_service.dart';
 import 'package:attenlume/domain/services/recording_state.dart';
+import 'package:attenlume/domain/services/safety_prompt_service.dart';
 import 'package:attenlume/features/capture/mic_test_sheet.dart';
 import 'package:attenlume/features/capture/quick_thought_sheet.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/capture/recording_screen.dart';
 import 'package:attenlume/platform/camera/photo_camera.dart';
+import 'package:attenlume/platform/diagnostics/battery_probe.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,6 +105,7 @@ void main() {
     required String activityId,
     required WidgetTester tester,
     RecordingStatus? statusOverride,
+    SafetyPromptService? safety,
   }) {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -124,6 +127,8 @@ void main() {
         mediaFreeBytesProvider.overrideWith((ref) async => 500 * 1024 * 1024),
         recordingServiceProvider.overrideWithValue(recordingService),
         oneActiveCoordinatorProvider.overrideWithValue(oneActiveCoordinator),
+        if (safety != null)
+          safetyPromptServiceProvider.overrideWithValue(safety),
         if (statusOverride != null)
           recordingStatusProvider.overrideWith(
             (ref) => Stream.value(statusOverride),
@@ -492,6 +497,84 @@ void main() {
           find.byKey(const Key('recording-resume-banner-button')),
           findsOneWidget,
         );
+      },
+    );
+  });
+
+  group('FR-REC-06 safety prompts [P1-13]', () {
+    SafetyPromptService safetyFor(double level) => SafetyPromptService(
+      recorder: recordingService,
+      level: () async => level,
+      battery: const UnknownBatteryProbe(),
+      createTimer: (_, _) => Timer(const Duration(days: 365), () {}),
+      clock: () => mockTime.toUtc(),
+    )..start();
+
+    testWidgets(
+      'FR-REC-06 after 2 hours asks "Still in" and Keep recording dismisses it',
+      (tester) async {
+        final conf = await t.conference();
+        final act = await t.activity(conf.id, title: 'Keynote');
+        final safety = safetyFor(-20);
+        addTearDown(safety.dispose);
+
+        await tester.pumpWidget(
+          buildSubject(activityId: act.id, tester: tester, safety: safety),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('record-button-start')));
+        await settleAsync(tester, const Duration(milliseconds: 700));
+
+        mockTime = mockTime.add(const Duration(hours: 2, minutes: 1));
+        await tester.runAsync(safety.check);
+        await settleAsync(tester);
+
+        expect(
+          find.byKey(const Key('safety-prompt-longRecording')),
+          findsOneWidget,
+        );
+        expect(find.textContaining("Still in 'Keynote'?"), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('safety-prompt-keep')));
+        await settleAsync(tester);
+        expect(
+          find.byKey(const Key('safety-prompt-longRecording')),
+          findsNothing,
+        );
+        expect(recordingService.status.state, RecordingState.recording);
+        await disposeService(tester);
+      },
+    );
+
+    testWidgets(
+      'FR-REC-06 after 10 minutes of silence the user can stop and save',
+      (tester) async {
+        final conf = await t.conference();
+        final act = await t.activity(conf.id, title: 'Breakout');
+        final safety = safetyFor(-80);
+        addTearDown(safety.dispose);
+
+        await tester.pumpWidget(
+          buildSubject(activityId: act.id, tester: tester, safety: safety),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('record-button-start')));
+        await settleAsync(tester, const Duration(milliseconds: 700));
+
+        mockTime = mockTime.add(const Duration(minutes: 10, seconds: 5));
+        await tester.runAsync(safety.check);
+        await settleAsync(tester);
+
+        expect(
+          find.text('No sound detected. Still in the session?'),
+          findsOneWidget,
+        );
+        expect(recordingService.status.state, RecordingState.recording);
+
+        await tester.tap(find.byKey(const Key('safety-prompt-stop')));
+        await settleAsync(tester, const Duration(milliseconds: 700));
+        expect(recordingService.status.state, RecordingState.saved);
+        await disposeService(tester);
       },
     );
   });

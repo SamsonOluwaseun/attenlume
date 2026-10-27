@@ -15,6 +15,7 @@ import '../../domain/models/enums.dart';
 import '../../domain/services/one_active_coordinator.dart';
 import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
+import '../../domain/services/safety_prompt_service.dart';
 import '../../presentation/components/bookmark_chip.dart';
 import '../../presentation/components/record_button.dart';
 import '../../presentation/components/storage_meter.dart';
@@ -60,11 +61,18 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   int _photoCount = 0;
   int _bookmarkCount = 0;
   StreamSubscription<String>? _hardStopSub;
+  StreamSubscription<SafetyPrompt>? _safetySub;
+  SafetyPrompt? _safetyPrompt;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _safetySub = ref.read(safetyPromptServiceProvider).prompts.listen((prompt) {
+      if (!mounted || prompt.activityId != widget.activityId) return;
+      unawaited(HapticFeedback.mediumImpact());
+      setState(() => _safetyPrompt = prompt);
+    });
     _hardStopSub = ref
         .read(storageBudgetServiceProvider)
         .hardStopNoticeStream
@@ -82,6 +90,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   @override
   void dispose() {
+    _safetySub?.cancel();
     _hardStopSub?.cancel();
     _ticker?.cancel();
     super.dispose();
@@ -530,6 +539,24 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
                   const SizedBox(height: TokenSpace.space3),
                 ],
 
+                // Safety prompt (FR-REC-06) [P1-13]. Never stops recording.
+                if (_safetyPrompt != null &&
+                    isThisRecording &&
+                    status.state.holdsActivity) ...[
+                  _SafetyPromptBanner(
+                    prompt: _safetyPrompt!,
+                    activityTitle: act.title,
+                    warningFill: warningFill,
+                    onLiveSurface: onLiveSurface,
+                    onKeep: () => setState(() => _safetyPrompt = null),
+                    onStop: () {
+                      setState(() => _safetyPrompt = null);
+                      unawaited(_handleStop());
+                    },
+                  ),
+                  const SizedBox(height: TokenSpace.space3),
+                ],
+
                 // Main RecordButton Anatomy (Status, Timer, LevelMeter, 96px controls, Secondary row)
                 RecordButton(
                   key: const Key('main-record-button'),
@@ -611,6 +638,103 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A safety prompt on the recording screen (FR-REC-06) [P1-13]. Both
+/// actions are the user's choice: the prompt itself never stops anything.
+class _SafetyPromptBanner extends StatelessWidget {
+  const _SafetyPromptBanner({
+    required this.prompt,
+    required this.activityTitle,
+    required this.warningFill,
+    required this.onLiveSurface,
+    required this.onKeep,
+    required this.onStop,
+  });
+
+  final SafetyPrompt prompt;
+  final String activityTitle;
+  final Color warningFill;
+  final Color onLiveSurface;
+  final VoidCallback onKeep;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, message) = switch (prompt.kind) {
+      SafetyPromptKind.longRecording => (
+        Icons.schedule_rounded,
+        "Still in '$activityTitle'? Recording has been running for "
+            '${prompt.elapsed?.inHours ?? 2} hours.',
+      ),
+      SafetyPromptKind.silence => (
+        Icons.hearing_disabled_rounded,
+        'No sound detected. Still in the session?',
+      ),
+      SafetyPromptKind.lowBattery => (
+        Icons.battery_alert_rounded,
+        'Battery is at ${prompt.batteryPercent ?? 15} %. Recording carries '
+            'on; plug in if you can.',
+      ),
+    };
+    final textStyle = TextStyle(
+      fontFamily: TokenType.fontFamily,
+      fontSize: 14,
+      color: onLiveSurface,
+    );
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        key: Key('safety-prompt-${prompt.kind.name}'),
+        padding: const EdgeInsets.all(TokenSpace.space3),
+        decoration: BoxDecoration(
+          color: warningFill.withValues(alpha: 0.15),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(TokenRadius.radiusMd),
+          ),
+          border: Border.all(color: warningFill),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: warningFill, size: 24),
+                const SizedBox(width: TokenSpace.space3),
+                Expanded(child: Text(message, style: textStyle)),
+              ],
+            ),
+            const SizedBox(height: TokenSpace.space2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (prompt.kind != SafetyPromptKind.lowBattery)
+                  TextButton(
+                    key: const Key('safety-prompt-stop'),
+                    onPressed: onStop,
+                    style: TextButton.styleFrom(foregroundColor: onLiveSurface),
+                    child: const Text('Stop and save'),
+                  ),
+                const SizedBox(width: TokenSpace.space2),
+                FilledButton(
+                  key: const Key('safety-prompt-keep'),
+                  onPressed: onKeep,
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Text(
+                    prompt.kind == SafetyPromptKind.lowBattery
+                        ? 'OK'
+                        : 'Keep recording',
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

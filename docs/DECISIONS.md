@@ -571,3 +571,16 @@ Format: context, decision, alternatives, consequences.
   3. **Photos section in the activity details** (`lib/features/photos/activity_photos_section.dart`): thumbnails decoded at display size (FR-PHO-03), "Import photos" with an optional batch label, and a photo sheet with the photo at screen size, its offset into the recording, and caption and label fields. `MediaAssetRepository.updatePhotoText` trims text and clears blank fields.
 - **Alternatives:** `image_picker` (camera roll on phones but leaves the app and has no Windows support of its own); importing originals untouched (FR-PHO-02 wants the space-saving default for every photo).
 - **Consequences:** P1-14 is complete in code. On phones the file picker shows files rather than the photo gallery; the gallery view comes with P1-15. Unverified on devices.
+
+## ADR-032: Safety prompts and the Android battery channel (P1-13)
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5), owner away. Owner to review.
+- **Context:** FR-REC-06 asks for prompts when a recording runs past 2 hours, after 10 minutes of near-silence and when the battery drops below 15 %, and says prompts never stop recording (only the storage hard limit does, ADR-026). `BatteryProbe` answered null on Android and iOS (ADR-015).
+- **Decision:**
+  1. **`SafetyPromptService`** (`lib/domain/services/safety_prompt_service.dart`) follows the recorder's status and checks every 5 s while recording: recorded time (pauses excluded) against 2 h, then every further 2 h; input level against -55 dBFS, prompting once after 10 min without sound and re-arming when sound returns; battery once a minute, prompting once per recording when below 15 % and not charging. It only emits prompts. Started with the other watchers by `oneActiveCoordinatorProvider`, so it runs whenever a recording does.
+  2. **Thresholds** live in `SafetyThresholds` with the build guide defaults. FR-REC-06 says "configurable": the Settings screen (P1-25) will store and pass them.
+  3. **-55 dBFS** for near-silence is a starting point: quiet rooms measure about -60 to -50 dBFS on phone mics, speech well above -40. Tune from device recordings.
+  4. **Recording screen banner** in `warning-fill` with an icon and a sentence (design guide): "Still in '<title>'? Recording has been running for 2 hours.", "No sound detected. Still in the session?", "Battery is at 14 %. Recording carries on; plug in if you can." Actions: Keep recording (or OK) dismisses; Stop and save is the user's choice. Light haptic on arrival.
+  5. **Android battery**: `BatteryChannel.kt` reads `BatteryManager` capacity and charging over `com.samlytics.attenlume/battery`; `MethodChannelBatteryProbe` maps it. iOS stays unknown (null, so no battery prompt) until a channel is built and tested on a Mac. Windows keeps `WindowsBatteryProbe`.
+- **Alternatives:** `battery_plus` (new dependency for one value); prompting through the Android notification while the screen is off (useful, needs FR-REC-10 work, left for later); stopping on silence (the build guide forbids it).
+- **Consequences:** Prompts show only on the recording screen; with the app in the background the user sees them on return. Device behaviour of the level threshold and battery channel is unverified.

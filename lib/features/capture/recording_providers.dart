@@ -14,6 +14,7 @@ import '../../domain/services/one_active_coordinator.dart';
 import '../../domain/services/photo_capture_service.dart';
 import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
+import '../../domain/services/safety_prompt_service.dart';
 import '../../domain/services/storage_budget_service.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
 import '../../platform/audio_capture/record_capture_engine.dart';
@@ -22,6 +23,7 @@ import '../../platform/audio_route/audio_session_route_probe.dart';
 import '../../platform/audio_route/engine_route_probe.dart';
 import '../../platform/camera/photo_camera.dart';
 import '../../platform/camera/plugin_photo_camera.dart';
+import '../../platform/diagnostics/battery_probe.dart';
 import '../../platform/foreground_service/foreground_service_bridge.dart';
 import '../../platform/interruptions/audio_interruption_source.dart';
 import '../../platform/interruptions/audio_session_interruption_source.dart';
@@ -174,6 +176,24 @@ final interruptionCoordinatorProvider = Provider<InterruptionCoordinator>((
   return coordinator;
 });
 
+/// Battery level for the low-battery prompt (ADR-032).
+final batteryProbeProvider = Provider<BatteryProbe>(
+  (ref) => BatteryProbe.forPlatform(),
+);
+
+/// Still recording after 2 hours, near-silence, low battery (FR-REC-06)
+/// [P1-13].
+final safetyPromptServiceProvider = Provider<SafetyPromptService>((ref) {
+  final engine = ref.watch(audioCaptureEngineProvider);
+  final service = SafetyPromptService(
+    recorder: ref.watch(recordingServiceProvider),
+    level: engine.levelDbfs,
+    battery: ref.watch(batteryProbeProvider),
+  )..start();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
 /// In-app photos with compression and thumbnails [P1-14].
 final photoCaptureServiceProvider = Provider<PhotoCaptureService>(
   (ref) => PhotoCaptureService(
@@ -211,11 +231,13 @@ final storageBudgetSnapshotProvider = StreamProvider<StorageBudgetSnapshot>((
 /// Every start goes through here so the one-active rule holds for all
 /// triggers (FR-REC-04) [P1-06]. Creating it also starts the
 /// [interruptionCoordinatorProvider], [foregroundServiceCoordinatorProvider],
-/// and [storageBudgetServiceProvider], so no recording runs unwatched.
+/// [storageBudgetServiceProvider] and [safetyPromptServiceProvider], so no
+/// recording runs unwatched.
 final oneActiveCoordinatorProvider = Provider<OneActiveCoordinator>((ref) {
   ref.watch(interruptionCoordinatorProvider);
   ref.watch(foregroundServiceCoordinatorProvider);
   ref.watch(storageBudgetServiceProvider);
+  ref.watch(safetyPromptServiceProvider);
   return OneActiveCoordinator(
     recorder: ref.watch(recordingServiceProvider),
     activities: ref.watch(activityRepositoryProvider),

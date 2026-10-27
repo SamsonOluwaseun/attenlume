@@ -1,25 +1,26 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended session continued while the owner was away
-Branch: main (merged from `phase-1/P1-14-photos-import`)
-Current task ID: P1-14 (done). Next: P1-13
+Branch: main (merged from `phase-1/P1-13-safety-prompts`)
+Current task ID: P1-13 (done). Next: P1-16
 Status: done
 
 ## Done in this session
 
 - ADR-028: microphone permission prompt, quick start opens the recorder, specific refusal messages, Windows data in `%LOCALAPPDATA%\Samlytics\Attenlume`, J2 journey integration test, `tool/build_windows_preview.ps1`.
 - ADR-029: Android 13+ notification permission requested when the recording service starts.
+- ADR-032: safety prompts (2 hours, silence, low battery) on the recording screen, Android battery channel (P1-13 done).
 - ADR-031: photo import with labels, captions, photos section in the activity details (P1-14 done).
 - ADR-030 (P1-14 first slice): camera screen with live viewfinder, `PhotoCaptureService`, `processPhoto` (EXIF rotation, 2048 px, JPEG 85, 320 px thumbnails, SHA-256), access-denied and no-camera messages, new dependency `image` 4.12.0.
 - Working loop agreed with the owner: check on the Windows laptop first, then ship to Android. Windows previews go to `C:\dev\attenlume-release\windows\` with the desktop shortcut "Attenlume (preview)".
 
 ## Left to do on this task
 
-- Nothing in code for P1-14. ADR-031 added photo import (`file_selector`), captions and labels. Settings toggle for "Keep highest quality" waits for P1-25.
+- Nothing in code for P1-13 or P1-14. Thresholds become editable in P1-25 (Settings). iOS battery channel needs a Mac.
 
 ## Exact next step
 
-Start **P1-13 Safety prompts** on branch `phase-1/P1-13-safety-prompts` (`FR-REC-06` in `docs/BUILD_GUIDE.md`: still recording after 2 hours, 10 minutes of near-silence, battery under 15 %; prompts never stop recording). Then P1-16 (bookmarks and notes), P1-17 (player and timeline). Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tool\build_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish; the owner releases Android 0.1.1 after checking Windows.
+Start **P1-16 Bookmarks and notes** on branch `phase-1/P1-16-bookmarks-notes` (`FR-BMK-01 to 03` in `docs/BUILD_GUIDE.md`). Then P1-17 (player, timeline, waveform). Keep `integration_test/app_capture_journey_test.dart` passing on Windows and run `powershell -File tool\build_windows_preview.ps1 -SkipTests` after each merge. Do not push or publish; the owner releases Android 0.1.1 after checking Windows.
 
 ## Files touched
 
