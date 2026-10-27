@@ -153,7 +153,7 @@ void main() {
       expect(
         seg.filePath,
         'conferences/${conference.id}/activities/${keynote.id}/'
-        'audio/segment-001.m4a',
+        'audio/segment-001.partial.m4a',
       );
       expect(
         engine.startedPaths.single,

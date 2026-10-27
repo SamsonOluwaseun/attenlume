@@ -7,6 +7,7 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../data/filesystem/m4a_inspector.dart';
 import '../../data/filesystem/media_paths.dart';
+import '../../data/filesystem/segment_commit.dart';
 import '../../data/local_database/app_database.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
@@ -114,6 +115,15 @@ class RouteChangeResult {
   String toString() => 'RouteChangeResult(${outcome.name}, $from -> $to)';
 }
 
+/// Longest a segment runs before it rolls to the next one (FR-REC-03).
+const defaultSegmentMaxDuration = Duration(minutes: 10);
+
+/// Makes a one-shot timer. Tests pass a fake one to control time.
+typedef RollTimerFactory = Timer Function(
+  Duration duration,
+  void Function() callback,
+);
+
 /// SHA-256 of a file, streamed off the UI isolate (BUILD_GUIDE 12.4).
 Future<String> sha256OfFileInIsolate(File file) {
   final path = file.path;
@@ -131,6 +141,10 @@ Future<String> sha256OfFileInIsolate(File file) {
 /// is written before the encoder starts (FR-REC-01). Audio goes straight
 /// from the encoder to a file: this class never holds audio bytes
 /// (FR-REC-02). Files are never deleted or overwritten here (NFR-07).
+///
+/// Segments roll every [segmentMaxDuration] (FR-REC-03) [P1-05]. Each one
+/// is written under a partial name and renamed only after its data is
+/// flushed to disk, so a final name always means a complete file.
 class RecordingService {
   RecordingService({
     required this._engine,
@@ -142,6 +156,9 @@ class RecordingService {
     this._inspector = const M4aInspector(),
     this._clock = systemUtcClock,
     this._hashFile = sha256OfFileInIsolate,
+    this._commitFile = commitSegmentFile,
+    this._rollTimer = Timer.new,
+    this.segmentMaxDuration = defaultSegmentMaxDuration,
   });
 
   final AudioCaptureEngine _engine;
@@ -153,12 +170,18 @@ class RecordingService {
   final M4aInspector _inspector;
   final UtcClock _clock;
   final Future<String> Function(File) _hashFile;
+  final SegmentCommit _commitFile;
+  final RollTimerFactory _rollTimer;
+
+  /// The open segment ends with reason `roll` after this long.
+  final Duration segmentMaxDuration;
 
   final _lock = SerialLock();
   final _statusController = StreamController<RecordingStatus>.broadcast();
   Directory? _resolvedRoot;
   RecordingStatus _status = RecordingStatus.idle;
   _OpenSegment? _open;
+  Timer? _rollDue;
   bool _disposed = false;
 
   RecordingStatus get status => _status;
@@ -384,6 +407,7 @@ class RecordingService {
       // Partial files stay on disk for recovery (FR-REC-08).
     }
     _disposed = true;
+    _cancelRoll();
     await _engine.dispose();
     await _statusController.close();
   }
@@ -425,18 +449,20 @@ class RecordingService {
     final root = await _root();
     final sequence = await _media.nextSegmentSequence(activityId);
     var attempt = 0;
-    var relative = MediaPaths.segment(conferenceId, activityId, sequence);
-    var file = MediaPaths.resolve(root, relative);
-    while (file.existsSync()) {
-      attempt++;
-      relative = MediaPaths.segment(
+    late String target;
+    late String relative;
+    late File file;
+    do {
+      target = MediaPaths.segment(
         conferenceId,
         activityId,
         sequence,
-        attempt: attempt,
+        attempt: attempt++,
       );
+      relative = MediaPaths.partial(target);
       file = MediaPaths.resolve(root, relative);
-    }
+    } while (file.existsSync() ||
+        MediaPaths.resolve(root, target).existsSync());
     await file.parent.create(recursive: true);
 
     final settings = effectiveCaptureSettings(profile, _platform);
@@ -471,7 +497,8 @@ class RecordingService {
       );
       return error;
     }
-    _open = _OpenSegment(segment.id, file, route);
+    _open = _OpenSegment(segment.id, file, target, route);
+    _rollDue = _rollTimer(segmentMaxDuration, () => _onRollDue(segment.id));
     _moveTo(
       RecordingStatus(
         state: RecordingState.recording,
@@ -498,9 +525,13 @@ class RecordingService {
 
   /// Stops the encoder and records what the file really holds
   /// (FR-QUAL-06). A file that does not parse is marked damaged and kept.
+  ///
+  /// A good file is flushed and renamed from its partial name. If that
+  /// fails, the file keeps its partial name and the row points there.
   Future<void> _finishSegment(SegmentEndReason reason) async {
     final open = _open!;
     _open = null;
+    _cancelRoll();
     try {
       await _engine.stop();
     } on Object {
@@ -536,10 +567,18 @@ class RecordingService {
     } on Object {
       // Left null: export re-hashes, and a missing hash is honest.
     }
+    String? committed;
+    try {
+      await _commitFile(file, MediaPaths.resolve(await _root(), open.target));
+      committed = open.target;
+    } on Object {
+      // Kept under the partial name. The row still finds it.
+    }
     await _media.finaliseSegment(
       open.segmentId,
       endUtc: end,
       endReason: reason,
+      filePath: committed,
       durationMs: info.durationMs,
       bytes: info.bytes,
       sha256: digest,
@@ -557,6 +596,7 @@ class RecordingService {
     try {
       return await body();
     } on Object catch (error) {
+      _cancelRoll();
       if (_open != null) {
         // Release the microphone. The row stays `writing` for crash
         // recovery to judge (FR-REC-08).
@@ -576,6 +616,34 @@ class RecordingService {
       rethrow;
     }
   }
+
+  void _cancelRoll() {
+    _rollDue?.cancel();
+    _rollDue = null;
+  }
+
+  /// Timer callback. Errors are already reflected in [status].
+  void _onRollDue(String segmentId) {
+    unawaited(_roll(segmentId).catchError((Object _) => false));
+  }
+
+  /// Ends [segmentId] with reason `roll` and starts the next segment with
+  /// the same profile (FR-REC-03) [P1-05]. Does nothing if that segment
+  /// has already ended.
+  Future<bool> _roll(String segmentId) => _lock.run(() async {
+    if (_status.state != RecordingState.recording ||
+        _open?.segmentId != segmentId) {
+      return false;
+    }
+    final activityId = _status.activityId!;
+    final profile = _status.profile!;
+    return _guard(() async {
+      _moveTo(_copyStatus(RecordingState.switchingSegment));
+      await _finishSegment(SegmentEndReason.roll);
+      final conferenceId = (await _activities.get(activityId))!.conferenceId;
+      return _beginSegment(activityId, conferenceId, profile);
+    });
+  });
 
   Future<Directory> _root() async => _resolvedRoot ??= await _mediaRoot();
 
@@ -604,9 +672,14 @@ class RecordingService {
 }
 
 class _OpenSegment {
-  _OpenSegment(this.segmentId, this.file, this.route);
+  _OpenSegment(this.segmentId, this.file, this.target, this.route);
 
   final String segmentId;
+
+  /// The partial file the encoder writes.
   final File file;
+
+  /// The relative path the file gets once finalised.
+  final String target;
   final InputRoute? route;
 }
