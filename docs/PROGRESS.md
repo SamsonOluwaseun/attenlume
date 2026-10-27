@@ -263,6 +263,27 @@ Test results on phase-1/P1-04-recording-service (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool: clean.
 - flutter build windows --release and flutter build apk --debug: both built successfully.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-04 background recording and call interruption spike harness
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 265 passed.
+- Picked P0-04 over P1-05 because the agent prompt puts Phase 0 first and P0-04's dependency (P0-02) is done.
+- `AudioInterruptionSource` interface, `AudioSessionInterruptionSource` (`audio_session` 0.2.4) and `NoAudioInterruptions` (`lib/platform/interruptions/`). Seed of the `InterruptionCoordinator` (P1-07).
+- `BackgroundRecordingSpike` (`lib/spikes/background_recording_spike.dart`): runs the real `RecordingService` for a fixed time, logs lifecycle, audio session events, states, level samples split by foreground and background, segment rows and interruption rows. Ends the segment on an interruption and resumes on the system signal or when the app is visible again. Report in JSON and Markdown, observations only, no verdict.
+- Device test `integration_test/p0_04_background_recording_test.dart` (Android and iOS only) and manual steps MT-17 in `TEST_PLAN.md`.
+- Android manifest: `RECORD_AUDIO`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS`. iOS `Info.plist`: `NSMicrophoneUsageDescription` and `UIBackgroundModes: audio`. No foreground service yet (P1-11), so Android background capture is expected to be silent.
+- New packages: `audio_session` 0.2.4 (MIT, Android and iOS, audited in P0-01) and transitive `rxdart` 0.28.0 (Apache-2.0). `THIRD_PARTY_NOTICES.md` regenerated: 121 packages, nothing flagged.
+- `FakeCaptureEngine` gained a settable `level`.
+- ADR-013 recorded. `PLATFORM_FEASIBILITY.md` 1 and 2.4.1, `TEST_PLAN.md` and `ARCHITECTURE.md` 7 and 8.3 updated.
+- **Not run on any phone.** No device is attached to the build host. P0-04 is blocked: needs real device (Android) and Mac plus iPhone (iOS).
+
+Test results on phase-0/P0-04-background-spike (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 275 passed, 0 failed (10 new, P0-04).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built. APK not installed on a phone. iOS not built (no Mac).
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -279,4 +300,5 @@ Test results on phase-1/P1-04-recording-service (Windows 11 build host):
 | P1-02 | done | Conference home, stats card, dominant button, 4 quick-start buttons, chronological activity list, ActivityCard, StatusPill, AttenlumeButton, 28 new tests (218 total). ADR-010 |
 | P1-03 | done | Activity CRUD editor, custom types, awareness consent check, contact fields, 19 new tests (237 total). ADR-011 |
 | P1-04 | done (real capture unverified) | RecordingService, state machine, serial lock, media paths, 28 new tests (265 total). ADR-012 |
-| P0-04, P0-05, P0-07, P0-10, P0-12, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these (rows added in P1-04 so the table matches the handover) |
+| P0-04 | blocked: needs real device | Harness, device test and MT-17 steps built, 10 unit tests with fakes pass (275 total). ADR-013. Android rerun needed after P1-11 |
+| P0-05, P0-07, P0-10, P0-12, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these (rows added in P1-04 so the table matches the handover) |

@@ -16,6 +16,9 @@ class FakeCaptureEngine implements AudioCaptureEngine {
   bool finaliseValidFile = true;
   int durationSeconds = 3;
 
+  /// What [levelDbfs] reports. Set very low to act as a muted mic.
+  double level = -30;
+
   /// When set, [start] waits for it, so tests can overlap commands.
   Completer<void>? startGate;
 
@@ -52,7 +55,7 @@ class FakeCaptureEngine implements AudioCaptureEngine {
   }
 
   @override
-  Future<double> levelDbfs() async => -30;
+  Future<double> levelDbfs() async => level;
 
   @override
   Future<String?> stop() async {

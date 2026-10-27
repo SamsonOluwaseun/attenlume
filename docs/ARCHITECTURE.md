@@ -102,6 +102,8 @@ Toolchain: Flutter 3.47.8 stable, Dart 3.13.7. Every package below accepts Dart 
 | photo_manager | 3.12.0 | 2026-08-09 | fluttercandies.com | Apache-2.0 | A, I | Gallery time-window import |
 | image | 4.12.0 | 2026-10-11 | taosengine.com | MIT | all | Resize, thumbnails, in an isolate |
 | archive | 4.5.2 | 2026-10-13 | taosengine.com | MIT | all | Streaming ZIP with ZIP64 |
+| audio_session | 0.2.4 | Adopted in P0-04 behind `AudioInterruptionSource` (ADR-013). Unit tests use a fake. Android and iOS: builds only (APK), iOS not built | 2026-10-27 |
+| rxdart | 0.28.0 | Transitive through `audio_session` (Apache-2.0). Builds only | 2026-10-27 |
 | crypto | 3.0.8 | 2026-10-26 | dart.dev | BSD-3 | all | SHA-256 |
 | path_provider | 2.1.6 | 2026-06-15 | flutter.dev | BSD-3 | A, I, W | App folders |
 | path | 1.9.1 | 2024-10-17 | dart.dev | BSD-3 | all | Stable core package |
@@ -214,6 +216,12 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 ### 8.2 Added in P0-08
 
 - `tool/licence_audit.dart`: reads `pubspec.lock`, `.dart_tool/package_config.json` and each package's licence file, works out which packages are reachable from the app's `dependencies`, and writes `THIRD_PARTY_NOTICES.md`. `--check` exits 1 if the file is stale or a package in the app is copyleft or unrecognised. Native components, fonts and brand assets are a hand-written section in the same tool.
+
+### 8.3 Added in P0-04
+
+- `lib/platform/interruptions/`: `AudioInterruptionSource` interface (began, ended with `shouldResume`, becoming noisy, devices changed), `AudioSessionInterruptionSource` (`audio_session`, Android and iOS) and `NoAudioInterruptions` (Windows). Seed of the `InterruptionCoordinator` (P1-07).
+- `lib/spikes/background_recording_spike.dart`: drives `RecordingService` for a fixed time and logs lifecycle, audio session events, states, level samples, segments and interruption rows. Device test `integration_test/p0_04_background_recording_test.dart` (MT-17).
+- Android manifest: `RECORD_AUDIO`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `POST_NOTIFICATIONS` declared. No service yet (P1-11). iOS `Info.plist`: `NSMicrophoneUsageDescription` and `UIBackgroundModes: audio`.
 
 ## 9. Open risks
 
