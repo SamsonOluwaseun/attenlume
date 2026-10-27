@@ -427,6 +427,26 @@ Test results on phase-1/P1-06-one-active (Windows 11 build host):
 - dart run tool/licence_audit.dart --check: up to date, nothing flagged.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P1-07 InterruptionCoordinator
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 419 passed.
+- `RecordingService.interrupt(reason)`: `recording -> interrupted`, segment ends with `interruption`, microphone released, `interruptions` row opened at the segment end. `resume()` refuses while interrupted, so the call is never recorded [FR-REC-05].
+- `RecordingService.interruptionEnded(mayResume:)`: closes the row; with system permission `interrupted -> recovering -> recording` in a new segment (row auto-resumed), otherwise or on a failed restart `userResumeRequired` with "Your audio so far is saved. Tap Resume to carry on." `stop()` closes any open row.
+- `InterruptionCoordinator` (`lib/domain/services/interruption_coordinator.dart`): audio session `began` (ducks ignored), `ended`, `devicesChanged` and `becomingNoisy` events handled one at a time. Camera use through `duringCameraUse` makes nearby interruptions `camera`, resumed straight after the shot [FR-PHO-07]. Notices ("Recording resumed", resume needed) through `InAppInterruptionNotices` until P1-11.
+- Lost mic after a route change now opens a `route_lost` row in the service, closed on resume. The P0-07 spike's own row for that case removed (it caused a duplicate, found by the existing spike test).
+- `RecordingService` owns the audio session: activated before capture, on resume and on recovery, deactivated once saved. `RecordingStatus.interruption` added for the P1-10 banner.
+- Providers: `audioInterruptionSourceProvider`, `interruptionNoticesProvider`, `interruptionCoordinatorProvider` (started with `oneActiveCoordinatorProvider`).
+- ADR-021 recorded. `ARCHITECTURE.md` (3, 8.11) and `TEST_PLAN.md` (2.1, 2.2) updated. No new packages.
+- Not checked on a device: whether `audio_session` reports call start and end with the right resume flag, whether iOS lets recording restart after a call, and whether the camera interrupts audio at all (MT-17, MT-21). Unverified.
+
+Test results on phase-1/P1-07-interruptions (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 455 passed, 0 failed (36 new: 17 in `test/domain/recording_service_interruption_test.dart`, 19 in `test/domain/interruption_coordinator_test.dart`).
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -451,3 +471,4 @@ Test results on phase-1/P1-06-one-active (Windows 11 build host):
 | P0-13 | blocked: needs real device | `ShortcutBridge`, `attenlume://` parser, Android tile and launcher shortcuts (APK builds), iOS App Intents (not built, needs Mac), harness, device test and MT-22 steps, 23 unit tests with fakes pass (372 total). ADR-018 |
 | P1-05 | done (device timing unverified) | 10-minute roll timer, partial names, flush then rename, 20 new tests (392 total). ADR-019. Interruption rolls come with P1-07 |
 | P1-06 | done (device triggers unverified) | `switchTo`, `OneActiveCoordinator`, prompt dialog, 27 new tests (419 total). ADR-020 |
+| P1-07 | done (device interruptions unverified) | `interrupt`, `interruptionEnded`, `InterruptionCoordinator`, camera and route events, 36 new tests (455 total). ADR-021 |

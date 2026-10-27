@@ -1,48 +1,50 @@
 # Handover
 
 Date and agent: 27 October 2026, Claude Code (Opus 5.5), unattended run
-Branch: main (P1-06 merged from `phase-1/P1-06-one-active`)
-Current task ID: P1-06 (done). Next: P1-07
+Branch: main (P1-07 merged from `phase-1/P1-07-interruptions`)
+Current task ID: P1-07 (done). Next: P1-08
 Status: done
 
 ## Done in this session
 
-- P1-06 one-active rule across all triggers [FR-REC-04, AT-REC-04]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 3 and 8.10, ADR-020.
-  - `RecordingService.switchTo(activityId, {replacing})`: checks the new activity, stops and saves the old one, starts the new one, under one lock hold.
-  - `OneActiveCoordinator` with `RecordingTrigger` (`ui`, `notification` prompt; `shortcut`, `voice` stop old, start new and confirm via `TriggerConfirmationSink`).
-  - `OneActivePromptDialog` and `startRecordingFromUi`; `oneActiveCoordinatorProvider`, `triggerConfirmationsProvider`.
-  - 27 new tests, 419 total, all passing. Windows release and debug APK build. No new packages.
+- P1-07 InterruptionCoordinator [FR-REC-05, FR-PHO-07]. Details in `docs/PROGRESS.md`, `docs/ARCHITECTURE.md` 3 and 8.11, ADR-021.
+  - `RecordingService.interrupt(reason)` and `interruptionEnded(mayResume:)`: `recording -> interrupted -> recovering -> recording`, or `interrupted -> userResumeRequired`. Segments end with `interruption`; interruption rows log reason, start (segment end) and end (when the OS said it ended), `auto_resumed`. `resume()` refuses while interrupted, so the call is never recorded.
+  - `InterruptionCoordinator`: audio session, camera (`duringCameraUse`, 2 s window) and route events to commands; notices through `InAppInterruptionNotices`.
+  - Lost mic after a route change logs a `route_lost` row in the service (the P0-07 spike no longer writes its own).
+  - `RecordingService` now activates and deactivates the audio session.
+  - 36 new tests, 455 total, all passing. Windows release and debug APK build. No new packages.
 
 ## Left to do on this task
 
-- Nothing in code. P1-10 (recording screen), P1-11 (notification actions) and P2 shortcut handlers must start recordings through `oneActiveCoordinatorProvider`, never `RecordingService.start` directly.
-- Show `InAppTriggerConfirmations.messages` as a banner once there is a screen for it (P1-10); replace with notification and haptic in P1-11.
-- Device check of a background shortcut switch (MT-22).
+- Nothing in code. P1-10 must show `RecordingStatus.interruption` / `errorMessage` as a banner with Resume and show `InAppInterruptionNotices.notices`. P1-11 replaces the in-app notices with a notification that has a Resume action. P1-14 must take photos through `interruptionCoordinatorProvider.duringCameraUse`.
+- Not built (ADR-016 consequence, still open): Android routed-device channel and Windows default-device query, so `input_route` stays null there. Also no marker yet when a recording falls back to another mic after the old one was removed (ADR-021 point 4).
+- Device checks: MT-17 (calls, alarms) and MT-21 (camera) now exercise logic that lives in the app, not only the spikes. The spikes still use `pause()`.
 
 ## Exact next step
 
-Start **P1-07 InterruptionCoordinator** [FR-REC-05, FR-PHO-07] on branch `phase-1/P1-07-interruptions`. Seed code is in `lib/platform/interruptions/` and the P0-04 and P0-05 spikes (`lib/spikes/background_recording_spike.dart`, `photo_during_recording_spike.dart`) already map audio session events. Add `RecordingService` commands for `recording -> interrupted -> recovering -> recording` and `interrupted -> userResumeRequired`, finalise the segment with an interruption end reason, log interruption rows (reason, start, end), and never record the call. Then P1-08 crash recovery, which must handle `writing` rows whose partial file was already renamed (ADR-019 point 3).
+Start **P1-08 Crash recovery and reconciliation** [FR-REC-08] on branch `phase-1/P1-08-crash-recovery`. On launch, find `writing` segment rows: inspect the file at the row's path, and if it is missing, check the final name too (`MediaPaths` without `.partial`), because the rename may have happened before the row update (ADR-019 point 3). Mark rows `recovered` or `damaged`, never delete files (NFR-07). Also close any interruption row with `end_utc` null for an activity no longer held (crash during an interruption), and move `active` activities to a recoverable state. Treat the zero-length damaged row of a failed fallback as a gap (ADR-016).
 
 ## Files touched
 
 New:
-- `lib/domain/services/one_active_coordinator.dart`
-- `lib/features/capture/one_active_prompt_dialog.dart`
-- `test/domain/one_active_coordinator_test.dart`, `test/features/capture/one_active_prompt_test.dart`
+- `lib/domain/services/interruption_coordinator.dart`
+- `test/domain/recording_service_interruption_test.dart`, `test/domain/interruption_coordinator_test.dart`, `test/fixtures/fake_interruption_source.dart`
 
 Changed:
-- `lib/domain/services/recording_service.dart`, `lib/features/capture/recording_providers.dart`, `lib/spikes/shortcut_trigger_spike.dart` (comment only)
-- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-020), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
+- `lib/domain/services/recording_service.dart`, `lib/domain/services/recording_state.dart`, `lib/features/capture/recording_providers.dart`, `lib/spikes/bluetooth_routing_spike.dart`
+- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-021), `docs/TEST_PLAN.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`
 
 ## Failing or skipped tests
 
-None failing in `flutter test` (419 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
+None failing in `flutter test` (455 passed). Device tests unchanged from the last run: `p0_13` fails on Windows by design (no shortcut bridge); `p0_05`, `p0_07`, `p0_10`, `p0_12` and `p0_06` fail on this PC because the Remote Desktop session has no microphone (expected, blocked). `p0_04` is skipped on Windows and has not run on any phone.
 
 Note for widget tests that use the real database and `RecordingService`: futures made inside `testWidgets` only complete while the fake zone is pumped. Pump with `tester.runAsync` ticks and dispose the recorder inside the test body (see `test/features/capture/one_active_prompt_test.dart`), or `tearDown` hangs.
 
 ## Open questions for the owner
 
-- **ADR-020 (new):** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing. Say if you meant something else by the two options. Notification start actions are treated as able to show the prompt; say if they should switch straight away like shortcuts.
+- **ADR-021 (new):** non-camera interruptions are logged as `system` ("a call or another app") because Android audio focus and iOS interruptions do not say what caused them. Getting `call` exactly would need the phone-state permission, which ADR-013 rejected. Say if you want that.
+- **ADR-021 (new):** after a camera interruption, recording restarts as soon as the shot is done, without waiting for the system. If iOS refuses that, the user is asked to tap Resume. Say if you would rather wait for the system's signal.
+- **ADR-020:** "Keep it running" leaves the old recording and lets the app open the new activity for notes and photos without audio; "Cancel" does nothing. Say if you meant something else by the two options. Notification start actions are treated as able to show the prompt; say if they should switch straight away like shortcuts.
 - **ADR-019:** segments roll every 10 minutes (the build guide minimum). Say if you would rather have shorter segments (less lost on a crash, more files) or longer ones.
 - **Deep-link scheme (ADR-018):** FR-HF-05 names `conferencecompanion://`. This run used `attenlume://` to match the product name. Say if you also want the old scheme registered.
 - **Project licence:** ADR-007 recommends Apache 2.0. Still waiting for your choice between Apache 2.0 and MIT, the copyright holder ("Samlytics Data Services") and whether to exclude the brand assets.
