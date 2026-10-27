@@ -647,7 +647,7 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - Before changes: `flutter analyze` clean, `flutter test` 665 passed.
 - ADR-036: trim start, trim end and middle cuts (two marks) on the review screen, stored in `cut_ranges` with snackbar Undo for add and remove; the player skips merged cuts while playing (across gaps, stopping at a trimmed end); hatched cuts on the timeline strip and time "after cuts". `ActivityRepository.split` and `ActivitySplitter`: split at the playhead into a named Part 2 in one transaction, segments, photos, bookmarks and interruptions move, cuts divided, no audio written (a segment the split falls inside is shared by both parts with a cut on each side), waveform summaries follow.
 - Tests: 16 new (5 player, 1 timeline, 5 repository and splitter, 5 widget), 2 P1-17 widget expectations updated for the sample's 30 s intro cut now being skipped. `flutter test` 681 passed, `flutter analyze` clean, `dart format` clean, notices up to date (no new packages).
-- `integration_test/app_capture_journey_test.dart` on Windows passed.
+- `integration_test/app_capture_journey_test.dart` on Windows passed. Windows release preview (`build_windows_preview.ps1 -SkipTests`) and `flutter build apk --debug` succeed on `main` after the merge.
 - Cut skipping and split on real devices are unverified. MT-25 written.
 
 ## Task status
