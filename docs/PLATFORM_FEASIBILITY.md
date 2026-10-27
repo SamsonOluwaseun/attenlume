@@ -20,7 +20,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 |---|---|---|---|---|---|
 | Background recording with screen locked | P0-04 | **blocked: needs real device** (harness ready; expect silence until the P1-11 foreground service exists, see 2.4.1) | **blocked: needs Mac and iPhone** (harness ready) | n/a (minimised: P0-06) | `integration_test/p0_04_background_recording_test.dart`, manual steps MT-17 |
 | Call interruption: segment finalised, call not recorded, resume | P0-04 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready) | n/a | Needs a second phone to call it. Logic tested with fakes only (2.4.1) |
-| Photo capture during recording, no audio loss | P0-05 | unverified | unverified | unverified | Camera may reconfigure the audio session |
+| Photo capture during recording, no audio loss | P0-05 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready; plugin source says the camera leaves the audio session alone, see 2.7.1) | **blocked** (no capture device and no camera in the build host's Remote Desktop session, see 2.7.1) | `integration_test/p0_05_photo_during_recording_test.dart`, manual steps MT-21. Interruption handling tested with fakes only |
 | Microphone capture while minimised | P0-06 | n/a | n/a | **blocked** (no capture device in the build host's Remote Desktop session, see 2.6.1) | Harness ready: `integration_test/p0_06_windows_mic_test.dart`, manual steps MT-16 |
 | AAC-LC at 32, 48, 64 kbps mono | P0-06, P0-12 | unverified | unverified | **not available per docs**, plugin source picks the nearest supported rate (2.6.1). On-device bitrate **blocked** | Windows encoder minimum is 96 kbps. AAC-LC encoder present on build host: `isEncoderSupported(aacLc)` true |
 | Export to user-chosen folder | P0-06 | unverified | unverified | **partial**: streaming copy, SHA-256 verify and no-overwrite pass on the build host (unit tests). Folder picker not built yet (P1-21) | `lib/data/filesystem/folder_export.dart` |
@@ -211,6 +211,20 @@ Official rules (AVAudioSession, handling audio interruptions, UIBackgroundModes)
 - **iOS risk:** an `AVCaptureSession` can reconfigure the shared `AVAudioSession` when it starts. If it does, recording may stop or change route. P0-05 must test 20 photos during a recording (AT-PHO-01). Mitigation options: keep audio session ownership in our code and treat any camera-caused change as an interruption with a segment boundary and auto-resume (FR-PHO-07).
 - **Android:** CameraX without audio should not take audio focus. Unverified.
 - **Windows:** `camera_windows` uses Media Foundation capture. Unverified whether it contends with the microphone.
+
+### 2.7.1 Spike P0-05 harness (27 October 2026)
+
+Built on the Windows build host. **No photo was taken and no audio was captured.** Everything below about phones is read from package source, not observed.
+
+- Packages: `camera` 0.12.1 with `camera_android_camerax` 0.7.6, `camera_avfoundation` 0.10.3+1 and `camera_windows` 0.3.0+1 (added explicitly), all flutter.dev, BSD-3. Behind the `PhotoCamera` interface (`lib/platform/camera/`), implementation `PluginPhotoCamera`. ADR-017.
+- **iOS, from source:** `camera_avfoundation` 0.10.3+1 creates both capture sessions with `automaticallyConfiguresApplicationAudioSession = false`, and its only call that changes the shared `AVAudioSession` category (`upgradeAudioSessionCategory`, to `playAndRecord` with speaker and A2DP options) runs only when the controller has `enableAudio: true`. We open it with `enableAudio: false`, so the camera is expected not to touch our audio session. Expectation only. The system shutter sound may still be heard in the recording. Docs: https://developer.apple.com/documentation/avfoundation/avcapturesession/automaticallyconfiguresapplicationaudiosession
+- **Android:** CameraX `ImageCapture` with no audio use case should not request audio focus. Unverified.
+- **Windows:** the build host lists **no camera** through `camera_windows` (Remote Desktop session, no webcam).
+- Harness: `PhotoDuringRecordingSpike` (`lib/spikes/photo_during_recording_spike.dart`) lists the cameras, starts the real `RecordingService` with `RecordCaptureEngine`, then opens the camera (as a tap on Photo would) and takes `P0_05_PHOTOS` photos (default 20, AT-PHO-01) every `P0_05_INTERVAL` seconds (default 3). Each photo is stored at `photos/<photo_id>.jpg` with a `photos` row and its timeline offset. Around each shot it logs the recording state, the open segment and the level before and after, and every audio session event with whether it came while the camera was busy or within 2 s of a shot.
+- **Mitigation under test (FR-PHO-07):** an interruption that begins near a shot is logged as a `camera` interruption, the segment ends and recording resumes in a new segment straight after the shot, without waiting for the system. Interruptions away from the camera are `system` ones and follow P0-04. After the run every gap between segments is matched against the interruption rows; a gap no row covers is lost audio. A level fall of 20 dB or more across a shot is flagged for listening.
+- Device run on the build host (`-d windows`, 2 photos): start failed with "No audio recording device was found.", no camera listed, no photos taken, one damaged row. Blocked, as for P0-06.
+
+**Manual steps (MT-21 in `docs/TEST_PLAN.md`).** Copy the printed Markdown table here per device.
 
 ### 2.8 Gallery import by time window (FR-PHO-05)
 

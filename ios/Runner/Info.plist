@@ -47,6 +47,8 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Attenlume takes photos of slides and posters for the activity you are capturing. Photos stay on this device unless you export them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Attenlume records audio of sessions you choose to capture. Recordings stay on this device unless you export them.</string>
 	<key>UIBackgroundModes</key>

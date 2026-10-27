@@ -104,6 +104,9 @@ Toolchain: Flutter 3.47.8 stable, Dart 3.13.7. Every package below accepts Dart 
 | archive | 4.5.2 | 2026-10-13 | taosengine.com | MIT | all | Streaming ZIP with ZIP64 |
 | audio_session | 0.2.4 | Adopted in P0-04 behind `AudioInterruptionSource` (ADR-013). Unit tests use a fake. Android and iOS: builds only (APK), iOS not built | 2026-10-27 |
 | rxdart | 0.28.0 | Transitive through `audio_session` (Apache-2.0). Builds only | 2026-10-27 |
+| camera | 0.12.1 (camera_android_camerax 0.7.6, camera_avfoundation 0.10.3+1, camera_platform_interface 2.15.0) | Adopted in P0-05 behind `PhotoCamera` (ADR-017). Windows release and APK debug builds. No photo taken on any device | 2026-10-27 |
+| camera_windows | 0.3.0+1 | Added explicitly in P0-05. `availableCameras()` returns an empty list on the build host (no webcam in RDP) | 2026-10-27 |
+| cross_file, flutter_plugin_android_lifecycle, camera_web | 0.3.5+5, 2.0.35, 0.3.5+6 | Transitive through `camera` (BSD-3). Builds only | 2026-10-27 |
 | crypto | 3.0.8 | 2026-10-26 | dart.dev | BSD-3 | all | SHA-256 |
 | path_provider | 2.1.6 | 2026-06-15 | flutter.dev | BSD-3 | A, I, W | App folders |
 | path | 1.9.1 | 2024-10-17 | dart.dev | BSD-3 | all | Stable core package |
@@ -239,12 +242,19 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `RecordingService` stores the active input in `recording_segments.input_route` and `RecordingStatus.inputRoute`, and `routeChanged({force})` rolls the segment with reason `route_change`, or waits in `userResumeRequired` when no mic can start (FR-REC-03, FR-REC-07).
 - `lib/spikes/bluetooth_routing_spike.dart`: logs inputs at start, on device events and once a second, rolls on change, logs `route_lost` markers and checks every row against its file (AT-QUAL-03). Device test `integration_test/p0_07_bluetooth_routing_test.dart` (MT-20).
 
+### 8.7 Added in P0-05
+
+- `lib/platform/camera/`: `PhotoCamera` interface (list, open, take photo, close), `CameraLens`, `moveCapturedFile` (rename, or copy, size check, then remove the plugin's temp file; never overwrites) and `PluginPhotoCamera` on the `camera` plugin with `enableAudio: false` and `ResolutionPreset.veryHigh`. ADR-017.
+- `MediaPaths.photo` (`photos/<photo_id>.jpg`) and an optional `id` on `MediaAssetRepository.addPhoto`, so the file is named after its row.
+- Android `CAMERA` permission and iOS `NSCameraUsageDescription`.
+- `lib/spikes/photo_during_recording_spike.dart`: photos during a recording, `camera` interruptions with resume after the shot, gaps matched to interruption rows (AT-PHO-01). Device test `integration_test/p0_05_photo_during_recording_test.dart` (MT-21).
+
 ## 9. Open risks
 
 | Risk | Where | Mitigation |
 |---|---|---|
 | Windows AAC minimum is 96 kbps | 2.3 of feasibility | ADR-002 mapping, effective settings shown |
-| iOS camera reconfigures audio session | P0-05 | Treat as interruption, segment boundary |
+| iOS camera reconfigures audio session | P0-05 | `enableAudio: false` (plugin source then leaves the session alone, ADR-017); if it still interrupts: `camera` interruption, segment boundary, resume after the shot. Unverified until MT-21 |
 | OEM battery managers kill the Android service | P0-04 | Test on Samsung or Xiaomi, document user steps |
 | No Mac: iOS unbuildable here | all iOS | Prepare code, mark iOS blocked until the owner has a Mac or CI with signing |
 | Windows AAC bitrate silently snapped to 96 kbps by `record_windows` | P0-06 | Store bitrate read from the file, never the request (ADR-006) |

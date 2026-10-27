@@ -344,6 +344,29 @@ Test results on phase-0/P0-07-bluetooth-routing-spike (Windows 11 build host):
 - dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
 - flutter build windows --release and flutter build apk --debug: both built.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-05 photo capture during recording spike harness
+
+- Start-of-session check on main: flutter analyze no issues, flutter test 335 passed.
+- Picked P0-05 over P0-13 and P1-05 because the agent prompt puts Phase 0 first and P0-05's dependency (P0-04) is blocked-on-device.
+- New packages: `camera` 0.12.1 and `camera_windows` 0.3.0+1 (flutter.dev, BSD-3, audited in P0-01), with transitive `camera_android_camerax` 0.7.6, `camera_avfoundation` 0.10.3+1, `camera_platform_interface` 2.15.0, `camera_web` 0.3.5+6, `cross_file` 0.3.5+5, `flutter_plugin_android_lifecycle` 2.0.35. `THIRD_PARTY_NOTICES.md` regenerated: 129 packages, nothing flagged.
+- `lib/platform/camera/`: `PhotoCamera` interface, `CameraLens`, `CapturedPhoto`, `CameraUnavailableException`, `moveCapturedFile` (never overwrites) and `PluginPhotoCamera` (`enableAudio: false`, `ResolutionPreset.veryHigh`) [FR-PHO-01, FR-PHO-07].
+- Desk finding from source: `camera_avfoundation` 0.10.3+1 sets `automaticallyConfiguresApplicationAudioSession = false` and only changes the `AVAudioSession` category when `enableAudio` is true. Expectation only, not observed.
+- `MediaPaths.photo` and optional `id` on `MediaAssetRepository.addPhoto` (`photos/<photo_id>.jpg`).
+- `PhotoDuringRecordingSpike` (`lib/spikes/photo_during_recording_spike.dart`): lists cameras, records, opens the camera, takes 20 photos, logs state, segment and level around each shot and every audio session event; interruptions near a shot become `camera` rows and resume after the shot; gaps between segments matched to interruption rows (AT-PHO-01). JSON and Markdown.
+- Android `CAMERA` permission, iOS `NSCameraUsageDescription`.
+- Device test `integration_test/p0_05_photo_during_recording_test.dart` and manual steps MT-21 in `TEST_PLAN.md`.
+- ADR-017 recorded. `PLATFORM_FEASIBILITY.md` 1 and 2.7.1, `TEST_PLAN.md` (2.1, MT-21, AT-PHO-01, results log) and `ARCHITECTURE.md` (7, 8.7, 9) updated.
+- **No photo taken, no audio captured.** The device test was run on the build host with `-d windows` and 2 photos: start failed with "No audio recording device was found." and `camera_windows` listed no camera (Remote Desktop session). P0-05 is blocked: needs real devices on all three platforms.
+
+Test results on phase-0/P0-05-photo-during-recording-spike (Windows 11 build host):
+
+- flutter analyze: no issues.
+- flutter test: 349 passed, 0 failed (14 new, P0-05, in `test/spikes/photo_during_recording_spike_test.dart`).
+- `integration_test/p0_05_photo_during_recording_test.dart -d windows`: failed as expected, no microphone and no camera (blocked, not a code fault).
+- dart run tool/licence_audit.dart --check: up to date, nothing flagged.
+- dart format --output=none --set-exit-if-changed lib test tool integration_test: clean.
+- flutter build windows --release and flutter build apk --debug: both built.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -364,4 +387,5 @@ Test results on phase-0/P0-07-bluetooth-routing-spike (Windows 11 build host):
 | P0-12 | blocked: needs real device | Harness, `RecordingService.changeProfile`, device test and MT-18 steps built, 16 unit tests with fakes pass (291 total). ADR-014. Windows run on build host blocked (no capture device) |
 | P0-10 | blocked: needs real device | Harness, memory and battery probes, device test and MT-19 steps built, 18 unit tests with fakes pass (309 total). ADR-015. Windows run on build host blocked (no capture device) |
 | P0-07 | blocked: needs real device and headsets | Route probe, `RecordingService.routeChanged`, harness, device test and MT-20 steps built, 26 unit tests with fakes pass (335 total). ADR-016. Windows run on build host blocked (no capture device) |
-| P0-05, P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet for these |
+| P0-05 | blocked: needs real device | `PhotoCamera` on `camera` 0.12.1, harness, device test and MT-21 steps built, 14 unit tests with fakes pass (349 total). ADR-017. Windows run on build host blocked (no capture device, no camera) |
+| P0-13 | blocked: needs real device | Listed as unverified in `PLATFORM_FEASIBILITY.md` 1. No spike harness built yet |
