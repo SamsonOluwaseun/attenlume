@@ -72,6 +72,25 @@ Test results on `phase-0/P0-09-data-model` (Windows 11 build host):
 - `dart format --set-exit-if-changed lib test tool`: clean.
 - `flutter build windows --debug` and `flutter build apk --debug`: both built. Not run on any device (on-device database open is unverified).
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-06 Windows mic spike
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 76 passed.
+- Capture interface `AudioCaptureEngine` with `RecordCaptureEngine` (`record` 7.1.2, `record_windows` 2.3.0). Effective encoder request per platform (`capture_settings.dart`, Windows 96 kbps floor).
+- Pure-Dart `M4aInspector`: reads codec, channels, sample rate, duration and declared, payload and whole-file bitrates from a finished M4A. Loads only `moov`. Rejects unfinalised files.
+- Streaming `exportFolder` with SHA-256, partial folder then rename, no overwrite, re-hash of every copy, `checksums.sha256`, `verifyChecksums`.
+- Spike harness `lib/spikes/windows_mic_spike.dart` and device test `integration_test/p0_06_windows_mic_test.dart`.
+- New packages: `crypto` 3.0.8 (dart.dev, BSD-3), `integration_test` (SDK). `record` was already audited in P0-01. Decisions in ADR-006.
+- **Real run on the build PC:** AAC-LC encoder reported present, but `listInputDevices()` was empty and every `start()` threw "No audio recording device was found.". Cause: the agent runs in a disconnected Remote Desktop session, which does not see the PC's microphone. No audio was recorded. Device part **blocked: needs real device session** (manual test MT-16). Details in `docs/PLATFORM_FEASIBILITY.md` 2.6.1.
+- Read from `record_windows` source (unverified): unsupported bitrates are snapped to the nearest supported one without an error, so 32/48/64 kbps requests are expected to give 96 kbps.
+
+Test results on `phase-0/P0-06-windows-mic` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 100 passed, 0 failed (24 new). All 24 run on any host.
+- `integration_test/p0_06_windows_mic_test.dart -d windows`: **failed as expected without a microphone** (blocked, not a code fault). Not part of `flutter test`.
+- `dart format --set-exit-if-changed lib test tool integration_test`: clean.
+- `flutter build apk --debug` and `flutter build windows --release`: both built. APK not installed on a phone.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -80,4 +99,5 @@ Test results on `phase-0/P0-09-data-model` (Windows 11 build host):
 | P0-02 | done (CI unverified) | analyze clean, 12 tests pass, Windows and APK debug builds succeed locally. CI file written, not run (no remote). No device runs |
 | P0-03 | done | Four docs created, all 1.6 docs linked from README, `P0-03` docs index tests pass (14 total) |
 | P0-09 | done | Schema v2, migration and repository tests pass (76 total). On-device DB open unverified |
-| P0-06 | todo | Next |
+| P0-06 | blocked: needs real device | Harness, inspector, export and 24 unit tests pass (100 total). Real capture blocked: no mic in the build host's RDP session. Run MT-16 |
+| P0-08 | todo | Next |

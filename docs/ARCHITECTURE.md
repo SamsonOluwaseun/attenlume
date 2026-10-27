@@ -181,6 +181,9 @@ Versions from `pubspec.lock` on `main` after P0-02. "Tested" means `flutter anal
 | build_runner (dev) | 2.17.1 | Codegen | 2026-10-27 |
 | flutter_lints (dev) | 6.0.0 | `flutter analyze` | 2026-10-27 |
 | mocktail (dev) | 1.0.5 | Added, not used yet | 2026-10-27 |
+| record | 7.1.2 (record_windows 2.3.0, record_android 2.2.0, record_ios 2.1.1) | Windows: encoder query true, no capture device in RDP session (P0-06). Android and iOS: builds only | 2026-10-27 |
+| crypto | 3.0.8 | Streaming SHA-256 in folder export tests (P0-06) | 2026-10-27 |
+| integration_test (dev, SDK) | Flutter 3.47.8 | P0-06 harness on Windows desktop | 2026-10-27 |
 
 Build notes: Gradle installed CMake 3.22.1 into the Android SDK on the first APK build. Montserrat static TTFs (400, 500, 600, 700) come from the upstream Montserrat Project repo (`JulietaUla/Montserrat`, `fonts/ttf`), because the Google Fonts repo now ships only the variable font. SHA-256:
 
@@ -198,6 +201,14 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/data/local_database/app_database.dart`: Drift `AppDatabase`, schema v1 with `app_settings` only. DateTimes stored as UTC ISO 8601 text (`build.yaml`). Foreign keys on.
 - `drift_schemas/`: schema dumps for migration tests. `test/data/local_database/generated/`: generated schema helpers.
 
+### 8.1 Added in P0-06
+
+- `lib/platform/audio_capture/`: `AudioCaptureEngine` interface and `RecordCaptureEngine` (`record` package). One file per start, rolling is stop then start.
+- `lib/domain/services/capture_settings.dart`: profile to encoder request per platform (Windows 96 kbps floor, ADR-002).
+- `lib/data/filesystem/m4a_inspector.dart`: reads codec, channels, sample rate, duration and bitrates from a finished M4A by walking box headers. Loads only `moov`. Rejects files without `moov`.
+- `lib/data/filesystem/folder_export.dart`: streaming copy with SHA-256, partial folder then rename, no overwrite, `checksums.sha256`, `verifyChecksums`. Seed of P1-21.
+- `lib/spikes/`: spike harnesses. Not wired into the app UI (ADR-006).
+
 ## 9. Open risks
 
 | Risk | Where | Mitigation |
@@ -206,5 +217,6 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 | iOS camera reconfigures audio session | P0-05 | Treat as interruption, segment boundary |
 | OEM battery managers kill the Android service | P0-04 | Test on Samsung or Xiaomi, document user steps |
 | No Mac: iOS unbuildable here | all iOS | Prepare code, mark iOS blocked until the owner has a Mac or CI with signing |
+| Windows AAC bitrate silently snapped to 96 kbps by `record_windows` | P0-06 | Store bitrate read from the file, never the request (ADR-006) |
 | No Windows playback package from a big publisher | P0-06 | `PlaybackEngine` interface, `audioplayers` fallback |
 | No Windows gallery API | P1-15 | Folder pick plus EXIF time filter |

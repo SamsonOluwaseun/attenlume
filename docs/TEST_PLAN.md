@@ -26,7 +26,7 @@ dart format --output=none --set-exit-if-changed lib test tool
 
 ### 2.1 Current suite
 
-As of P0-09 (27 October 2026, Windows 11 build host): 76 tests, all passing.
+As of P0-06 (27 October 2026, Windows 11 build host): 100 unit and widget tests, all passing. One Windows integration test (`integration_test/`) is a device test: see MT-16.
 
 | File | Proves |
 |---|---|
@@ -40,8 +40,13 @@ As of P0-09 (27 October 2026, Windows 11 build host): 76 tests, all passing.
 | `test/data/repositories/activity_repository_test.dart` | NFR-03 built-in types, FR-ACT-02 quick-start labels, FR-ACT-06 custom types, FR-ACT-05 numbering per type and timezone, FR-ACT-04 fields, FR-EXP-10 private reflections, FR-ACT-03 order, cascade delete |
 | `test/data/repositories/media_repositories_test.dart` | FR-REC-03 sequence, FR-REC-01 row before audio, FR-QUAL-06 quality fields, FR-REC-08 states, offset rule across a call and backfill, FR-REV-04 cut ranges with undo, export job lifecycle, UTC storage in every table |
 | `test/docs/docs_index_test.dart` | P0-03 every document in build guide 1.6 exists and is linked from `README.md` |
+| `test/domain/capture_settings_test.dart` | FR-QUAL-05 effective encoder request per platform, Windows 96 kbps floor (ADR-002), MB per hour |
+| `test/data/filesystem/m4a_inspector_test.dart` | FR-QUAL-06 codec, channels, sample rate, duration and bitrates read from M4A (moov first or last, mdhd v1, long descriptor lengths, HE-AAC, video track first). FR-REC-08 unfinalised, truncated and non-MP4 files rejected |
+| `test/data/filesystem/folder_export_test.dart` | FR-EXP-06 checksums written and verified, tamper detected. FR-EXP-04 no temp files left. FR-EXP-05 sources unchanged, no overwrite, failure part way removes only the partial copy |
+| `test/spikes/windows_mic_spike_test.dart` | P0-06 harness with a fake engine: FR-REC-03 stop-then-start rolling, FR-QUAL-01 reports file contents not the request, refused start recorded, FR-REC-08 unfinalised file, flat signal flag, export verified |
+| `integration_test/p0_06_windows_mic_test.dart` | P0-06 on real Windows hardware (MT-16). Fails when no microphone is available |
 
-Fixtures: `test/fixtures/fixtures.dart` (fake clock, sequential IDs, `TestData` with every repository, `SampleConference` with a keynote recorded around a call).
+Fixtures: `test/fixtures/m4a_builder.dart` (synthetic M4A files, zero audio payload) and `test/fixtures/fixtures.dart` (fake clock, sequential IDs, `TestData` with every repository, `SampleConference` with a keynote recorded around a call).
 
 ### 2.2 Planned unit tests (build guide 13.1)
 
@@ -106,6 +111,7 @@ Run on each device in section 5. Record results in section 6 with device, OS, da
 | MT-13 | App killed by the OS | Recovery offered on next launch, at most one segment lost |
 | MT-14 | Photo burst during recording | No audio loss, or logged auto-resumed interruptions |
 | MT-15 | Rapid start and stop taps | No duplicate recordings |
+| MT-16 | Windows mic spike (P0-06): signed in at the console or on a Surface, run `flutter test integration_test/p0_06_windows_mic_test.dart -d windows`, listen to each segment, repeat with the microphone privacy switch off | Test passes, segments are audible AAC-LC mono, actual bitrate per request recorded in `PLATFORM_FEASIBILITY.md` 2.6.1, privacy-off behaviour recorded |
 
 ---
 
@@ -189,7 +195,7 @@ Add one row per real-device run. Never add a row for a run that was not observed
 
 | Date | Tester | Device and OS | App version | Test IDs | Result | Evidence |
 |---|---|---|---|---|---|---|
-| | | | | | | |
+| 2026-10-27 | Claude Code (unattended) | Build PC (NucBox M6 Ultra), Windows 11 Pro 26200, Remote Desktop session | 0.1.0+1 | MT-16 | blocked: no capture device in RDP session, `start()` threw "No audio recording device was found." | `docs/PLATFORM_FEASIBILITY.md` 2.6.1 |
 
 ---
 

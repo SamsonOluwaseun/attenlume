@@ -21,9 +21,9 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | Background recording with screen locked | P0-04 | unverified | unverified | n/a (minimised: P0-06) | Needs real phone |
 | Call interruption: segment finalised, call not recorded, resume | P0-04 | unverified | unverified | n/a | Needs real phone and a second phone to call it |
 | Photo capture during recording, no audio loss | P0-05 | unverified | unverified | unverified | Camera may reconfigure the audio session |
-| Microphone capture while minimised | P0-06 | n/a | n/a | unverified | Can partly run on this dev PC |
-| AAC-LC at 32, 48, 64 kbps mono | P0-06, P0-12 | unverified | unverified | **not available per docs** (see 2.3) | Windows encoder minimum is 96 kbps |
-| Export to user-chosen folder | P0-06 | unverified | unverified | unverified | |
+| Microphone capture while minimised | P0-06 | n/a | n/a | **blocked** (no capture device in the build host's Remote Desktop session, see 2.6.1) | Harness ready: `integration_test/p0_06_windows_mic_test.dart`, manual steps MT-16 |
+| AAC-LC at 32, 48, 64 kbps mono | P0-06, P0-12 | unverified | unverified | **not available per docs**, plugin source picks the nearest supported rate (2.6.1). On-device bitrate **blocked** | Windows encoder minimum is 96 kbps. AAC-LC encoder present on build host: `isEncoderSupported(aacLc)` true |
+| Export to user-chosen folder | P0-06 | unverified | unverified | **partial**: streaming copy, SHA-256 verify and no-overwrite pass on the build host (unit tests). Folder picker not built yet (P1-21) | `lib/data/filesystem/folder_export.dart` |
 | Bluetooth mic routing and fallback | P0-07 | unverified | unverified | unverified | Needs headset and lapel mic |
 | 90-minute low-spec recording: memory, size, battery | P0-10 | unverified | unverified | unverified | No figures until measured |
 | Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | unverified | Export half can run in automated tests |
@@ -114,6 +114,34 @@ Official rules (AVAudioSession, handling audio interruptions, UIBackgroundModes)
 
 **Risk:** low to medium. P0-06 can run its automated parts on this development PC.
 
+### 2.6.1 Spike P0-06 results (27 October 2026)
+
+**Host:** GMKtec NucBox M6 Ultra (AMD), Windows 11 Pro 10.0.26200, Flutter 3.47.8, `record` 7.1.2 with `record_windows` 2.3.0. This is the build PC, not a Surface. Run by Claude Code (Opus 5.5), unattended.
+
+**What ran:** `flutter test integration_test/p0_06_windows_mic_test.dart -d windows`. The harness (`lib/spikes/windows_mic_spike.dart`) asks for four 3-second AAC-LC mono 48 kHz segments at 32, 48, 64 and 96 kbps, rolling by stop then start, then inspects each file with our own MP4 reader (`lib/data/filesystem/m4a_inspector.dart`), exports the folder and verifies `checksums.sha256`.
+
+**Observed:**
+
+| Check | Result |
+|---|---|
+| `isEncoderSupported(aacLc)` | true |
+| Microphone permission (`hasPermission`) | true (the plugin always answers true on Windows) |
+| `listInputDevices()` | empty list |
+| `start()` at 32, 48, 64 and 96 kbps | each threw `PlatformException(Record, null, No audio recording device was found., null)` |
+| Files written | none |
+| Export of the (empty) segment folder and checksum verify | passed (0 files) |
+
+**Why:** the agent runs inside Remote Desktop session 2 (`RDP-Tcp#0`, state Disconnected). The registry lists an active capture endpoint ("Microphone Array", Senary Audio), but Remote Desktop sessions only see microphones that the RDP client redirects, so Media Foundation finds no capture device. Fixing this needs someone at the PC (sign in at the console, or connect with RDP audio recording redirection on). That is outside unattended mode, so on-device capture is **blocked: needs real device session**.
+
+**Findings that stand without a microphone:**
+
+1. With no capture device, `record` on Windows returns an empty input list and `start()` throws a `PlatformException`. It does not hang or write a file. The app must check `listInputs()` first and show a plain "No microphone found" message (P1-10), separately from the privacy-switch case.
+2. From the `record_windows` 2.3.0 source (`encoder/codec_caps.cpp`, `record/record.cpp`): when the requested channels, sample rate or bitrate are not in the encoder's capability list, the plugin picks the nearest supported entry and records with that. A 32, 48 or 64 kbps request is therefore expected to come out at 96 kbps, without an error. Source reading only: **unverified** until MT-16 is run. This is why segments must store the bitrate read back from the file (FR-QUAL-06), not the request.
+3. Observed bitrate is read from the finished file: the `esds` descriptor's declared average bitrate, the `mdat` payload bitrate and the whole-file bitrate (`AudioFileInfo`). A file without a `moov` box (recording cut off before finalisation) is rejected as not finalised, never reported as good (FR-REC-08).
+4. Folder export streams each file through SHA-256 in one pass with bounded memory, writes to `<name>.partial` then renames, never overwrites an existing folder and re-hashes every copy. A failure part way removes only the partial copy (unit tests, FR-EXP-04 to 06).
+
+**Manual steps (MT-16 in `docs/TEST_PLAN.md`):** sign in at the PC's own console (or a Surface), check Settings > Privacy and security > Microphone > "Let desktop apps access your microphone" is on, then run the integration test above. Copy `report.md` from the printed folder into this section, listen to each segment, and record whether 32/48/64 kbps came out at 96 kbps. Then minimise the app during a longer recording (Phase 1 harness) and check for gaps. Repeat once with the privacy switch off and record what `record` does (error or silence).
+
 ### 2.7 Camera and the audio session (FR-PHO-07)
 
 - `camera` 0.12.1 (flutter.dev) covers Android (CameraX implementation) and iOS. Windows needs `camera_windows` 0.3.0+1 added explicitly. `camera` does not endorse it automatically.
@@ -141,7 +169,7 @@ No single maintained package covers Android, iOS and Windows:
 - `just_audio` 0.10.6 (MIT and Apache-2.0) covers Android and iOS but **not Windows**.
 - Windows options: `just_audio_windows` 0.2.3 (MIT, community, last release April 2026), or `just_audio_media_kit` (Unlicense, no release since April 2025, bundles libmpv, which is large).
 - Fallback: `audioplayers` 6.8.1 (MIT, covers all three).
-- Decision: `just_audio` plus `just_audio_windows`, behind a `PlaybackEngine` interface so it can be swapped. Verify seeking accuracy in M4A on Windows during P0-06.
+- Decision: `just_audio` plus `just_audio_windows`, behind a `PlaybackEngine` interface so it can be swapped. Verify seeking accuracy in M4A on Windows: not done in P0-06 (no recording could be made on the build host), moved to P1-17.
 
 ### 2.11 Trimming (FR-REV-07, ADR-003 in P0-14)
 
@@ -201,5 +229,6 @@ Microsoft:
 Packages:
 - record README (feature matrix): https://github.com/llfbandit/record/blob/main/record/README.md
 - record background recording note: https://github.com/llfbandit/record/blob/main/doc/bg_recording.md
+- record_windows source (capability matching): https://github.com/llfbandit/record/tree/main/record_windows/windows
 - ffmpeg-kit (retired): https://github.com/arthenica/ffmpeg-kit
 - pub.dev package data: queried with `tool/pub_audit.py` (see `docs/ARCHITECTURE.md` section 6)
