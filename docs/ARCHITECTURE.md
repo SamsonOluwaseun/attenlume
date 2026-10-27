@@ -276,6 +276,12 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/features/capture/crash_recovery_dialog.dart`: `CrashRecoveryDialog`, `CrashRecoveryGate` (wraps the home screen in `AttenlumeApp`). Providers `crashRecoveryServiceProvider`, `crashRecoveryReportProvider`.
 - `MediaPaths.finalName`, `MediaAssetRepository.openInterruptions` and `segmentPaths`, `ActivityRepository.listByStatus`.
 
+### 8.13 Added in P1-09
+
+- `lib/domain/services/profile_estimates.dart`: `estimateProfile` (effective MB per hour and safe minutes left above the hard reserve), `formatTimeLeft`, `formatMegabytesPerHour`, `effectiveSettingsNotice` (FR-QUAL-05). ADR-023.
+- `lib/features/capture/recording_profile_selector.dart`: `RecordingProfileSelector` (FR-UI-08), on the activity detail sheet until the recording screen (P1-10). Providers `capturePlatformProvider`, `freeSpaceProbeProvider`, `mediaFreeBytesProvider`.
+- `ConferenceRepository.countUnrecordedInheritingActivities` and `showProfileBulkChangeDialog` (FR-QUAL-03), used by the conference wizard when the default changes.
+
 ### 8.8 Added in P0-13
 
 - `lib/platform/shortcuts/`: `ShortcutCommand` (the `attenlume://` URI parser, the only one), `ShortcutBridge` interface, `MethodChannelShortcutBridge` on `com.samlytics.attenlume/shortcuts`, `NoShortcutBridge` for Windows until P2-05. ADR-018.

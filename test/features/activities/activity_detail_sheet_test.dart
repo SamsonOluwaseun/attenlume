@@ -1,8 +1,13 @@
 import 'package:attenlume/app/theme/app_theme.dart';
+import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
 import 'package:attenlume/data/repositories/repository_providers.dart';
 import 'package:attenlume/domain/models/enums.dart';
+import 'package:attenlume/domain/services/capture_settings.dart';
+import 'package:attenlume/domain/services/recording_state.dart';
+import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/conferences/activity_detail_sheet.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +25,11 @@ void main() {
     await t.close();
   });
 
-  Widget buildSubject({required Widget child, required WidgetTester tester}) {
+  Widget buildSubject({
+    required Widget child,
+    required WidgetTester tester,
+    RecordingStatus? status,
+  }) {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -34,6 +43,10 @@ void main() {
         conferenceRepositoryProvider.overrideWithValue(t.conferences),
         activityRepositoryProvider.overrideWithValue(t.activities),
         mediaAssetRepositoryProvider.overrideWithValue(t.media),
+        capturePlatformProvider.overrideWithValue(CapturePlatform.android),
+        mediaFreeBytesProvider.overrideWith((ref) async => null),
+        if (status != null)
+          recordingStatusProvider.overrideWith((ref) => Stream.value(status)),
       ],
       child: MaterialApp(theme: AppTheme.light(), home: child),
     );
@@ -191,5 +204,91 @@ void main() {
         expect(await t.activities.get(act.id), isNull);
       },
     );
+  });
+
+  group('FR-UI-08 quality selector on the activity sheet [P1-09]', () {
+    Future<void> pumpSheet(
+      WidgetTester tester,
+      String activityId, {
+      RecordingStatus? status,
+    }) async {
+      final summary = (await t.activities.getSummary(activityId))!;
+      await tester.pumpWidget(
+        buildSubject(
+          tester: tester,
+          status: status,
+          child: Scaffold(
+            body: ActivityDetailSheet(
+              summary: summary,
+              timezone: 'Europe/London',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('FR-UI-08 FR-QUAL-02 before recording, picking a profile '
+        'stores the activity override', (tester) async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await pumpSheet(tester, act.id);
+
+      expect(
+        find.byKey(const Key('recording-profile-selector')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(
+        find.byKey(const Key('profile-option-enhanced')),
+      );
+      await tester.tap(find.byKey(const Key('profile-option-enhanced')));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+
+      final stored = await tester.runAsync(() => t.activities.get(act.id));
+      expect(stored!.recordingProfileOverride, RecordingProfile.enhanced);
+    });
+
+    testWidgets('FR-UI-08 hidden once recorded; the profile row stays', (
+      tester,
+    ) async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await t.segment(
+        act.id,
+        start: t.clock.now,
+        length: const Duration(minutes: 2),
+      );
+      await t.activities.update(
+        act.id,
+        const ActivitiesCompanion(status: Value(ActivityStatus.completed)),
+      );
+      await pumpSheet(tester, act.id);
+
+      expect(find.byKey(const Key('recording-profile-selector')), findsNothing);
+      expect(find.text('Recording profile'), findsOneWidget);
+    });
+
+    testWidgets('FR-UI-08 while recording, shows the profile in use', (
+      tester,
+    ) async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await t.activities.update(
+        act.id,
+        const ActivitiesCompanion(status: Value(ActivityStatus.active)),
+      );
+      await pumpSheet(
+        tester,
+        act.id,
+        status: RecordingStatus(
+          state: RecordingState.recording,
+          activityId: act.id,
+          profile: RecordingProfile.economy,
+        ),
+      );
+
+      expect(find.text('Recording quality: Economy'), findsOneWidget);
+    });
   });
 }

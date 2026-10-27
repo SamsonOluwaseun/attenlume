@@ -19,6 +19,7 @@ import '../../platform/audio_route/audio_session_route_probe.dart';
 import '../../platform/audio_route/engine_route_probe.dart';
 import '../../platform/interruptions/audio_interruption_source.dart';
 import '../../platform/interruptions/audio_session_interruption_source.dart';
+import '../../platform/storage/free_space_probe.dart';
 
 // Recording wiring [P1-04]. Tests override audioCaptureEngineProvider and
 // mediaRootProvider.
@@ -29,6 +30,11 @@ CapturePlatform currentCapturePlatform() {
   if (Platform.isIOS) return CapturePlatform.ios;
   return CapturePlatform.android;
 }
+
+/// The platform for encoder settings and estimates. Tests override it.
+final capturePlatformProvider = Provider<CapturePlatform>(
+  (ref) => currentCapturePlatform(),
+);
 
 final audioCaptureEngineProvider = Provider<AudioCaptureEngine>(
   (ref) => RecordCaptureEngine(),
@@ -60,6 +66,23 @@ final mediaRootProvider = Provider<Future<Directory> Function()>(
       ),
 );
 
+/// Free-space query for the volume that holds recordings (P0-11).
+final freeSpaceProbeProvider = Provider<FreeSpaceProbe>(
+  (ref) => FreeSpaceProbe.forPlatform(),
+);
+
+/// Bytes free where recordings are written, or null when unknown. Read
+/// fresh each time a selector opens (FR-UI-08) [P1-09].
+final mediaFreeBytesProvider = FutureProvider.autoDispose<int?>((ref) async {
+  try {
+    final root = await ref.watch(mediaRootProvider)();
+    final space = await ref.watch(freeSpaceProbeProvider).query(root.path);
+    return space?.availableBytes;
+  } on Object {
+    return null;
+  }
+});
+
 /// The single recorder for the app (NFR-04, FR-REC-09).
 final recordingServiceProvider = Provider<RecordingService>((ref) {
   final service = RecordingService(
@@ -67,7 +90,7 @@ final recordingServiceProvider = Provider<RecordingService>((ref) {
     activities: ref.watch(activityRepositoryProvider),
     media: ref.watch(mediaAssetRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
-    platform: currentCapturePlatform(),
+    platform: ref.watch(capturePlatformProvider),
     routes: ref.watch(audioRouteProbeProvider),
     session: ref.watch(audioInterruptionSourceProvider),
   );
