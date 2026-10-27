@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Quick Settings tile and launcher shortcuts [P0-13, FR-HF-04]. -->
+    <string name="tile_record_label">Record</string>
+    <string name="shortcut_start_short">Start recording</string>
+    <string name="shortcut_start_long">Start recording the current activity</string>
+    <string name="shortcut_stop_short">Stop recording</string>
+    <string name="shortcut_stop_long">Stop and save the recording</string>
+    <string name="shortcut_bookmark_short">Bookmark</string>
+    <string name="shortcut_bookmark_long">Bookmark this moment in the recording</string>
+</resources>

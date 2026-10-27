@@ -47,6 +47,19 @@
 			</array>
 		</dict>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.samlytics.attenlume.shortcuts</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>attenlume</string>
+			</array>
+		</dict>
+	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Attenlume takes photos of slides and posters for the activity you are capturing. Photos stay on this device unless you export them.</string>
 	<key>NSMicrophoneUsageDescription</key>

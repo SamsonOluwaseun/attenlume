@@ -28,7 +28,7 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 | 90-minute low-spec recording: memory, size, battery | P0-10 | **blocked: needs real device** (harness ready; locked part expected silent until P1-11) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.4.2) | `integration_test/p0_10_long_run_test.dart`, manual steps MT-19. No figures until measured |
 | Low-storage stop and streaming export with bounded RAM | P0-11 | unverified | unverified | **pass** (Windows probe, preflight, disk-full cleanup, streaming folder and ZIP exports with bounded RAM; see 2.12) | Real RSS measured: delta 10.3 MB (folder), 5.6 MB (ZIP) on a 1 GiB file |
 | Per-segment profile switch, observed bitrate | P0-12 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready) | **blocked** (no capture device in the build host's Remote Desktop session, see 2.3.1) | `integration_test/p0_12_profile_switch_test.dart`, manual steps MT-18. Switch logic tested with fakes only |
-| Start recording from App Intent (iOS) or Quick Settings tile (Android) | P0-13 | unverified | unverified | n/a | Phase 2 feasibility only |
+| Start recording from App Intent (iOS) or Quick Settings tile (Android) | P0-13 | **blocked: needs real device** (harness ready: tile, launcher shortcuts, deep links; APK builds) | **blocked: needs Mac and iPhone** (App Intents and deep links written, not built, see 2.13.1) | n/a (hotkeys are P2-05) | `integration_test/p0_13_shortcut_trigger_test.dart`, manual steps MT-22. Phase 2 feasibility only. Command handling tested with fakes only |
 | Passthrough trimming without re-encoding | P0-14 | unverified (method channel in P1-19) | unverified (method channel in P1-19) | **pass** (pure container M4A trimmer, cut maths, split logic, cuts.json; see 2.11) | ADR-003 |
 
 ---
@@ -280,6 +280,22 @@ No single maintained package covers Android, iOS and Windows:
 - Android Quick Settings tiles and app shortcuts can start an activity. Whether a tile tap may start a microphone foreground service directly from the background must be tested on Android 14 and later.
 - Windows global hotkeys: `hotkey_manager` (MIT) has not had a release since May 2024. Re-check in Phase 2 or use `RegisterHotKey` through `win32`. Tray: `tray_manager` 0.8.0 (MIT, active).
 
+### 2.13.1 Spike P0-13 harness (27 October 2026)
+
+What was built (ADR-018). No phone run yet:
+
+- **One URI for every trigger.** The tile, launcher shortcuts, App Intents and deep links all send an `attenlume://` URI (`record/start`, `record/stop`, `record/toggle`, `bookmark`, `photo`, `conversation/new`, optional `source` and `activity`) over the `com.samlytics.attenlume/shortcuts` channel. Dart's `ShortcutCommand.parse` is the only parser and drops anything it does not know. The native side adds the tap time, whether the trigger launched the process, whether an app screen was visible and whether the command was delivered without opening the app.
+- **Android** (builds into the debug APK; never run on a phone): `RecordTileService` (Quick Settings tile), three static launcher shortcuts (`res/xml/shortcuts.xml`) and a `VIEW` intent filter for `attenlume://`. A tile tap opens the app with `startActivityAndCollapse(PendingIntent)` on Android 14 and later (the `Intent` overload is refused for apps targeting 34+) and uses `unlockAndRun` when the phone is locked. Spike mode `P0_13_TILE_DIRECT=true`: when the app is already running, the tap goes straight to Dart without opening the app, to see whether capture starts and whether it is silent.
+- **iOS** (written only; needs a Mac to build): App Intents in the Runner target, iOS 16 and later. Start recording, New conversation and Take photo open the app. Stop recording and Bookmark do not, and only reach an app that is already running (never queued, so a stale stop cannot fire on a later launch). Siri phrases through `AppShortcutsProvider`. A test-only intent, "Start recording without opening (test)", checks the background rule. Deep links arrive through Flutter's scene lifecycle hook (`addSceneDelegate`), because `FlutterSceneDelegate` declares no methods a subclass can override. The two Swift files were added to `project.pbxproj` by hand.
+- **Spike** `ShortcutTriggerSpike` drives the real `RecordingService` per command (one-active rule: a start for another activity is a conflict, never a switch; bookmarks only while recording or paused, stored with source `shortcut`) and logs the lifecycle state on arrival, tap-to-recording time and the input level for 5 s after each start.
+- **Build host run** (`-d windows`, 10 s): the harness ran, microphone permission reported true, no trigger arrived because Windows has no shortcut bridge yet (hotkeys are P2-05). The test fails by design when nothing arrives. Not evidence for Android or iOS.
+
+Desk findings to confirm in MT-22 (read in the docs, not observed):
+
+- Android 14 and later block starting a `microphone` foreground service while the app is in the background. A Quick Settings tile tap was not among the exemptions on the background-start restrictions page listed in section 3. So the default opens the app, which makes the start a foreground start. Until the P1-11 foreground service exists, even an opened app is expected to go silent once it leaves the screen (2.4.1).
+- iOS documents background audio for recordings started in the foreground. It does not document starting a new microphone capture from an intent that runs without opening the app. Expect "Start recording" to need `openAppWhenRun`.
+- Live Activity (FR-HF-02) and Control Centre controls (FR-HF-03) need a widget extension target, which needs Xcode: still **blocked: needs Mac**.
+
 ### 2.14 Cloud (Phase 1.5, noted only)
 
 - `flutter_appauth` covers Android, iOS and macOS, **not Windows**. Windows needs a loopback-redirect PKCE flow with the system browser. Plan this in P15-02.
@@ -299,6 +315,7 @@ Android:
 - Audio focus: https://developer.android.com/media/optimize/audio-focus
 - MediaMuxer: https://developer.android.com/reference/android/media/MediaMuxer
 - Quick Settings tiles: https://developer.android.com/develop/ui/views/quicksettings-tiles
+- App shortcuts: https://developer.android.com/develop/ui/views/launch/shortcuts/creating-shortcuts
 
 Apple:
 - AVAudioSession: https://developer.apple.com/documentation/avfaudio/avaudiosession
