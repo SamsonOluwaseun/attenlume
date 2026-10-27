@@ -88,6 +88,7 @@ Toolchain: Flutter 3.47.8 stable, Dart 3.13.7. Every package below accepts Dart 
 | riverpod_annotation / riverpod_generator | 4.0.7 / 4.0.9 | 2026-09-03 | dash-overflow.net | MIT | A, I, W | Optional codegen. Decide in P0-02 |
 | drift | 2.35.3 | 2026-10-23 | simonbinder.eu | MIT | A, I, W | Database |
 | drift_flutter | 0.3.1 | 2026-07-11 | simonbinder.eu | MIT | A, I, W | Opens the DB on each platform |
+| timezone | 0.11.2 | 2026 (dart-lang/labs) | dart.dev labs (Dart team) | BSD-3 | pure Dart, all | Conference-local times from the bundled IANA database, offline (added in P0-09, ADR-005) |
 | drift_dev (dev) | 2.35.2 | 2026-10-23 | simonbinder.eu | MIT | tooling | Codegen, schema dumps for migration tests |
 | sqlite3 | 3.8.0 | 2026-10-23 | simonbinder.eu | MIT | A, I, W | Bundles SQLite through build hooks |
 | build_runner (dev) | 2.17.1 | 2026-10-14 | tools.dart.dev | BSD-3 | tooling | |
@@ -169,12 +170,13 @@ Versions from `pubspec.lock` on `main` after P0-02. "Tested" means `flutter anal
 |---|---|---|---|
 | Flutter / Dart | 3.47.8 / 3.13.7 | Windows 11 Pro 10.0.26200 build host | 2026-10-27 |
 | flutter_riverpod (riverpod) | 3.4.3 | Unit and widget tests, Windows and APK builds | 2026-10-27 |
-| drift | 2.35.3 | In-memory DB tests, schema verifier | 2026-10-27 |
+| drift | 2.35.3 | In-memory DB tests, schema verifier, v1 to v2 migration (P0-09) | 2026-10-27 |
 | drift_flutter | 0.3.1 | Builds only (on-device open not yet exercised) | 2026-10-27 |
 | sqlite3 | 3.8.0 | Build hooks bundle SQLite for tests and both builds | 2026-10-27 |
 | path_provider | 2.1.6 | Builds only | 2026-10-27 |
 | path | 1.9.1 | Builds only | 2026-10-27 |
-| uuid | 4.6.0 | Builds only | 2026-10-27 |
+| uuid | 4.6.0 | Repository tests (row IDs) | 2026-10-27 |
+| timezone | 0.11.2 | Default title tests (Europe/London, America/New_York, Asia/Tokyo) | 2026-10-27 |
 | drift_dev (dev) | 2.35.2 | Codegen, `make-migrations`, `schema generate` | 2026-10-27 |
 | build_runner (dev) | 2.17.1 | Codegen | 2026-10-27 |
 | flutter_lints (dev) | 6.0.0 | `flutter analyze` | 2026-10-27 |

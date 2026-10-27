@@ -54,6 +54,24 @@ Test results on `phase-0/P0-03-docs` (Windows 11 build host):
 - `flutter test`: 14 passed, 0 failed.
 - `dart format --set-exit-if-changed lib test tool`: clean.
 
+## 2026-10-27, Claude Code (Opus 5.5): P0-09 data model
+
+- Start-of-session check on `main`: `flutter analyze` no issues, `flutter test` 14 passed.
+- Schema v2 (`lib/data/local_database/tables.dart`): conferences, goals, activity_types, activities, recording_segments, interruptions, photos, bookmarks, cut_ranges, export_jobs, plus v1 app_settings. Foreign keys cascade from conference and activity, restrict on activity type. CHECK constraints for goal priority, segment sequence and cut ranges. Unique (activity, sequence). Indexes on every parent key.
+- Migration v1 to v2 through drift `stepByStep`. Dump `drift_schemas/app_database/drift_schema_v2.json`. Migration tests moved to drift's standard `test/drift/app_database/`.
+- Built-in activity types seeded on every open, with fixed UUID v4 IDs (NFR-03).
+- Domain models and enums in `lib/domain/models/`. Rules in `lib/domain/services/`: profile precedence (FR-QUAL-02), default title in conference timezone (FR-ACT-05), offset rule (9.4).
+- Repositories in `lib/data/repositories/`: settings, conference (with goals, archive, FR-QUAL-03 default change, deletion summary), activity (with custom types), media assets (segments, interruptions, photos, bookmarks, offset backfill), cut ranges (soft delete with undo), export jobs. Riverpod providers in `repository_providers.dart`.
+- Fixtures in `test/fixtures/fixtures.dart`.
+- New package `timezone` 0.11.2 (Dart team, BSD-3, pure Dart). Decisions in ADR-005.
+
+Test results on `phase-0/P0-09-data-model` (Windows 11 build host):
+
+- `flutter analyze`: no issues.
+- `flutter test`: 76 passed, 0 failed (62 new).
+- `dart format --set-exit-if-changed lib test tool`: clean.
+- `flutter build windows --debug` and `flutter build apk --debug`: both built. Not run on any device (on-device database open is unverified).
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -61,4 +79,5 @@ Test results on `phase-0/P0-03-docs` (Windows 11 build host):
 | P0-01 | done | `docs/PLATFORM_FEASIBILITY.md` and `docs/ARCHITECTURE.md` drafted, ADR-002. Desk audit only, no device results |
 | P0-02 | done (CI unverified) | analyze clean, 12 tests pass, Windows and APK debug builds succeed locally. CI file written, not run (no remote). No device runs |
 | P0-03 | done | Four docs created, all 1.6 docs linked from README, `P0-03` docs index tests pass (14 total) |
-| P0-09 | todo | Next |
+| P0-09 | done | Schema v2, migration and repository tests pass (76 total). On-device DB open unverified |
+| P0-06 | todo | Next |

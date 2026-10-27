@@ -43,3 +43,23 @@ Format: context, decision, alternatives, consequences.
   8. CI (`.github/workflows/ci.yml`): Windows job (codegen drift check, format, analyze, test, Windows debug build), Ubuntu job (debug APK), macOS job (unsigned iOS debug build). Dormant until a remote exists (ADR-001).
 - **Alternatives:** integer Unix timestamps (Drift's default, smaller but unreadable in exports and debugging); variable Montserrat font (one file, but weight mapping in Flutter needs `FontVariation` everywhere); hand-written token constants (drift from the JSON).
 - **Consequences:** P0-09 builds the full schema on this database class and bumps `schemaVersion` with a migration test per version.
+
+## ADR-005: Data model conventions (P0-09)
+
+- **Date:** 27 October 2026. **Decided by:** Claude Code (Opus 5.5) in unattended mode, task P0-09. Owner to review.
+- **Context:** P0-09 builds the build guide 9.4 tables. The guide leaves storage formats, some nullability and the FR-QUAL-03 mechanics open.
+- **Decision:**
+  1. **Schema v2, not a redefined v1.** v1 (`app_settings`) stays as dumped, and v2 adds the Phase 1 tables through drift's `stepByStep` helper, so the real upgrade path is tested. Phase 1.5 and 2 tables (`cloud_connections`, `cloud_export_files`, `transcripts`) arrive with their phases as new versions.
+  2. **Drift standard layout for migrations.** `dart run drift_dev make-migrations` owns `drift_schemas/`, `lib/data/local_database/app_database.steps.dart` and `test/drift/app_database/generated/`. The P0-02 copies under `test/data/local_database/generated/` were removed.
+  3. **Rows are domain classes.** Tables use `@UseRowClass` with the plain classes in `lib/domain/models/`, so there is no mapping layer. Partial updates take Drift companions.
+  4. **Stored values.** Enums are stored by a stable snake_case key spelled as in 9.4 (`KeyedEnum`), never by Dart name or index. JSON lists (speakers, tags, requested outputs) and the export scope are JSON text. Conference start and end dates are calendar days stored as `YYYY-MM-DD` (read as UTC midnight) so they never shift between timezones. Instants stay UTC ISO 8601 text (ADR-004).
+  5. **Goal text.** Drift cannot have a column getter named `text`, so the SQL column is `text` and the Dart field is `goalText`.
+  6. **Built-in activity types** have fixed UUID v4 IDs (`00000000-0000-4000-8000-00000000000n`) and are seeded with insert-or-ignore on every open, so later releases can add types. Labels are "Conversation" and "Reflection" to match the FR-ACT-02 quick-start buttons, while the keys keep `business_conversation` and `personal_reflection`. Built-in types and types in use cannot be deleted (`ON DELETE RESTRICT`).
+  7. **Offsets.** `bookmarks.offset_ms` is nullable like `photos.offset_ms` (the guide does not say). An event before the first segment gets a negative offset. When the first segment starts, null offsets in that activity are filled in.
+  8. **FR-QUAL-03.** Changing a conference default pins activities that inherited the old default by writing it into their override. With the user's confirmed bulk change, inheriting activities without segments follow the new default instead. Explicit overrides are never changed.
+  9. **Privacy default.** Activities of type `personal_reflection` are created with `is_private = true` (FR-UI-05, FR-EXP-10). The caller can override.
+  10. **Deletes.** Deleting a conference or activity cascades to its database rows only. Media files are not touched by repositories. Removing them is a separate, user-confirmed step in P1 (NFR-07, AGENTS rule on originals).
+  11. **Timezones.** Added `timezone` 0.11.2 (Dart team, BSD-3, pure Dart) for conference-local default titles from the bundled IANA data, offline. An unknown timezone name falls back to UTC. Detecting the device's IANA timezone needs a plugin and is left to P1-01.
+  12. **Export enums.** `audio_mode` is `original`, `trimmed`, `original_with_cuts` or `none` (for text or photo scopes). `state` is `pending`, `running`, `completed`, `failed` or `cancelled`. The scope JSON shape is set in P1-21.
+- **Alternatives:** redefining v1 (simpler history, but no tested upgrade path); a separate mapping layer between Drift rows and domain models (more code, no gain yet); storing the effective profile on every activity at creation (needs a new column the guide does not list).
+- **Consequences:** every schema change is a new version with a dump and a migration test. Renaming an enum key needs a data migration.

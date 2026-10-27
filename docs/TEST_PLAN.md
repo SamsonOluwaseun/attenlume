@@ -26,7 +26,7 @@ dart format --output=none --set-exit-if-changed lib test tool
 
 ### 2.1 Current suite
 
-As of P0-03 (27 October 2026, Windows 11 build host): 14 tests, all passing.
+As of P0-09 (27 October 2026, Windows 11 build host): 76 tests, all passing.
 
 | File | Proves |
 |---|---|
@@ -34,8 +34,14 @@ As of P0-03 (27 October 2026, Windows 11 build host): 14 tests, all passing.
 | `test/app/theme/contrast_test.dart` | NFR-09 contrast of token pairs in light and dark, button label size, navy recording theme |
 | `test/app/theme/tokens_sync_test.dart` | P0-02 generated tokens match `design/tokens.json` |
 | `test/data/local_database/app_database_test.dart` | P0-02 settings round trip, UTC ISO 8601 text dates, foreign keys on |
-| `test/data/local_database/migration_test.dart` | P0-02 v1 schema matches the dump |
+| `test/drift/app_database/migration_test.dart` | P0-09 current schema matches the latest dump, every version migrates to every later one, v1 to v2 keeps settings and seeds built-in types |
+| `test/domain/domain_rules_test.dart` | FR-QUAL-02 precedence, FR-ACT-05 title format and conference timezone (with summer time), offset rule (gaps, negative, null), stored enum keys |
+| `test/data/repositories/conference_repository_test.dart` | FR-CONF-01, 02, 03, 05 create and round trip, FR-QUAL-02 copy of global default, FR-QUAL-03 new-activities-only and confirmed bulk change, FR-CONF-08 edit, archive (NFR-02), deletion summary, cascade delete, FR-CONF-06 acknowledgement, FR-CONF-04 goals |
+| `test/data/repositories/activity_repository_test.dart` | NFR-03 built-in types, FR-ACT-02 quick-start labels, FR-ACT-06 custom types, FR-ACT-05 numbering per type and timezone, FR-ACT-04 fields, FR-EXP-10 private reflections, FR-ACT-03 order, cascade delete |
+| `test/data/repositories/media_repositories_test.dart` | FR-REC-03 sequence, FR-REC-01 row before audio, FR-QUAL-06 quality fields, FR-REC-08 states, offset rule across a call and backfill, FR-REV-04 cut ranges with undo, export job lifecycle, UTC storage in every table |
 | `test/docs/docs_index_test.dart` | P0-03 every document in build guide 1.6 exists and is linked from `README.md` |
+
+Fixtures: `test/fixtures/fixtures.dart` (fake clock, sequential IDs, `TestData` with every repository, `SampleConference` with a keynote recorded around a call).
 
 ### 2.2 Planned unit tests (build guide 13.1)
 
