@@ -45,6 +45,8 @@ As of P0-08 (27 October 2026, Windows 11 build host): 117 unit and widget tests,
 | `test/data/filesystem/m4a_inspector_test.dart` | FR-QUAL-06 codec, channels, sample rate, duration and bitrates read from M4A (moov first or last, mdhd v1, long descriptor lengths, HE-AAC, video track first). FR-REC-08 unfinalised, truncated and non-MP4 files rejected |
 | `test/data/filesystem/folder_export_test.dart` | FR-EXP-06 checksums written and verified, tamper detected. FR-EXP-04 no temp files left. FR-EXP-05 sources unchanged, no overwrite, failure part way removes only the partial copy |
 | `test/spikes/windows_mic_spike_test.dart` | P0-06 harness with a fake engine: FR-REC-03 stop-then-start rolling, FR-QUAL-01 reports file contents not the request, refused start recorded, FR-REC-08 unfinalised file, flat signal flag, export verified |
+| `test/spikes/background_recording_spike_test.dart` | P0-04 harness with fakes: NFR-05 foreground and background level split and flat-signal flag, FR-REC-05 interruption ends the segment and logs a row, system resume and resume on return, duck ignored, open interruption closed at the end, denied mic, audio session error |
+| `integration_test/p0_04_background_recording_test.dart` | P0-04 on a real Android phone or iPhone (MT-17). Skipped on other platforms |
 | `integration_test/p0_06_windows_mic_test.dart` | P0-06 on real Windows hardware (MT-16). Fails when no microphone is available |
 
 Fixtures: `test/fixtures/m4a_builder.dart` (synthetic M4A files, zero audio payload) and `test/fixtures/fixtures.dart` (fake clock, sequential IDs, `TestData` with every repository, `SampleConference` with a keynote recorded around a call).
@@ -112,6 +114,7 @@ Run on each device in section 5. Record results in section 6 with device, OS, da
 | MT-13 | App killed by the OS | Recovery offered on next launch, at most one segment lost |
 | MT-14 | Photo burst during recording | No audio loss, or logged auto-resumed interruptions |
 | MT-15 | Rapid start and stop taps | No duplicate recordings |
+| MT-17 | Background and call spike (P0-04), Android and iPhone: (1) connect the phone, run `flutter test integration_test/p0_04_background_recording_test.dart -d DEVICE_ID --dart-define=P0_04_SECONDS=300`, allow the microphone; (2) talk for 30 s with the app visible; (3) lock the screen for 60 s while talking; (4) unlock, then call the phone from a second phone and decline it; (5) call again, answer, speak for 20 s, hang up; (6) set a 1-minute alarm and let it ring; (7) wait for the run to end. Copy the printed Markdown and JSON into `PLATFORM_FEASIBILITY.md` 2.4.1, pull the audio from the report folder and listen | Test passes, locked-screen audio is audible (Android: expected silent until P1-11), the call is not in any segment, each call or alarm produced an interruption row and a new segment, resume path recorded (system or app visible) |
 | MT-16 | Windows mic spike (P0-06): signed in at the console or on a Surface, run `flutter test integration_test/p0_06_windows_mic_test.dart -d windows`, listen to each segment, repeat with the microphone privacy switch off | Test passes, segments are audible AAC-LC mono, actual bitrate per request recorded in `PLATFORM_FEASIBILITY.md` 2.6.1, privacy-off behaviour recorded |
 
 ---

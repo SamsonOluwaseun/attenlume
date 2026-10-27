@@ -18,8 +18,8 @@ Result values: **pass**, **fail**, **partial**, **blocked** (with reason), **unv
 
 | Capability | Spike | Android | iOS | Windows | Notes |
 |---|---|---|---|---|---|
-| Background recording with screen locked | P0-04 | unverified | unverified | n/a (minimised: P0-06) | Needs real phone |
-| Call interruption: segment finalised, call not recorded, resume | P0-04 | unverified | unverified | n/a | Needs real phone and a second phone to call it |
+| Background recording with screen locked | P0-04 | **blocked: needs real device** (harness ready; expect silence until the P1-11 foreground service exists, see 2.4.1) | **blocked: needs Mac and iPhone** (harness ready) | n/a (minimised: P0-06) | `integration_test/p0_04_background_recording_test.dart`, manual steps MT-17 |
+| Call interruption: segment finalised, call not recorded, resume | P0-04 | **blocked: needs real device** (harness ready) | **blocked: needs Mac and iPhone** (harness ready) | n/a | Needs a second phone to call it. Logic tested with fakes only (2.4.1) |
 | Photo capture during recording, no audio loss | P0-05 | unverified | unverified | unverified | Camera may reconfigure the audio session |
 | Microphone capture while minimised | P0-06 | n/a | n/a | **blocked** (no capture device in the build host's Remote Desktop session, see 2.6.1) | Harness ready: `integration_test/p0_06_windows_mic_test.dart`, manual steps MT-16 |
 | AAC-LC at 32, 48, 64 kbps mono | P0-06, P0-12 | unverified | unverified | **not available per docs**, plugin source picks the nearest supported rate (2.6.1). On-device bitrate **blocked** | Windows encoder minimum is 96 kbps. AAC-LC encoder present on build host: `isEncoderSupported(aacLc)` true |
@@ -93,6 +93,17 @@ Official rules (Android developer docs, foreground service types and background 
 **Planned approach:** a thin native Kotlin foreground service in `android/` started through a platform channel, owning the notification and its actions (Pause/Resume, Stop, Bookmark, Photo where allowed, FR-REC-10). `flutter_foreground_task` (MIT, active) is the fallback if writing our own service costs too much. The record package's own docs recommend it, and it has a recording example. Decision in P1-11 with an ADR.
 
 **Risk:** medium-high. OEM battery managers (Samsung, Xiaomi) can still kill services. Must be tested on at least one such device (build guide 10.2).
+
+### 2.4.1 Spike P0-04 harness (27 October 2026)
+
+Built on the Windows build host. **Nothing has run on a phone.** Every result below is a prediction from the docs, not an observation.
+
+- Harness: `BackgroundRecordingSpike` (`lib/spikes/background_recording_spike.dart`) runs the real `RecordingService` with `RecordCaptureEngine` for `P0_04_SECONDS` (default 300). It logs app lifecycle (`AppLifecycleListener`), audio session events (`AudioSessionInterruptionSource`, `audio_session` 0.2.4), recorder states, the input level once a second tagged foreground or background, the segment rows and the interruption rows. Report: JSON and Markdown, printed and saved next to the audio.
+- Interruption handling in the spike: "began" (not a duck) ends the segment through `pause()` and opens an interruption row (reason `system`, because `audio_session` does not say whether it was a call or an alarm). "Ended" with `shouldResume` resumes and marks the row auto-resumed. Without it, the spike resumes when the app is visible again (the user-resume path). The real `InterruptionCoordinator` (P1-07) will end segments with reason `interruption` instead of `pause`.
+- Silent background capture shows up as a flat signal (every background sample at or below -90 dBFS). The tester must still listen to the files.
+- **Android expectation:** with no foreground service (P1-11), Android 9 and later give a backgrounded app silence from the microphone, so the background part is expected to be flat. Rerun P0-04 on Android after P1-11. Audio focus is requested with `AndroidAudioUsage.media` and speech content, so a ringing call should arrive as focus loss (interruption began).
+- **iOS expectation:** with `UIBackgroundModes: audio` and a `playAndRecord` session activated in the foreground, recording should continue when locked. `record_ios` 2.1.1 also manages the audio session by default (read from its source: `m_manageAudioSession = true` in `Recorder.swift`), which may replace our category and options when recording starts. If the run shows that, turn it off through the plugin's `ios.manageAudioSession` call in `RecordCaptureEngine` (ADR-013).
+- Unit tests with fakes: `test/spikes/background_recording_spike_test.dart` (10 tests). They prove the harness logic, not the platform.
 
 ### 2.5 iOS background recording and interruptions
 

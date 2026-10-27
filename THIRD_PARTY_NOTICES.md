@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 119 Dart and Flutter packages in `pubspec.lock`: 81 can be part of the app, 38 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (5), BSD-2-Clause (1), BSD-3-Clause (62), Flutter engine bundle (permissive, see note) (1), MIT (12).
+- 121 Dart and Flutter packages in `pubspec.lock`: 83 can be part of the app, 38 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (6), BSD-2-Clause (1), BSD-3-Clause (62), Flutter engine bundle (permissive, see note) (1), MIT (13).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -19,6 +19,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `archive` | 4.5.2 | pub.dev | direct main | MIT | Copyright (c) 2013-2021 Brendan Duncan. |
 | `args` | 2.7.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `async` | 2.13.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
+| `audio_session` | 0.2.4 | pub.dev | direct main | MIT | Copyright (c) 2020 Ryan Heise and the project contributors. |
 | `boolean_selector` | 2.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2016, the Dart project authors. |
 | `characters` | 1.4.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2019, the Dart project authors. |
 | `clock` | 1.1.3 | pub.dev | transitive | Apache-2.0 | Not stated in the licence file |
@@ -78,6 +79,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `record_web` | 2.1.3 | pub.dev | transitive | BSD-3-Clause | Copyright 2022 openapi4j authors. All rights reserved. |
 | `record_windows` | 2.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2022 openapi4j authors. All rights reserved. |
 | `riverpod` | 3.4.3 | pub.dev | transitive | MIT | Copyright (c) 2020 Remi Rousselet |
+| `rxdart` | 0.28.0 | pub.dev | transitive | Apache-2.0 | Not stated in the licence file |
 | `sky_engine` | 0.0.0 | Flutter SDK | transitive | Flutter engine bundle (permissive, see note) | The Flutter Authors and many others |
 | `source_span` | 1.10.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `sqlcipher_flutter_libs` | 0.7.0+eol | pub.dev | transitive | Apache-2.0 | Copyright (c) 2020 Simon Binder<br>Copyright (c) 2008-2020 Zetetic LLC |
@@ -370,6 +372,32 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
+### MIT: `audio_session`
+
+```text
+MIT License
+
+Copyright (c) 2020 Ryan Heise and the project contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### BSD-3-Clause: `boolean_selector`, `meta`
 
 ```text
@@ -434,7 +462,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### Apache-2.0: `clock`, `fake_async`
+### Apache-2.0: `clock`, `fake_async`, `rxdart`
 
 ```text
 Apache License
