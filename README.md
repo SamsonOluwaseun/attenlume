@@ -31,7 +31,7 @@ flutter test
 flutter run -d windows
 ```
 
-Hands-on Windows preview: `powershell -ExecutionPolicy Bypass -File tool\build_windows_preview.ps1` runs analysis and tests, builds a release, copies it to `..\attenlume-release\windows\Attenlume-<version>-<commit>\` with a portable ZIP, and points the desktop shortcut "Attenlume (preview)" at it. App data lives in `%LOCALAPPDATA%\Samlytics\Attenlume` (ADR-028).
+Hands-on Windows preview: `powershell -File tool\build_windows_preview.ps1` runs analysis and tests, builds a release, copies it to `..\attenlume-release\windows\Attenlume-<version>-<commit>\` with a portable ZIP, and points the desktop shortcut "Attenlume (preview)" at it. App data lives in `%LOCALAPPDATA%\Samlytics\Attenlume` (ADR-028).
 
 End-to-end check of the real app with the real microphone and camera: `flutter test integration_test/app_capture_journey_test.dart -d windows` (or `-d <android device>`).
 

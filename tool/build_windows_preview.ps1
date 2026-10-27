@@ -1,6 +1,6 @@
 # Builds a Windows preview of Attenlume for hands-on testing (ADR-028).
 #
-#   powershell -ExecutionPolicy Bypass -File tool\build_windows_preview.ps1
+#   powershell -File tool\build_windows_preview.ps1
 #   ... -SkipTests        skip flutter analyze and flutter test
 #   ... -OutDir <folder>  where builds go (default: ..\attenlume-release\windows)
 #
