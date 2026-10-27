@@ -625,6 +625,14 @@ Owner report from the first Android tablet install: microphone, camera preview a
 - `integration_test/app_capture_journey_test.dart` on Windows passed (no microphone or camera on this PC, so recording, bookmark and shutter steps not run).
 - Devices unverified (notification bookmark, Ctrl+B on a Surface keyboard).
 
+## 27 October 2026: P1-17 player, timeline and waveform summaries (Claude Code, Opus 5.5, overnight relay)
+
+- Before changes: `flutter analyze` clean, `flutter test` 620 passed.
+- ADR-034: `audioplayers` 6.8.1 (MIT) behind `AudioPlaybackEngine`, instead of the planned `just_audio` + `just_audio_windows`. `ReviewTimeline` (segments, gaps, interruptions, photos, bookmarks at offsets), `ReviewPlayerController` (joins segments, play/pause, scrub, 15 s skips in audio time, speeds 0.75 to 2), waveform summaries written from the live input level while recording (`waveforms/<segment_id>.wave`, 200 ms buckets) and drawn in 2-minute pages that read only their bytes, `ReviewScreen` from "Play and review" in the activity details.
+- Tests: 28 new (6 timeline, 7 summary and pager, 3 summary recorder, 7 player, 5 widget). `flutter test` 648 passed, `flutter analyze` clean, `dart format` clean, notices regenerated (146 packages, 0 flagged).
+- `flutter build windows --release` and `flutter build apk --debug` succeed with the new plugin. `integration_test/app_capture_journey_test.dart` on Windows passed (no microphone or camera on this PC).
+- Playback, seeking and speed are unverified on every platform: no real recording can be made on the build host. MT-23 written.
+
 ## Task status
 
 | Task | Status | Evidence |
@@ -662,3 +670,4 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-14 | done (device camera unverified) | Camera screen, compression, thumbnails, SHA-256, import with labels, captions. 19 new tests (600 total). ADR-030, ADR-031 |
 | P1-13 | done (device thresholds unverified) | SafetyPromptService, recording screen banner, Android battery channel, 12 new tests (612 total). ADR-032 |
 | P1-16 | done (devices unverified) | Bookmarks list with edit and remove, notes editor, Ctrl+B hotkey bookmark, 8 new tests (620 total). ADR-033. Timeline and export use come with P1-17 and P1-21/22 |
+| P1-17 | done (playback unverified on devices) | Review timeline, player across segments and gaps, waveform summaries and paged view, review screen, 28 new tests (648 total). ADR-034. MT-23 for devices |

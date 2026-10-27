@@ -16,6 +16,7 @@ import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
 import '../../domain/services/safety_prompt_service.dart';
 import '../../domain/services/storage_budget_service.dart';
+import '../../domain/services/waveform_summary_recorder.dart';
 import '../../platform/audio_capture/audio_capture_engine.dart';
 import '../../platform/audio_capture/record_capture_engine.dart';
 import '../../platform/audio_route/audio_route_probe.dart';
@@ -228,16 +229,33 @@ final storageBudgetSnapshotProvider = StreamProvider<StorageBudgetSnapshot>((
   yield* service.snapshotStream;
 });
 
+/// Writes the level summary for each segment as it records, for the
+/// review waveform (FR-REV-03, ADR-034) [P1-17].
+final waveformSummaryRecorderProvider = Provider<WaveformSummaryRecorder>((
+  ref,
+) {
+  final engine = ref.watch(audioCaptureEngineProvider);
+  final recorder = WaveformSummaryRecorder(
+    recorder: ref.watch(recordingServiceProvider),
+    activities: ref.watch(activityRepositoryProvider),
+    mediaRoot: ref.watch(mediaRootProvider),
+    level: engine.levelDbfs,
+  )..start();
+  ref.onDispose(recorder.dispose);
+  return recorder;
+});
+
 /// Every start goes through here so the one-active rule holds for all
 /// triggers (FR-REC-04) [P1-06]. Creating it also starts the
 /// [interruptionCoordinatorProvider], [foregroundServiceCoordinatorProvider],
-/// [storageBudgetServiceProvider] and [safetyPromptServiceProvider], so no
-/// recording runs unwatched.
+/// [storageBudgetServiceProvider], [safetyPromptServiceProvider] and
+/// [waveformSummaryRecorderProvider], so no recording runs unwatched.
 final oneActiveCoordinatorProvider = Provider<OneActiveCoordinator>((ref) {
   ref.watch(interruptionCoordinatorProvider);
   ref.watch(foregroundServiceCoordinatorProvider);
   ref.watch(storageBudgetServiceProvider);
   ref.watch(safetyPromptServiceProvider);
+  ref.watch(waveformSummaryRecorderProvider);
   return OneActiveCoordinator(
     recorder: ref.watch(recordingServiceProvider),
     activities: ref.watch(activityRepositoryProvider),

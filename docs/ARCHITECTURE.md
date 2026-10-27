@@ -100,8 +100,7 @@ Toolchain: Flutter 3.47.8 stable, Dart 3.13.7. Every package below accepts Dart 
 | build_runner (dev) | 2.17.1 | 2026-10-14 | tools.dart.dev | BSD-3 | tooling | |
 | record | 7.1.2 | 2026-10-09 | cow-level.ovh | BSD-3 | A, I, W | Audio capture |
 | audio_session | 0.2.4 | 2026-06-29 | ryanheise.com | MIT | A, I | Interruptions, routing |
-| just_audio | 0.10.6 | 2026-06-29 | ryanheise.com | MIT, Apache-2.0 | A, I | Playback |
-| just_audio_windows | 0.2.3 | 2026-04-04 | bdlukaa.dev | MIT | W | Playback on Windows |
+| audioplayers | 6.8.1 | 2026-06-27 | blue-fire.xyz | MIT | A, I, W | Review playback (P1-17, ADR-034). Replaces the planned `just_audio` + `just_audio_windows` pair |
 | camera | 0.12.1 | 2026-09-03 | flutter.dev | BSD-3 | A, I | Photos |
 | camera_windows | 0.3.0+1 | 2026-10-21 | flutter.dev | BSD-3 | W | Photos on Windows, add explicitly |
 | photo_manager | 3.12.0 | 2026-08-09 | fluttercandies.com | Apache-2.0 | A, I | Gallery time-window import |
@@ -143,7 +142,7 @@ A = Android, I = iOS, W = Windows.
 |---|---|---|---|
 | flutter_foreground_task | 11.0.3 | MIT | If our own Kotlin foreground service is too costly (P1-11) |
 | storage_space | 1.4.0 | BSD-3 | Free space on Android and iOS if the method channel is not enough |
-| audioplayers | 6.8.1 | MIT | If `just_audio_windows` fails P0-06 |
+| just_audio + just_audio_windows | 0.10.6 + 0.2.3 | MIT, Apache-2.0 | If `audioplayers` seeks badly in M4A on a device (ADR-034) |
 | ffmpeg_kit_flutter_new | 4.6.7 | LGPL-3.0 | Trimming last resort, needs licence review (P0-14, P0-08) |
 | flutter_image_compress | 2.5.1 | MIT | Faster native JPEG on mobile if `image` is too slow. No Windows |
 | very_good_analysis (dev) | 11.0.0 | MIT | Stricter lint set if wanted |
@@ -307,6 +306,14 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/domain/services/storage_budget_service.dart`: `StorageBudgetService` (FR-STO-01 to 04), rolling write rate measurement from active segment file growth or prior segment history, periodic 30-second recording checks, conference folder size calculation, and automatic hard stop enforcement at 100 MB reserve (`SegmentEndReason.storageLow`).
 - `lib/presentation/components/storage_meter.dart`: `StorageMeter` (FR-UI-07), compact single-line gauge under timer on `RecordingScreen` with staged warning (<1 GB / <60 min) and critical (<300 MB / <=100 MB) banners; expanded mode with progress bar and conference usage stats.
 
+
+### 8.17 Added in P1-17
+
+- `lib/domain/services/review_timeline.dart`: `ReviewTimeline.build` (segments, gaps, interruption, photo and bookmark markers at their offsets), `locate` (scrub, gaps move forward), `locateAudio` (skips in audio time), `TimelineSegment.playable` (finalised or recovered only).
+- `lib/data/filesystem/waveform_summary.dart`: summary file format (`ALWF` header, one byte per 200 ms bucket), `WaveformSummaryWriter`, `WaveformSummaryReader.read` (byte range only). `MediaPaths.waveform` (`waveforms/<segment_id>.wave`).
+- `lib/domain/services/waveform_summary_recorder.dart`: samples the input level while each segment records. Provider `waveformSummaryRecorderProvider`, started with `oneActiveCoordinatorProvider`.
+- `lib/platform/audio_playback/`: `AudioPlaybackEngine` interface, `AudioplayersPlaybackEngine`. Fixture `test/fixtures/fake_playback_engine.dart`.
+- `lib/features/playback_review/`: `ReviewPlayerController` (joins segments, play/pause, scrub, 15 s skips, speeds 0.75 to 2), `WaveformPager` and `WaveformView` (2-minute pages), `TimelineStrip`, `ReviewScreen` (opened with "Play and review" in the activity details). Provider `audioPlaybackEngineFactoryProvider`. ADR-034.
 
 ## 9. Open risks
 
