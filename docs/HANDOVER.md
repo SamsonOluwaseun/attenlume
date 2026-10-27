@@ -1,38 +1,39 @@
 # Handover
 
-Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended
-Branch: main (merged from `fix/P1-capture-entry`)
-Current task ID: capture entry fixes (owner request, ADR-028). Next: P1-13
-Status: done (Android device check pending)
+Date and agent: 27 October 2026, Claude Code (Opus 5.5), attended session continued while the owner was away
+Branch: main (merged from `phase-1/P1-14-photos`)
+Current task ID: P1-14 (first slice done)
+Status: in progress
 
 ## Done in this session
 
-- Earlier: Android preview release on GitHub, MIT licence, release signing (ADR-007, ADR-027).
-- Owner's first Android tablet install: microphone, camera preview and other features did not work. Fixed in ADR-028: microphone permission prompt, quick start opens the recording screen, specific refusal messages, Windows data moved out of the OneDrive-synced Documents folder into `%LOCALAPPDATA%\Samlytics\Attenlume`.
-- `integration_test/app_capture_journey_test.dart`: the J2 capture journey in the real app with real plugins. On this PC it reaches the recording screen and checks that a refused start is explained (no microphone in the RDP session).
-- `tool/build_windows_preview.ps1`: versioned Windows preview build outside the repo plus a desktop shortcut, for the owner to test while work continues.
-- Agreed working loop with the owner: build and check on the Windows laptop first, then ship to Android.
+- ADR-028: microphone permission prompt, quick start opens the recorder, specific refusal messages, Windows data in `%LOCALAPPDATA%\Samlytics\Attenlume`, J2 journey integration test, `tool/build_windows_preview.ps1`.
+- ADR-029: Android 13+ notification permission requested when the recording service starts.
+- ADR-030 (P1-14 first slice): camera screen with live viewfinder, `PhotoCaptureService`, `processPhoto` (EXIF rotation, 2048 px, JPEG 85, 320 px thumbnails, SHA-256), access-denied and no-camera messages, new dependency `image` 4.12.0.
+- Working loop agreed with the owner: check on the Windows laptop first, then ship to Android. Windows previews go to `C:\dev\attenlume-release\windows\` with the desktop shortcut "Attenlume (preview)".
 
 ## Left to do on this task
 
-- Ship 0.1.1 to Android (raise the build number in `pubspec.yaml`, `flutter build apk --release`, new GitHub Release) once the owner has checked the Windows preview.
-- Android 13+ notification permission is never requested (needs a small native method or `permission_handler`).
+- FR-PHO-06: manual import of photos with labels, and an optional caption per photo (needs a file or image picker: check `file_selector` from flutter.dev, which covers Android, iOS and Windows, and record an ADR).
+- Settings toggle for "Keep highest quality" (`PhotoQuality.keepOriginal`) waits for P1-25.
 
 ## Exact next step
 
-Ask the owner how the Windows preview went. Then either ship 0.1.1 to Android or start **P1-13 Safety prompts** on branch `phase-1/P1-13-safety-prompts` (see `FR-REC-06` in `docs/BUILD_GUIDE.md`). P1-14 (photo screen with viewfinder) is the next most visible gap for the owner.
+On branch `phase-1/P1-14-photos-import`: add FR-PHO-06, then mark P1-14 done. Then P1-13 (safety prompts), P1-16 (bookmarks and notes), P1-17 (player and timeline). Keep `integration_test/app_capture_journey_test.dart` passing on Windows and build a Windows preview after each merge. Do not push or publish; the owner releases Android 0.1.1 after checking Windows.
 
 ## Files touched
 
-New: `lib/data/filesystem/app_data_directory.dart`, `integration_test/app_capture_journey_test.dart`, `test/data/filesystem/app_data_directory_test.dart`, `tool/build_windows_preview.ps1`.
-Changed: `lib/platform/audio_capture/record_capture_engine.dart`, `lib/features/conferences/conference_home_screen.dart`, `lib/features/capture/recording_screen.dart`, `lib/features/capture/mic_test_sheet.dart`, `lib/features/capture/recording_providers.dart`, `lib/data/local_database/app_database.dart`, tests for these, `README.md`, `docs/ARCHITECTURE.md`, `docs/PRIVACY_AND_SAFETY.md`, `docs/DECISIONS.md`, `docs/PROGRESS.md`, `docs/HANDOVER.md`.
+New: `lib/features/capture/camera_screen.dart`, `lib/domain/services/photo_capture_service.dart`, `lib/data/filesystem/photo_processor.dart`, `test/domain/photo_capture_service_test.dart`, `test/data/filesystem/photo_processor_test.dart`.
+Changed: `lib/platform/camera/photo_camera.dart`, `lib/platform/camera/plugin_photo_camera.dart`, `lib/data/filesystem/media_paths.dart`, `lib/features/capture/recording_screen.dart`, `lib/features/capture/recording_providers.dart`, `android/.../ForegroundServiceChannel.kt`, `test/fixtures/fake_photo_camera.dart`, `test/features/capture/recording_screen_test.dart`, `integration_test/app_capture_journey_test.dart`, `pubspec.yaml`, `pubspec.lock`, `THIRD_PARTY_NOTICES.md`, docs.
 
 ## Failing or skipped tests
 
-None failing in `flutter test`. Device tests: the spikes in `integration_test/` still need a real microphone or camera (unchanged). `app_capture_journey_test.dart` passes on this PC but only up to Record, because there is no microphone.
+None failing: `flutter test` 596 passed. `app_capture_journey_test.dart` passes on this PC up to the microphone and camera checks (none in the Remote Desktop session). The P0 device spikes still need real hardware.
 
 ## Open questions for the owner
 
+- **ADR-030 (new):** Photo opens a full-screen camera (two taps for the first photo, one for each after). Photos are stored at a 2048 px long edge, JPEG quality 85. Say if you want a different size or a small preview on the recording screen instead.
+- **Overnight relay:** Claude Code blocked me from adding Codex to `tool/overnight.ps1` and from starting the relay, because the relay runs agents with all permission checks switched off (`--dangerously-skip-permissions`, and for Codex `--dangerously-bypass-approvals-and-sandbox`). Your decision: start it yourself, or allow it in Claude Code settings. Codex also needs `npm i -g @openai/codex` and `codex login`.
 - **ADR-026 (new):** Free space calculation for Android queries `StatFs.availableBytes` on `context.filesDir`, and iOS queries `volumeAvailableCapacityForImportantUsageKey` on the documents directory. Measured file growth rate averages over the active segment (after 5s) or prior activity segments, falling back to nominal profile rate. Hard stop reserve is 100 MB (`storage_low`). Confirm this meets expectations.
 - **ADR-025:** Android notification channel is configured with `NotificationManager.IMPORTANCE_LOW` so ongoing timer updates and state changes do not emit repeated audible chimes. Confirm this meets expectation.
 - **ADR-025:** Notification actions include compact Pause/Resume, Stop, Bookmark, and Photo. Photo dispatches `MainActivity` with `attenlume://photo?source=notification` since opening the camera requires an active foreground activity.

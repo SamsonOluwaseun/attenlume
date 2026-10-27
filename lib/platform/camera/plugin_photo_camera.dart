@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/widgets.dart';
 
 import 'photo_camera.dart' as ours;
 
@@ -51,11 +52,26 @@ class PluginPhotoCamera implements ours.PhotoCamera {
     );
     try {
       await controller.initialize();
+    } on CameraException catch (e) {
+      await controller.dispose();
+      // CameraAccessDenied, CameraAccessDeniedWithoutPrompt and
+      // CameraAccessRestricted on Android, iOS and Windows.
+      if (e.code.startsWith('CameraAccess')) {
+        throw const ours.CameraAccessDeniedException();
+      }
+      rethrow;
     } on Object {
       await controller.dispose();
       rethrow;
     }
     _controller = controller;
+  }
+
+  @override
+  Widget buildPreview() {
+    final controller = _controller;
+    if (controller == null || !isOpen) return const SizedBox.shrink();
+    return CameraPreview(controller);
   }
 
   @override

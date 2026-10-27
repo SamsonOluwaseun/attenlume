@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
+
 /// Still photo capture for the recording screen (BUILD_GUIDE 5.6)
 /// [P0-05, FR-PHO-01, FR-PHO-07].
 ///
@@ -11,10 +13,15 @@ abstract interface class PhotoCamera {
   Future<List<CameraLens>> listCameras();
 
   /// Opens [lens], or the first back camera, or the first camera. Throws
-  /// [CameraUnavailableException] when there is no camera to open.
+  /// [CameraUnavailableException] when there is no camera to open, and
+  /// [CameraAccessDeniedException] when the user or the OS blocks it.
   Future<void> open({CameraLens? lens});
 
   bool get isOpen;
+
+  /// The live viewfinder for the open camera [P1-14]. An empty box when
+  /// the camera is not open.
+  Widget buildPreview();
 
   /// Takes one photo and stores it at [path]. The camera stays open for
   /// the next shot (FR-UI-03).
@@ -56,6 +63,15 @@ class CameraUnavailableException implements Exception {
 
   @override
   String toString() => 'CameraUnavailableException: $message';
+}
+
+/// Camera access was refused by the user or blocked by the OS
+/// (FR-PRI-04) [P1-14].
+class CameraAccessDeniedException implements Exception {
+  const CameraAccessDeniedException();
+
+  @override
+  String toString() => 'CameraAccessDeniedException';
 }
 
 /// Moves a photo the platform wrote to [from] into [to].

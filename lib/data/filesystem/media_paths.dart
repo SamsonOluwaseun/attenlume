@@ -69,6 +69,18 @@ abstract final class MediaPaths {
         '$photoId.jpg',
       );
 
+  /// `thumbs/<photo_id>.jpg` in the activity folder (BUILD_GUIDE 9.5)
+  /// [P1-14].
+  static String thumbnail(
+    String conferenceId,
+    String activityId,
+    String photoId,
+  ) => p.posix.join(
+    activityFolder(conferenceId, activityId),
+    'thumbs',
+    '$photoId.jpg',
+  );
+
   /// The absolute file for a stored relative path.
   static File resolve(Directory mediaRoot, String relativePath) =>
       File(p.joinAll([mediaRoot.path, ...p.posix.split(relativePath)]));

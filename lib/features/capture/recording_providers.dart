@@ -11,6 +11,7 @@ import '../../domain/services/crash_recovery_service.dart';
 import '../../domain/services/foreground_service_coordinator.dart';
 import '../../domain/services/interruption_coordinator.dart';
 import '../../domain/services/one_active_coordinator.dart';
+import '../../domain/services/photo_capture_service.dart';
 import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
 import '../../domain/services/storage_budget_service.dart';
@@ -172,6 +173,17 @@ final interruptionCoordinatorProvider = Provider<InterruptionCoordinator>((
   ref.onDispose(coordinator.dispose);
   return coordinator;
 });
+
+/// In-app photos with compression and thumbnails [P1-14].
+final photoCaptureServiceProvider = Provider<PhotoCaptureService>(
+  (ref) => PhotoCaptureService(
+    camera: ref.watch(photoCameraProvider),
+    activities: ref.watch(activityRepositoryProvider),
+    media: ref.watch(mediaAssetRepositoryProvider),
+    mediaRoot: ref.watch(mediaRootProvider),
+    interruptions: ref.watch(interruptionCoordinatorProvider),
+  ),
+);
 
 /// Tracks disk free space, rolling minutes left from measured file growth,
 /// and enforces the hard stop reserve (FR-STO-01 to 04, FR-UI-07) [P1-12].

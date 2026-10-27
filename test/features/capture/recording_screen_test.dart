@@ -14,6 +14,7 @@ import 'package:attenlume/features/capture/mic_test_sheet.dart';
 import 'package:attenlume/features/capture/quick_thought_sheet.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/capture/recording_screen.dart';
+import 'package:attenlume/platform/camera/photo_camera.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -255,7 +256,7 @@ void main() {
 
   group('FR-UI-03 Photo capture', () {
     testWidgets(
-      'FR-UI-03 tapping Photo captures still photo and leaves shutter ready',
+      'FR-UI-03 Photo opens the camera, the shutter stays ready, and the count updates',
       (tester) async {
         final conf = await t.conference();
         final act = await t.activity(conf.id, title: 'Panel Discussion');
@@ -265,24 +266,68 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Tap Photo button
+        // Photo opens the in-app camera with a viewfinder (P1-14)
         await tester.tap(find.byKey(const Key('record-action-photo')));
         await settleAsync(tester, const Duration(milliseconds: 700));
+        expect(find.byKey(const Key('camera-screen')), findsOneWidget);
+        expect(find.byKey(const Key('fake-camera-preview')), findsOneWidget);
 
-        expect(fakeCamera.shots, equals(1));
-        final photos = await t.media.photosFor(act.id);
-        expect(photos, hasLength(1));
-        expect(find.text('Photo captured'), findsOneWidget);
-
-        // Tap second shot - shutter is still ready
-        await tester.tap(find.byKey(const Key('record-action-photo')));
+        // Two shots in a row: the shutter is ready again after each
+        await tester.tap(find.byKey(const Key('camera-shutter-button')));
         await settleAsync(tester, const Duration(milliseconds: 700));
-
+        await tester.tap(find.byKey(const Key('camera-shutter-button')));
+        await settleAsync(tester, const Duration(milliseconds: 700));
         expect(fakeCamera.shots, equals(2));
-        final photosAfter = await t.media.photosFor(act.id);
-        expect(photosAfter, hasLength(2));
+        expect(find.text('2 photos'), findsOneWidget);
+
+        // Close returns to the recording screen
+        await tester.tap(find.byKey(const Key('camera-close-button')));
+        await settleAsync(tester, const Duration(milliseconds: 700));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('camera-screen')), findsNothing);
+        expect(await t.media.photosFor(act.id), hasLength(2));
+        expect(find.text('2 photos saved'), findsOneWidget);
+        expect(fakeCamera.closed, isTrue);
       },
     );
+
+    testWidgets('FR-PRI-04 the camera explains when access is denied', (
+      tester,
+    ) async {
+      fakeCamera.openError = const CameraAccessDeniedException();
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      expect(
+        find.textContaining('Attenlume needs camera access'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('camera-shutter-button')));
+      await settleAsync(tester);
+      expect(fakeCamera.shots, 0);
+    });
+
+    testWidgets('FR-PHO-01 the camera says when there is no camera', (
+      tester,
+    ) async {
+      fakeCamera.lenses = const [];
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      expect(find.text('No camera found on this device.'), findsOneWidget);
+    });
   });
 
   group('FR-UI-04 Bookmark chips and button', () {
