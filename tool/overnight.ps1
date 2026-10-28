@@ -1,6 +1,5 @@
 # Overnight supervisor: runs one agent task at a time, Claude Code first,
-# falling back to Google Antigravity (agy), then OpenAI Codex, when an agent
-# hits a limit or stalls.
+# falling back to Google Antigravity (agy) when Claude hits a limit or stalls.
 # Usage:  powershell -File tool\overnight.ps1 [-Until "08:00"] [-MaxRuns 40]
 param(
     [string]$Until = "08:00",
@@ -36,29 +35,27 @@ if ($deadline -le (Get-Date)) { $deadline = $deadline.AddDays(1) }
 $ClaudeExe = Get-ChildItem "$env:USERPROFILE\.vscode\extensions\anthropic.claude-code-*\resources\native-binary\claude.exe" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
 $AgyExe = Join-Path $env:USERPROFILE ".gemini\bin\agy.exe"
-# Codex CLI bundled with the VS Code extension. The workspace-write sandbox
-# lets it write only inside this repository.
-$CodexExe = Get-ChildItem "$env:USERPROFILE\.vscode\extensions\openai.chatgpt-*-win32-x64\bin\windows-x86_64\codex.exe" -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+# Codex is not in the relay: its Windows sandbox runs as another user, so it
+# cannot run Git or Flutter here and leaves uncommitted work on main.
 $Prompt = '"Read tool/agent-prompt.md and follow it exactly."'
 
 $Agents = @(
     @{ Name = "claude";      Exe = $ClaudeExe; Args = "-p $Prompt --dangerously-skip-permissions" },
     @{ Name = "agy-opus";    Exe = $AgyExe;    Args = "-p $Prompt --dangerously-skip-permissions --model claude-opus-4-6-thinking" },
-    @{ Name = "agy-gemini";  Exe = $AgyExe;    Args = "-p $Prompt --dangerously-skip-permissions --model gemini-3.8-flash-high" },
-    @{ Name = "codex";       Exe = $CodexExe;  Args = "exec --sandbox workspace-write -C `"$Repo`" $Prompt" }
+    @{ Name = "agy-gemini";  Exe = $AgyExe;    Args = "-p $Prompt --dangerously-skip-permissions --model gemini-3.8-flash-high" }
 )
 $cooldown = @{}            # agent name -> time it may be used again
-$LimitPattern = 'usage limit|rate limit|limit reached|out of credits|insufficient credit|quota|resets at|429|overloaded|exhausted'
+$LimitPattern = 'usage limit|session limit|rate limit|limit reached|out of credits|insufficient credit|quota|resets |429|overloaded|exhausted'
 
 function CommitCount { [int](git rev-list --all --count 2>$null) }
 
-Log "Supervisor started. Deadline $deadline. Claude: $ClaudeExe Codex: $CodexExe"
+Log "Supervisor started. Deadline $deadline. Claude: $ClaudeExe"
 $noProgress = 0
 
 for ($run = 1; $run -le $MaxRuns; $run++) {
     if ((Get-Date) -ge $deadline) { Log "Deadline reached."; break }
-    if ((Test-Path docs\PROGRESS.md) -and (Select-String -Path docs\PROGRESS.md -Pattern 'OVERNIGHT-COMPLETE' -Quiet)) { Log "OVERNIGHT-COMPLETE found."; break }
+    # The marker must be a line on its own; prose that mentions it does not count.
+    if ((Test-Path docs\PROGRESS.md) -and (Select-String -Path docs\PROGRESS.md -Pattern '^\s*OVERNIGHT-COMPLETE\s*$' -Quiet)) { Log "OVERNIGHT-COMPLETE found."; break }
 
     $agent = $Agents | Where-Object { $_.Exe -and (Test-Path $_.Exe) -and (-not $cooldown[$_.Name] -or $cooldown[$_.Name] -le (Get-Date)) } | Select-Object -First 1
     if (-not $agent) { Log "All agents cooling down. Waiting 15 min."; Start-Sleep -Seconds 900; $run--; continue }

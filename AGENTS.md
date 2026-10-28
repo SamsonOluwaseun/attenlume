@@ -34,7 +34,7 @@ If `docs/HANDOVER.md` does not exist yet, start at task P0-01 in section 17 of t
 
 ## Unattended mode (overnight supervisor)
 
-`tool/overnight.ps1` runs Claude Code, Google Antigravity and OpenAI Codex in turns, one task per run. When started by it:
+`tool/overnight.ps1` runs Claude Code and Google Antigravity in turns, one task per run. OpenAI Codex is for attended sessions only: its Windows sandbox cannot run Git or Flutter here. When started by it:
 
 - Nobody is watching. Do not ask questions. Put them under "Open questions for the owner" in `HANDOVER.md` and pick the safest option that keeps work moving.
 - Work on a task branch, and when the task's tests and `flutter analyze` pass, merge it into `main` with `--no-ff` so the next agent starts from it. Never push to any remote.
