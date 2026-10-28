@@ -5,11 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/local_database/app_database.dart';
 import '../../data/repositories/repository_providers.dart';
 
-/// Short plain-Markdown notes for one activity, shown as written, with a
-/// quick editor (FR-BMK-02) [P1-16].
+/// Short plain-Markdown notes for one activity, with a quick editor
+/// (FR-BMK-02) [P1-16].
 ///
-/// The Markdown is stored and exported as text; it is not rendered here,
-/// so what the user sees is exactly what goes into the export.
+/// The Markdown is stored and exported as written. Here only `**bold**` is
+/// rendered, so the app's own labels such as `**[Quick thought]**` read as
+/// a bold "Quick thought" rather than as symbols.
 class ActivityNotesSection extends ConsumerWidget {
   const ActivityNotesSection({
     super.key,
@@ -67,8 +68,8 @@ class ActivityNotesSection extends ConsumerWidget {
           ],
         ),
         if (hasNotes)
-          SelectableText(
-            notes,
+          SelectableText.rich(
+            TextSpan(children: notesSpans(notes)),
             key: const Key('detail-notes'),
             style: theme.textTheme.bodyMedium,
           )
@@ -82,6 +83,29 @@ class ActivityNotesSection extends ConsumerWidget {
       ],
     );
   }
+}
+
+final _bold = RegExp(r'\*\*(.+?)\*\*');
+final _label = RegExp(r'^\[(.+)\]$');
+
+/// [notes] as spans with `**bold**` in bold. A bold label in square
+/// brackets, as the app writes, loses its brackets.
+List<TextSpan> notesSpans(String notes) {
+  final spans = <TextSpan>[];
+  var at = 0;
+  for (final m in _bold.allMatches(notes)) {
+    if (m.start > at) spans.add(TextSpan(text: notes.substring(at, m.start)));
+    final inner = m.group(1)!;
+    spans.add(
+      TextSpan(
+        text: _label.firstMatch(inner)?.group(1) ?? inner,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+    );
+    at = m.end;
+  }
+  if (at < notes.length) spans.add(TextSpan(text: notes.substring(at)));
+  return spans;
 }
 
 /// Multi-line editor for activity notes. Pops the text, or null on cancel.

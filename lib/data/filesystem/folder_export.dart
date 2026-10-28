@@ -12,12 +12,16 @@ class ExportedFile {
     required this.relativePath,
     required this.bytes,
     required this.sha256,
+    this.durationMs,
   });
 
   /// Forward slashes, relative to the export folder.
   final String relativePath;
   final int bytes;
   final String sha256;
+
+  /// Audio length, for trimmed copies written by the export (P1-21).
+  final int? durationMs;
 
   Map<String, Object?> toJson() => {
     'path': relativePath,
@@ -101,8 +105,8 @@ Future<FolderExportResult> exportFolder({
       final relative = p.relative(file.path, from: source.path);
       final target = File(p.join(partialDir.path, relative));
       await target.parent.create(recursive: true);
-      final (bytes, digest) = await _copyHashing(file, target, openSink);
-      final check = await _hashFile(target);
+      final (bytes, digest) = await copyFileHashing(file, target, openSink);
+      final check = await hashFileSha256(target);
       if (check != digest) {
         throw FileSystemException('Copy does not match source', target.path);
       }
@@ -162,12 +166,13 @@ class _FileExportSink implements ExportSink {
 }
 
 /// Streams [from] into [to] (temp name, flush, rename) and hashes in the
-/// same pass. Memory use is one read chunk.
-Future<(int, String)> _copyHashing(
+/// same pass. Memory use is one read chunk. Returns the byte count and the
+/// SHA-256 hex digest. Used by [exportFolder] and the P1-21 export writer.
+Future<(int, String)> copyFileHashing(
   File from,
-  File to,
-  ExportSinkOpener openSink,
-) async {
+  File to, [
+  ExportSinkOpener openSink = openFileExportSink,
+]) async {
   final temp = File('${to.path}.tmp');
   final digestSink = _DigestSink();
   final hasher = sha256.startChunkedConversion(digestSink);
@@ -196,7 +201,8 @@ Future<(int, String)> _copyHashing(
   return (bytes, digestSink.value.toString());
 }
 
-Future<String> _hashFile(File file) async =>
+/// SHA-256 hex digest of [file], streamed (FR-EXP-04, FR-EXP-06).
+Future<String> hashFileSha256(File file) async =>
     (await sha256.bind(file.openRead()).first).toString();
 
 class _DigestSink implements Sink<Digest> {
@@ -219,7 +225,7 @@ Future<List<String>> verifyChecksums(Directory folder) async {
     final expected = line.substring(0, split);
     final relative = line.substring(split + 2);
     final file = File(p.joinAll([folder.path, ...p.posix.split(relative)]));
-    if (!file.existsSync() || await _hashFile(file) != expected) {
+    if (!file.existsSync() || await hashFileSha256(file) != expected) {
       failures.add(relative);
     }
   }

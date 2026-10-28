@@ -339,8 +339,18 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
               runSpacing: TokenSpace.space2,
               children: [
                 _kindChip(theme, 'Audio', sizes.audioBytes, Icons.mic_rounded),
-                _kindChip(theme, 'Photos', sizes.photoBytes, Icons.photo_camera_rounded),
-                _kindChip(theme, 'Thumbnails', sizes.thumbnailBytes, Icons.image_outlined),
+                _kindChip(
+                  theme,
+                  'Photos',
+                  sizes.photoBytes,
+                  Icons.photo_camera_rounded,
+                ),
+                _kindChip(
+                  theme,
+                  'Thumbnails',
+                  sizes.thumbnailBytes,
+                  Icons.image_outlined,
+                ),
                 if (sizes.keptOriginalBytes > 0)
                   _kindChip(
                     theme,
@@ -355,8 +365,18 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                     breakdown.safeTemporaryBytes,
                     Icons.cleaning_services_rounded,
                   ),
-                _kindChip(theme, 'Transcripts', sizes.transcriptBytes, Icons.description_outlined),
-                _kindChip(theme, 'Models', sizes.modelBytes, Icons.memory_rounded),
+                _kindChip(
+                  theme,
+                  'Transcripts',
+                  sizes.transcriptBytes,
+                  Icons.description_outlined,
+                ),
+                _kindChip(
+                  theme,
+                  'Models',
+                  sizes.modelBytes,
+                  Icons.memory_rounded,
+                ),
               ],
             ),
 
@@ -371,7 +391,10 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                   child: AttenlumeButton(
                     key: const Key('clear-safe-temp-button'),
                     label: 'Clear temporary files',
-                    leading: const Icon(Icons.cleaning_services_outlined, size: 18),
+                    leading: const Icon(
+                      Icons.cleaning_services_outlined,
+                      size: 18,
+                    ),
                     variant: AttenlumeButtonVariant.secondary,
                     onPressed: () => _openClearTempDialog(breakdown),
                   ),
@@ -523,8 +546,8 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                     variant: AttenlumeButtonVariant.danger,
                     onPressed: isVerified
                         ? () => _openDeleteLocalDialog(
-                              conferenceId: conf.conferenceId,
-                            )
+                            conferenceId: conf.conferenceId,
+                          )
                         : null,
                   ),
                 ),
@@ -552,9 +575,9 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                     )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: conf.activities.map(
-                        (act) => _buildActivityTile(theme, conf, act),
-                      ).toList(),
+                      children: conf.activities
+                          .map((act) => _buildActivityTile(theme, conf, act))
+                          .toList(),
                     ),
             ),
           ],
@@ -642,9 +665,9 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                 ),
                 onPressed: isVerified
                     ? () => _openDeleteLocalDialog(
-                          conferenceId: conf.conferenceId,
-                          activityId: act.activityId,
-                        )
+                        conferenceId: conf.conferenceId,
+                        activityId: act.activityId,
+                      )
                     : null,
               ),
             ),
@@ -749,15 +772,30 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
         child: Row(
           children: [
             if (audioFlex > 0)
-              Expanded(flex: audioFlex, child: Container(color: Colors.blue)),
+              Expanded(
+                flex: audioFlex,
+                child: Container(color: Colors.blue),
+              ),
             if (photoFlex > 0)
-              Expanded(flex: photoFlex, child: Container(color: Colors.teal)),
+              Expanded(
+                flex: photoFlex,
+                child: Container(color: Colors.teal),
+              ),
             if (thumbFlex > 0)
-              Expanded(flex: thumbFlex, child: Container(color: Colors.green)),
+              Expanded(
+                flex: thumbFlex,
+                child: Container(color: Colors.green),
+              ),
             if (origFlex > 0)
-              Expanded(flex: origFlex, child: Container(color: Colors.amber)),
+              Expanded(
+                flex: origFlex,
+                child: Container(color: Colors.amber),
+              ),
             if (derivedFlex > 0)
-              Expanded(flex: derivedFlex, child: Container(color: Colors.purple)),
+              Expanded(
+                flex: derivedFlex,
+                child: Container(color: Colors.purple),
+              ),
           ],
         ),
       ),

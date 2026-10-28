@@ -150,7 +150,10 @@ void main() {
     testWidgets('FR-UI-02 displays conference title, activity title and room', (
       tester,
     ) async {
-      final conf = await t.conference(name: 'DevFest London');
+      final conf = await t.conference(
+        policyAcknowledged: true,
+        name: 'Samlytics Conference 2026',
+      );
       final act = await t.activity(conf.id, title: 'Building with Flutter');
       await t.activities.update(
         act.id,
@@ -166,7 +169,7 @@ void main() {
         find.byKey(const Key('recording-screen-subtitle')),
         findsOneWidget,
       );
-      expect(find.text('DevFest London · Room 101'), findsOneWidget);
+      expect(find.text('Samlytics Conference 2026 · Room 101'), findsOneWidget);
       expect(find.byKey(const Key('input-source-indicator')), findsOneWidget);
       expect(find.byKey(const Key('record-status-idle')), findsOneWidget);
       expect(find.byKey(const Key('record-button-start')), findsOneWidget);
@@ -175,7 +178,7 @@ void main() {
     testWidgets(
       'FR-UI-01 starts recording on Record tap and displays LIVE controls',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Keynote Session');
 
         await tester.pumpWidget(
@@ -202,7 +205,7 @@ void main() {
     testWidgets('FR-UI-01 Pause, Resume, and Stop controls work cleanly', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Session');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -239,7 +242,7 @@ void main() {
       'FR-UI-01 says microphone access is needed when permission is refused',
       (tester) async {
         fakeEngine.permission = false;
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Session');
 
         await tester.pumpWidget(
@@ -264,7 +267,7 @@ void main() {
     testWidgets(
       'FR-UI-03 Photo opens the camera, the shutter stays ready, and the count updates',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Panel Discussion');
 
         await tester.pumpWidget(
@@ -297,11 +300,88 @@ void main() {
       },
     );
 
+    testWidgets('FR-PHO-01 the switch button flips to the front camera and '
+        'back', (tester) async {
+      const back = CameraLens(id: 'back-0', facing: CameraFacing.back);
+      const front = CameraLens(id: 'front-1', facing: CameraFacing.front);
+      fakeCamera.lenses = const [back, front];
+      final conf = await t.conference(policyAcknowledged: true);
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      final button = find.byKey(const Key('camera-switch-button'));
+      expect(find.byTooltip('Switch to front camera'), findsOneWidget);
+      await tester.tap(button);
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      expect(fakeCamera.lens, front);
+      expect(find.byTooltip('Switch to back camera'), findsOneWidget);
+      expect(find.byKey(const Key('fake-camera-preview')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('camera-shutter-button')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      expect(fakeCamera.shots, 1);
+
+      await tester.tap(button);
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      expect(fakeCamera.lens, back);
+    });
+
+    testWidgets('FR-PHO-01 closing during a switch leaves no camera '
+        'running', (tester) async {
+      fakeCamera.lenses = const [
+        CameraLens(id: 'back-0', facing: CameraFacing.back),
+        CameraLens(id: 'front-1', facing: CameraFacing.front),
+      ];
+      final conf = await t.conference(policyAcknowledged: true);
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      final gate = Completer<void>();
+      fakeCamera.openGate = gate.future;
+      await tester.tap(find.byKey(const Key('camera-switch-button')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('camera-close-button')));
+      // Give the screen time to close before the next camera opens.
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      gate.complete();
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('camera-screen')), findsNothing);
+      expect(fakeCamera.isOpen, isFalse);
+    });
+
+    testWidgets('FR-PHO-01 no switch button with only one camera', (
+      tester,
+    ) async {
+      final conf = await t.conference(policyAcknowledged: true);
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      expect(find.byKey(const Key('camera-screen')), findsOneWidget);
+      expect(find.byKey(const Key('camera-switch-button')), findsNothing);
+    });
+
     testWidgets('FR-PRI-04 the camera explains when access is denied', (
       tester,
     ) async {
       fakeCamera.openError = const CameraAccessDeniedException();
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Panel Discussion');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -323,7 +403,7 @@ void main() {
       tester,
     ) async {
       fakeCamera.lenses = const [];
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Panel Discussion');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -340,7 +420,7 @@ void main() {
     testWidgets('FR-UI-04 tapping bookmark button creates default bookmark', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Workshop');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -357,7 +437,7 @@ void main() {
     testWidgets('FR-UI-04 tapping standard chips creates labeled bookmark', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Workshop');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -381,7 +461,7 @@ void main() {
     testWidgets('FR-BMK-03 Ctrl+B adds a bookmark with source hotkey', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Workshop');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -403,7 +483,7 @@ void main() {
     testWidgets(
       'FR-UI-05 note button opens QuickThoughtSheet and saves text reflection',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Roundtable');
 
         await tester.pumpWidget(
@@ -453,7 +533,7 @@ void main() {
     testWidgets('FR-UI-06 mic test button in app bar opens MicTestSheet', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Session');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -471,7 +551,7 @@ void main() {
     testWidgets('FR-UI-08 profile selector is present on screen', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Session');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -487,7 +567,7 @@ void main() {
     testWidgets(
       'ADR-021 displays interruption banner when recording is interrupted',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Session');
 
         final interruptedStatus = RecordingStatus(
@@ -534,7 +614,7 @@ void main() {
     testWidgets(
       'FR-REC-06 after 2 hours asks "Still in" and Keep recording dismisses it',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Keynote');
         final safety = safetyFor(-20);
         addTearDown(safety.dispose);
@@ -570,7 +650,7 @@ void main() {
     testWidgets(
       'FR-REC-06 after 10 minutes of silence the user can stop and save',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Breakout');
         final safety = safetyFor(-80);
         addTearDown(safety.dispose);

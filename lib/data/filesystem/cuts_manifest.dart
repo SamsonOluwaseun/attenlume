@@ -109,12 +109,17 @@ class CutsManifest {
   final List<SegmentReference> segments;
 
   /// Builds a [CutsManifest] from domain entities.
+  ///
+  /// [fileNames] maps segment id to the name the file has where the
+  /// manifest is read (an export renames files, FR-EXP-03); without an
+  /// entry the stored file's base name is used.
   factory CutsManifest.fromDomain({
     required String activityId,
     required int totalDurationMs,
     required Iterable<CutRange> cutRanges,
     List<RecordingSegment> segments = const [],
     DateTime? firstSegmentStartUtc,
+    Map<String, String> fileNames = const {},
   }) {
     final activeCuts = cutRanges.where((c) => !c.isDeleted).toList();
     final keeps = CutRangeMath.calculateKeepRanges(
@@ -152,7 +157,7 @@ class CutsManifest {
         segRefs.add(
           SegmentReference(
             sequence: s.sequence,
-            fileName: p.basename(s.filePath),
+            fileName: fileNames[s.id] ?? p.basename(s.filePath),
             startOffsetMs: startOffset,
             durationMs: dur,
           ),

@@ -692,7 +692,7 @@ class _ActivityEditorScreenState extends ConsumerState<ActivityEditorScreen> {
                             controller: _organisationController,
                             decoration: const InputDecoration(
                               labelText: 'Organisation',
-                              hintText: 'e.g. UKHSA',
+                              hintText: 'e.g. Samlytics Data Services',
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.business_outlined),
                             ),

@@ -31,3 +31,22 @@ tool/logs/
 # Secrets
 .env
 *.secret
+
+# Quick guide generator
+tool/guide/node_modules/
+tool/guide/package-lock.json
+tool/guide/guide.html
+
+# Development-only files: kept on this PC, not published to GitHub
+# (owner decision, 28 October 2026). Only app code, build files, licences
+# and the user guide are public.
+/AGENTS.md
+/CLAUDE.md
+/docs/*
+!/docs/user-guide/
+/assets/brand/reference/
+/test/docs/
+/tool/overnight.ps1
+/tool/agent-prompt.md
+/tool/team_check.ps1
+/tool/pub_audit.py

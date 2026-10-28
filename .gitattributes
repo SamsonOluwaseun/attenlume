@@ -1,3 +1,8 @@
 # Dart sources (including generated code) keep LF so CI codegen and format checks compare cleanly.
 *.dart text eol=lf
 *.yaml text eol=lf
+# Windows batch files need CRLF to run reliably.
+*.cmd text eol=crlf
+# Flutter regenerates these with LF on every build.
+windows/flutter/generated_plugin_registrant.* text eol=lf
+windows/flutter/generated_plugins.cmake text eol=lf

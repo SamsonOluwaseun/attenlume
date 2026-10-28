@@ -558,7 +558,9 @@ class MediaAssetRepository {
     final path = _db.recordingSegments.filePath;
     final query = _db.selectOnly(_db.recordingSegments)..addColumns([path]);
     if (excludedActivityIds.isNotEmpty) {
-      query.where(_db.recordingSegments.activityId.isNotIn(excludedActivityIds));
+      query.where(
+        _db.recordingSegments.activityId.isNotIn(excludedActivityIds),
+      );
     }
     final rows = await query.map((r) => r.read(path)!).get();
     return rows.toSet();

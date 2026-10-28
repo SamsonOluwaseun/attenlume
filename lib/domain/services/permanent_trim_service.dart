@@ -22,6 +22,7 @@ class SegmentTrimChange {
     required this.segment,
     required this.segmentStartMs,
     required this.keep,
+    this.segmentDurationMs = 0,
   });
 
   final RecordingSegment segment;
@@ -29,12 +30,63 @@ class SegmentTrimChange {
   /// Offset of the segment start on the activity timeline.
   final int segmentStartMs;
 
+  /// The segment's length on the timeline.
+  final int segmentDurationMs;
+
+  int get keptMs => keep.fold(0, (n, r) => n + r.durationMs);
+
   /// Parts of the segment to keep, in ms from its start. Each becomes its
   /// own file, so the gaps left by cuts keep the timeline in place. Empty
   /// when the whole segment is cut.
   final List<TimeRange> keep;
 
   bool get dropped => keep.isEmpty;
+}
+
+/// What [cuts] (merged, in timeline ms) do to each playable segment of
+/// [timeline]: one [SegmentTrimChange] per segment a cut touches, with the
+/// parts to keep in ms from the segment's start. Cuts and kept pieces
+/// shorter than [minimumMs] are ignored. Segments no cut touches are left
+/// out. Shared by the permanent trim (P1-19) and the export's trimmed
+/// copies (FR-EXP-03, P1-21).
+List<SegmentTrimChange> segmentTrimChanges(
+  ReviewTimeline timeline,
+  List<TimeRange> cuts, {
+  int minimumMs = 100,
+}) {
+  final changes = <SegmentTrimChange>[];
+  for (final t in timeline.segments) {
+    if (!t.playable) continue;
+    final local = <TimeRange>[
+      for (final c in cuts)
+        if (math.max(c.startMs, t.startMs) < math.min(c.endMs, t.endMs) &&
+            math.min(c.endMs, t.endMs) - math.max(c.startMs, t.startMs) >=
+                minimumMs)
+          TimeRange(
+            math.max(c.startMs, t.startMs) - t.startMs,
+            math.min(c.endMs, t.endMs) - t.startMs,
+          ),
+    ];
+    if (local.isEmpty) continue;
+    final keep = <TimeRange>[];
+    var at = 0;
+    for (final c in local) {
+      if (c.startMs - at >= minimumMs) keep.add(TimeRange(at, c.startMs));
+      at = c.endMs;
+    }
+    if (t.durationMs - at >= minimumMs) {
+      keep.add(TimeRange(at, t.durationMs));
+    }
+    changes.add(
+      SegmentTrimChange(
+        segment: t.segment,
+        segmentStartMs: t.startMs,
+        segmentDurationMs: t.durationMs,
+        keep: keep,
+      ),
+    );
+  }
+  return changes;
 }
 
 /// A permanent trim worked out from an activity's cuts.
@@ -145,46 +197,20 @@ class PermanentTrimService {
     final merged = CutRangeMath.mergeOverlappingCutRanges(
       await cuts.activeFor(activityId),
     );
-    final changes = <SegmentTrimChange>[];
+    final changes = segmentTrimChanges(timeline, merged, minimumMs: minimumMs);
     var removed = 0;
     var kept = 0;
     var bytes = 0;
     for (final t in timeline.segments) {
       if (!t.playable) continue;
-      final local = <TimeRange>[
-        for (final c in merged)
-          if (math.max(c.startMs, t.startMs) < math.min(c.endMs, t.endMs) &&
-              math.min(c.endMs, t.endMs) - math.max(c.startMs, t.startMs) >=
-                  minimumMs)
-            TimeRange(
-              math.max(c.startMs, t.startMs) - t.startMs,
-              math.min(c.endMs, t.endMs) - t.startMs,
-            ),
-      ];
-      if (local.isEmpty) {
-        kept += t.durationMs;
-        continue;
-      }
-      final keep = <TimeRange>[];
-      var at = 0;
-      for (final c in local) {
-        if (c.startMs - at >= minimumMs) keep.add(TimeRange(at, c.startMs));
-        at = c.endMs;
-      }
-      if (t.durationMs - at >= minimumMs) {
-        keep.add(TimeRange(at, t.durationMs));
-      }
-      final keepMs = keep.fold(0, (n, r) => n + r.durationMs);
-      kept += keepMs;
-      removed += t.durationMs - keepMs;
-      bytes += ((t.segment.bytes ?? 0) * keepMs / t.durationMs).round();
-      changes.add(
-        SegmentTrimChange(
-          segment: t.segment,
-          segmentStartMs: t.startMs,
-          keep: keep,
-        ),
-      );
+      kept += t.durationMs;
+    }
+    for (final change in changes) {
+      final duration = change.segmentDurationMs;
+      final keepMs = change.keptMs;
+      kept -= duration - keepMs;
+      removed += duration - keepMs;
+      bytes += ((change.segment.bytes ?? 0) * keepMs / duration).round();
     }
     return PermanentTrimPlan(
       activityId: activityId,

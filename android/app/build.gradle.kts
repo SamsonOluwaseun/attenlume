@@ -64,6 +64,8 @@ kotlin {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    // AppCompat themes for the local_auth prompt on Android 8 and below (ADR-041).
+    implementation("androidx.appcompat:appcompat:1.7.0")
 }
 
 flutter {

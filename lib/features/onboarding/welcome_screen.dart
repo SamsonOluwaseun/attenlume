@@ -8,6 +8,7 @@ import '../../domain/services/device_timezone.dart';
 import '../conferences/conference_home_screen.dart';
 import '../conferences/conference_list_screen.dart';
 import '../conferences/conference_wizard_screen.dart';
+import '../guide/quick_guide_screen.dart';
 
 /// First screen. No sign-in (NFR-01).
 ///
@@ -113,13 +114,34 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Supplied artwork, used as is. Decoded at display size.
+                  // Its navy wordmark disappears on the dark theme, so there
+                  // it sits on a cream panel, as the design guide allows
+                  // (lockups on cream or white, never recoloured).
                   Center(
-                    child: Image.asset(
-                      'assets/brand/logos/attenlume-logo-stacked.png',
-                      width: logoSize,
-                      height: logoSize,
-                      cacheWidth: (logoSize * pixelRatio).round(),
-                      semanticLabel: 'Attenlume by Samlytics Data Services',
+                    child: DecoratedBox(
+                      key: const Key('welcome-logo-panel'),
+                      decoration: BoxDecoration(
+                        color: theme.brightness == Brightness.dark
+                            ? TokenColors.light.surface
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(
+                          TokenRadius.radiusLg,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(
+                          theme.brightness == Brightness.dark
+                              ? TokenSpace.space3
+                              : 0,
+                        ),
+                        child: Image.asset(
+                          'assets/brand/logos/attenlume-logo-stacked.png',
+                          width: logoSize,
+                          height: logoSize,
+                          cacheWidth: (logoSize * pixelRatio).round(),
+                          semanticLabel: 'Attenlume by Samlytics Data Services',
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: TokenSpace.space4),
@@ -210,28 +232,52 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 
                   const SizedBox(height: TokenSpace.space4),
 
-                  // Secondary actions: Set up with wizard, Open previous
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          key: const Key('set-up-wizard-button'),
-                          onPressed: _openWizard,
-                          child: const Text('Set up with wizard'),
-                        ),
-                      ),
-                      const SizedBox(width: TokenSpace.space3),
-                      Expanded(
-                        child: OutlinedButton(
-                          key: const Key('open-previous-button'),
-                          onPressed: _openPrevious,
-                          child: const Text('Open previous'),
-                        ),
-                      ),
-                    ],
+                  // Secondary actions: Set up with wizard, Open previous.
+                  // Side by side when there is room, stacked on a phone so
+                  // neither label wraps.
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wizard = OutlinedButton(
+                        key: const Key('set-up-wizard-button'),
+                        onPressed: _openWizard,
+                        child: const Text('Set up with wizard'),
+                      );
+                      final previous = OutlinedButton(
+                        key: const Key('open-previous-button'),
+                        onPressed: _openPrevious,
+                        child: const Text('Open previous'),
+                      );
+                      if (constraints.maxWidth < 480) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            wizard,
+                            const SizedBox(height: TokenSpace.space2),
+                            previous,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: wizard),
+                          const SizedBox(width: TokenSpace.space3),
+                          Expanded(child: previous),
+                        ],
+                      );
+                    },
                   ),
 
-                  const SizedBox(height: TokenSpace.space5),
+                  const SizedBox(height: TokenSpace.space2),
+                  Center(
+                    child: TextButton.icon(
+                      key: const Key('welcome-quick-guide-button'),
+                      onPressed: () => QuickGuideScreen.open(context),
+                      icon: const Icon(Icons.menu_book_outlined),
+                      label: const Text('New here? Read the quick guide'),
+                    ),
+                  ),
+
+                  const SizedBox(height: TokenSpace.space4),
 
                   // Recent conferences
                   Builder(

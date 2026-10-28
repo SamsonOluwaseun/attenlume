@@ -155,15 +155,18 @@ class RecordingForegroundService : Service() {
 
         val isActivelyRecording = state.equals("recording", ignoreCase = true)
         if (isActivelyRecording) {
-            val base = if (baseTimeMs != null && baseTimeMs > 0) {
-                SystemClock.elapsedRealtime() - (System.currentTimeMillis() - baseTimeMs)
+            // The chronometer counts up from `when`, which is wall-clock time
+            // (System.currentTimeMillis), not SystemClock.elapsedRealtime.
+            val startedAt = if (baseTimeMs != null && baseTimeMs > 0) {
+                baseTimeMs
             } else if (elapsedMs != null && elapsedMs > 0) {
-                SystemClock.elapsedRealtime() - elapsedMs
+                System.currentTimeMillis() - elapsedMs
             } else {
-                SystemClock.elapsedRealtime()
+                System.currentTimeMillis()
             }
             builder.setUsesChronometer(true)
-            builder.setWhen(base)
+            builder.setShowWhen(true)
+            builder.setWhen(startedAt)
             builder.setContentText(message ?: "Recording")
         } else {
             builder.setUsesChronometer(false)

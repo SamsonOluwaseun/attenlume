@@ -61,7 +61,7 @@ void main() {
 
         // Name and Dates
         expect(
-          find.text('Data Summit London'),
+          find.text('Samlytics Conference 2026'),
           findsWidgets,
         ); // App bar and card
         expect(find.text('4–5 Nov 2026'), findsOneWidget);

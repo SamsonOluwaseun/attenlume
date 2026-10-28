@@ -26,10 +26,7 @@ class FakeFreeSpaceProbe implements FreeSpaceProbe {
   @override
   Future<FreeSpace?> query(String path) async {
     if (availableBytes == null || totalBytes == null) return null;
-    return FreeSpace(
-      availableBytes: availableBytes!,
-      totalBytes: totalBytes!,
-    );
+    return FreeSpace(availableBytes: availableBytes!, totalBytes: totalBytes!);
   }
 }
 
@@ -40,7 +37,9 @@ void main() {
 
   setUp(() async {
     t = TestData();
-    tempMediaDir = await Directory.systemTemp.createTemp('attenlume_storage_widget_test_');
+    tempMediaDir = await Directory.systemTemp.createTemp(
+      'attenlume_storage_widget_test_',
+    );
     fakeProbe = FakeFreeSpaceProbe();
   });
 
@@ -104,7 +103,11 @@ void main() {
       final segFile = MediaPaths.resolve(tempMediaDir, segPath);
       await segFile.parent.create(recursive: true);
       await segFile.writeAsBytes(List.filled(12 * 1024 * 1024, 1));
-      await createTestSegment(act.id, filePath: segPath, bytes: 12 * 1024 * 1024);
+      await createTestSegment(
+        act.id,
+        filePath: segPath,
+        bytes: 12 * 1024 * 1024,
+      );
 
       await tester.pumpWidget(createWidget());
       await tester.pumpAndSettle();
@@ -113,7 +116,10 @@ void main() {
       expect(find.byKey(const Key('storage-overview-card')), findsOneWidget);
       expect(find.text('Device storage'), findsOneWidget);
       expect(find.text('12 MB'), findsWidgets);
-      expect(find.textContaining('Free space: 50 GB of 128 GB available'), findsOneWidget);
+      expect(
+        find.textContaining('Free space: 50 GB of 128 GB available'),
+        findsOneWidget,
+      );
 
       expect(find.text('Audio: 12 MB'), findsOneWidget);
       expect(find.text('Photos: 0 B'), findsOneWidget);
@@ -135,7 +141,11 @@ void main() {
       final segFile1 = MediaPaths.resolve(tempMediaDir, segPath1);
       await segFile1.parent.create(recursive: true);
       await segFile1.writeAsBytes(List.filled(5 * 1024 * 1024, 1));
-      await createTestSegment(act1.id, filePath: segPath1, bytes: 5 * 1024 * 1024);
+      await createTestSegment(
+        act1.id,
+        filePath: segPath1,
+        bytes: 5 * 1024 * 1024,
+      );
 
       await tester.pumpWidget(createWidget());
       await tester.pumpAndSettle();
@@ -146,8 +156,14 @@ void main() {
 
       expect(find.text('Morning Keynote'), findsOneWidget);
       expect(find.text('Afternoon Workshop'), findsOneWidget);
-      expect(find.byKey(Key('activity-storage-tile-${act1.id}')), findsOneWidget);
-      expect(find.byKey(Key('activity-storage-tile-${act2.id}')), findsOneWidget);
+      expect(
+        find.byKey(Key('activity-storage-tile-${act1.id}')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('activity-storage-tile-${act2.id}')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -175,7 +191,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Remove kept originals'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('confirm-remove-kept-originals-dialog-button')));
+      await tester.tap(
+        find.byKey(const Key('confirm-remove-kept-originals-dialog-button')),
+      );
       await tester.pumpAndSettle();
 
       // Original is deleted, card disappears
@@ -193,12 +211,17 @@ void main() {
       await tester.pumpWidget(createWidget());
       await tester.pumpAndSettle();
 
-      final buttonFinder = find.byKey(Key('delete-local-conference-${conf.id}'));
+      final buttonFinder = find.byKey(
+        Key('delete-local-conference-${conf.id}'),
+      );
       expect(buttonFinder, findsOneWidget);
 
       // Verify that the button is disabled (onPressed is null)
       final button = tester.widget<ElevatedButton>(
-        find.descendant(of: buttonFinder, matching: find.byType(ElevatedButton)),
+        find.descendant(
+          of: buttonFinder,
+          matching: find.byType(ElevatedButton),
+        ),
       );
       expect(button.onPressed, isNull);
     },
@@ -214,7 +237,11 @@ void main() {
       final segFile = MediaPaths.resolve(tempMediaDir, segPath);
       await segFile.parent.create(recursive: true);
       await segFile.writeAsBytes(List.filled(3 * 1024 * 1024, 1));
-      await createTestSegment(act.id, filePath: segPath, bytes: 3 * 1024 * 1024);
+      await createTestSegment(
+        act.id,
+        filePath: segPath,
+        bytes: 3 * 1024 * 1024,
+      );
 
       // Add verified export
       final job = await t.exports.create(
@@ -230,7 +257,9 @@ void main() {
 
       expect(find.text('Verified'), findsOneWidget);
 
-      final buttonFinder = find.byKey(Key('delete-local-conference-${conf.id}'));
+      final buttonFinder = find.byKey(
+        Key('delete-local-conference-${conf.id}'),
+      );
       await tester.tap(buttonFinder);
       await tester.pumpAndSettle();
 
@@ -238,7 +267,10 @@ void main() {
       expect(find.text('Delete local copies'), findsOneWidget);
       expect(find.text('Files to delete:'), findsOneWidget);
       expect(find.text('Audio recordings'), findsOneWidget);
-      expect(find.byKey(const Key('keep-lightweight-index-checkbox')), findsOneWidget);
+      expect(
+        find.byKey(const Key('keep-lightweight-index-checkbox')),
+        findsOneWidget,
+      );
 
       // Confirm delete
       await tester.tap(find.byKey(const Key('confirm-delete-local-button')));
@@ -286,7 +318,10 @@ void main() {
 
       expect(find.text('Manage offline models'), findsOneWidget);
       expect(find.text('Phase 2 Feature'), findsOneWidget);
-      expect(find.textContaining('Attenlume is strictly offline-first'), findsOneWidget);
+      expect(
+        find.textContaining('Attenlume is strictly offline-first'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(const Key('close-models-dialog-button')));
       await tester.pumpAndSettle();

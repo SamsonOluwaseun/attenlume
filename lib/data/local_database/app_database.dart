@@ -52,14 +52,18 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) => m.createAll(),
+    onCreate: (m) async {
+      for (final entity in allSchemaEntities) {
+        await _createIfMissing(m, entity);
+      }
+    },
     onUpgrade: stepByStep(
       from1To2: (m, schema) async {
         // Every 9.4 Phase 1 table and index is new in v2. Parents come
         // before children in the list, so foreign keys resolve.
         for (final entity in schema.entities) {
           if (entity == schema.appSettings) continue;
-          await m.create(entity);
+          await _createIfMissing(m, entity);
         }
       },
     ),
@@ -68,6 +72,28 @@ class AppDatabase extends _$AppDatabase {
       await seedBuiltinActivityTypes();
     },
   );
+
+  /// Creates [entity] unless it already exists, so a first open that was
+  /// cut short can run again (ADR-043). Drift writes tables with
+  /// `IF NOT EXISTS` but indexes without it, and the schema version is
+  /// only stored after every step succeeds: one interrupted create left
+  /// tables without a version, and every later open then failed on the
+  /// first index, so nothing could be saved.
+  static Future<void> _createIfMissing(
+    Migrator m,
+    DatabaseSchemaEntity entity,
+  ) async {
+    if (entity is Index) {
+      final existing = await m.database
+          .customSelect(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+            variables: [Variable.withString(entity.entityName)],
+          )
+          .get();
+      if (existing.isNotEmpty) return;
+    }
+    await m.create(entity);
+  }
 
   /// Inserts any missing built-in activity types (NFR-03). Existing rows
   /// are left alone, so this is safe on every open.

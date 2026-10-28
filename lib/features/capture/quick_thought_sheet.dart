@@ -10,6 +10,7 @@ import '../../app/theme/tokens.dart';
 import '../../data/local_database/app_database.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/enums.dart';
+import '../../domain/services/private_notes.dart';
 
 /// Modal bottom sheet for quick thoughts and reflections during recording (FR-UI-05).
 ///
@@ -74,7 +75,7 @@ class _QuickThoughtSheetState extends ConsumerState<QuickThoughtSheet> {
       await mediaRepo.addBookmark(
         activityId: widget.activityId,
         source: BookmarkSource.ui,
-        label: _isPrivate ? 'Private thought' : 'Quick thought',
+        label: _isPrivate ? privateThoughtLabel : 'Quick thought',
         note: text,
       );
 
@@ -83,12 +84,10 @@ class _QuickThoughtSheetState extends ConsumerState<QuickThoughtSheet> {
       final act = await actRepo.get(widget.activityId);
       if (act != null) {
         final existing = act.notesMd ?? '';
-        final prefix = _isPrivate
-            ? '**[Private reflection]**'
-            : '**[Quick thought]**';
-        final updatedNotes = existing.isEmpty
-            ? '$prefix $text'
-            : '$existing\n\n$prefix $text';
+        // A private thought is wrapped in start and end markers so the
+        // export leaves all of it out, blank lines included (FR-EXP-10).
+        final entry = formatQuickThought(text, isPrivate: _isPrivate);
+        final updatedNotes = existing.isEmpty ? entry : '$existing\n\n$entry';
         await actRepo.update(
           widget.activityId,
           ActivitiesCompanion(notesMd: Value(updatedNotes)),

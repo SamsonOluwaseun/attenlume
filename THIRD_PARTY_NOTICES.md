@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 147 Dart and Flutter packages in `pubspec.lock`: 110 can be part of the app, 37 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (78), Flutter engine bundle (permissive, see note) (1), MIT (22).
+- 162 Dart and Flutter packages in `pubspec.lock`: 125 can be part of the app, 37 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (93), Flutter engine bundle (permissive, see note) (1), MIT (22).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -46,6 +46,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `equatable` | 3.0.0 | pub.dev | transitive | MIT | Copyright (c) 2026 Felix Angelov |
 | `fake_async` | 1.3.3 | pub.dev | transitive | Apache-2.0 | Not stated in the licence file |
 | `ffi` | 2.2.0 | pub.dev | direct main | BSD-3-Clause | Copyright 2019, the Dart project authors. |
+| `ffi_leak_tracker` | 0.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright (c) 2026, Halil Durmus |
 | `file` | 7.0.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. All rights reserved. |
 | `file_selector` | 1.1.0 | pub.dev | direct main | BSD-3-Clause | Copyright 2013 The Flutter Authors |
 | `file_selector_android` | 0.5.2+11 | pub.dev | transitive | Apache-2.0 | Copyright 2013 The Flutter Authors<br>Copyright 2011 - 2013 Paul Burke |
@@ -67,6 +68,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `http` | 1.6.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `http_parser` | 4.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `image` | 4.12.0 | pub.dev | direct main | MIT | Copyright (c) 2013-2022 Brendan Duncan. |
+| `intl` | 0.20.3 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `jni` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `jni_flutter` | 1.0.4+1 | pub.dev | transitive | BSD-3-Clause | Copyright 2026, the Dart project authors. |
 | `jni_util` | 1.0.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2026, the Dart project authors. |
@@ -74,10 +76,16 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `leak_tracker_flutter_testing` | 3.0.10 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `leak_tracker_testing` | 3.0.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `listen` | 1.0.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth` | 3.0.2 | pub.dev | direct main | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_android` | 2.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_darwin` | 2.0.5 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_platform_interface` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_windows` | 2.0.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
 | `logging` | 1.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `matcher` | 0.12.20 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `material_color_utilities` | 0.13.0 | pub.dev | transitive | Apache-2.0 | Copyright 2021 Google LLC |
 | `meta` | 1.19.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2016, the Dart project authors. |
+| `mime` | 2.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `native_toolchain_c` | 0.19.5 | pub.dev | transitive | BSD-3-Clause | Copyright 2023, the Dart project authors. |
 | `objective_c` | 9.6.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2024, the Dart project authors. |
 | `package_config` | 3.0.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2019, the Dart project authors. |
@@ -105,6 +113,8 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `record_windows` | 2.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2022 openapi4j authors. All rights reserved. |
 | `riverpod` | 3.4.3 | pub.dev | transitive | MIT | Copyright (c) 2020 Remi Rousselet |
 | `rxdart` | 0.28.0 | pub.dev | transitive | Apache-2.0 | Not stated in the licence file |
+| `share_plus` | 13.3.1 | pub.dev | direct main | BSD-3-Clause | Copyright 2017, the Flutter project authors. All rights reserved. |
+| `share_plus_platform_interface` | 7.2.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2017 The Chromium Authors. All rights reserved. |
 | `sky_engine` | 0.0.0 | Flutter SDK | transitive | Flutter engine bundle (permissive, see note) | The Flutter Authors and many others |
 | `source_span` | 1.10.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `sqlcipher_flutter_libs` | 0.7.0+eol | pub.dev | transitive | Apache-2.0 | Copyright (c) 2020 Simon Binder<br>Copyright (c) 2008-2020 Zetetic LLC |
@@ -120,10 +130,15 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `test_api` | 0.7.12 | pub.dev | transitive | BSD-3-Clause | Copyright 2018, the Dart project authors. |
 | `timezone` | 0.11.2 | pub.dev | direct main | BSD-2-Clause | Copyright (c) 2014, timezone project authors. |
 | `typed_data` | 1.4.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
+| `url_launcher_linux` | 3.2.3 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `url_launcher_platform_interface` | 2.3.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors. All rights reserved. |
+| `url_launcher_web` | 2.4.3 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `url_launcher_windows` | 3.1.6 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
 | `uuid` | 4.6.0 | pub.dev | direct main | MIT | Copyright (c) 2021 Yulian Kuncheff |
 | `vector_math` | 2.4.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
 | `vm_service` | 15.4.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `web` | 1.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2023, the Dart project authors. |
+| `win32` | 6.4.0 | pub.dev | transitive | BSD-3-Clause | Copyright (c) 2024, Halil Durmus |
 | `xdg_directories` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors. All rights reserved. |
 | `yaml` | 3.1.4 | pub.dev | direct dev | MIT | Copyright (c) 2014, the Dart project authors.<br>Copyright (c) 2006, Kirill Simonov. |
 
@@ -143,10 +158,11 @@ Reachable only from `dev_dependencies`. Used to generate code, lint and test. No
 | `built_value` | 8.13.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, Google Inc. All rights reserved. |
 | `charcode` | 1.4.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. All rights reserved. |
 | `checked_yaml` | 2.0.4 | pub.dev | transitive | BSD-3-Clause | Copyright 2019, the Dart project authors. All rights reserved. |
-| `cli_util` | 0.6.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
+| `cli_util` | 0.4.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `dart_style` | 3.1.14 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `drift_dev` | 2.35.2 | pub.dev | direct dev | MIT | Copyright (c) 2021 Simon Binder |
 | `flutter_driver` | 0.0.0 | Flutter SDK | transitive | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
+| `flutter_launcher_icons` | 0.14.4 | pub.dev | direct dev | MIT | Copyright (c) 2019 Mark O'Sullivan |
 | `flutter_lints` | 6.0.0 | pub.dev | direct dev | BSD-3-Clause | Copyright 2013 The Flutter Authors. All rights reserved. |
 | `fuchsia_remote_debug_protocol` | 0.0.0 | Flutter SDK | transitive | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
 | `graphs` | 2.3.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. |
@@ -155,7 +171,6 @@ Reachable only from `dev_dependencies`. Used to generate code, lint and test. No
 | `io` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. |
 | `json_annotation` | 4.12.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. All rights reserved. |
 | `lints` | 6.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2021, the Dart project authors. |
-| `mime` | 2.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `mocktail` | 1.0.5 | pub.dev | direct dev | MIT | Copyright (c) 2026 Felix Angelov |
 | `pool` | 1.5.3 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `pubspec_parse` | 1.7.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2018, the Dart project authors. |
@@ -334,7 +349,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### BSD-3-Clause: `args`, `logging`, `process`
+### BSD-3-Clause: `args`, `intl`, `logging`, `process`
 
 ```text
 Copyright 2013, the Dart project authors.
@@ -366,7 +381,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### BSD-3-Clause: `async`, `collection`, `convert`, `crypto`, `stream_channel`, `typed_data`, `vm_service`
+### BSD-3-Clause: `async`, `collection`, `convert`, `crypto`, `mime`, `stream_channel`, `typed_data`, `vm_service`
 
 ```text
 Copyright 2015, the Dart project authors.
@@ -482,7 +497,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### BSD-3-Clause: `camera`, `camera_android_camerax`, `camera_avfoundation`, `camera_platform_interface`, `camera_web`, `camera_windows`, `cross_file`, `file_selector`, `file_selector_ios`, `file_selector_linux`, `file_selector_macos`, `file_selector_platform_interface`, `file_selector_web`, `file_selector_windows`, `flutter_plugin_android_lifecycle`, `listen`, `path_provider`, `path_provider_android`, `path_provider_foundation`, `path_provider_linux`, `path_provider_platform_interface`, `vector_math`
+### BSD-3-Clause: `camera`, `camera_android_camerax`, `camera_avfoundation`, `camera_platform_interface`, `camera_web`, `camera_windows`, `cross_file`, `file_selector`, `file_selector_ios`, `file_selector_linux`, `file_selector_macos`, `file_selector_platform_interface`, `file_selector_web`, `file_selector_windows`, `flutter_plugin_android_lifecycle`, `listen`, `local_auth`, `local_auth_android`, `local_auth_darwin`, `local_auth_platform_interface`, `local_auth_windows`, `path_provider`, `path_provider_android`, `path_provider_foundation`, `path_provider_linux`, `path_provider_platform_interface`, `url_launcher_linux`, `url_launcher_web`, `url_launcher_windows`, `vector_math`
 
 ```text
 Copyright 2013 The Flutter Authors
@@ -858,6 +873,39 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+### BSD-3-Clause: `ffi_leak_tracker`
+
+```text
+BSD 3-Clause License
+
+Copyright (c) 2026, Halil Durmus
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 ### BSD-3-Clause: `file`, `platform`
@@ -1780,7 +1828,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### BSD-3-Clause: `path_provider_windows`, `plugin_platform_interface`, `xdg_directories`
+### BSD-3-Clause: `path_provider_windows`, `plugin_platform_interface`, `url_launcher_platform_interface`, `xdg_directories`
 
 ```text
 Copyright 2013 The Flutter Authors. All rights reserved.
@@ -2072,6 +2120,70 @@ SOFTWARE.
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### BSD-3-Clause: `share_plus`
+
+```text
+Copyright 2017, the Flutter project authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### BSD-3-Clause: `share_plus_platform_interface`
+
+```text
+Copyright 2017 The Chromium Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 ### Apache-2.0: `sqlcipher_flutter_libs`
@@ -2494,6 +2606,39 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### BSD-3-Clause: `win32`
+
+```text
+BSD 3-Clause License
+
+Copyright (c) 2024, Halil Durmus
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 

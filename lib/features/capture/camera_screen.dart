@@ -42,6 +42,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   _CameraState _state = _CameraState.opening;
   String? _error;
   bool _shutterBusy = false;
+  bool _switching = false;
+
+  /// The switch in progress, so closing waits for it and never leaves a
+  /// newly opened camera running behind a closed screen.
+  Future<void>? _switchJob;
+  List<CameraLens> _lenses = const [];
   bool _flash = false;
   int _saved = 0;
   Photo? _last;
@@ -57,7 +63,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   @override
   void dispose() {
-    unawaited(_service.close());
+    final switching = _switchJob;
+    unawaited(
+      switching == null
+          ? _service.close()
+          : switching.whenComplete(_service.close),
+    );
     super.dispose();
   }
 
@@ -65,7 +76,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     try {
       _mediaRoot = await ref.read(mediaRootProvider)();
       await _service.open();
-      if (mounted) setState(() => _state = _CameraState.ready);
+      final lenses = await _service.cameras();
+      if (mounted) {
+        setState(() {
+          _state = _CameraState.ready;
+          _lenses = lenses;
+        });
+      }
     } on CameraAccessDeniedException {
       if (mounted) setState(() => _state = _CameraState.accessDenied);
     } on CameraUnavailableException {
@@ -81,7 +98,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   void _takePhoto() {
-    if (_state != _CameraState.ready || _shutterBusy) return;
+    if (_state != _CameraState.ready || _shutterBusy || _switching) return;
     unawaited(HapticFeedback.lightImpact());
     setState(() {
       _shutterBusy = true;
@@ -122,7 +139,41 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     });
   }
 
+  /// Flips to the next camera. Photos still being saved carry on; only a
+  /// shot the camera has not taken yet blocks the switch.
+  Future<void> _switchCamera() async {
+    if (_state != _CameraState.ready || _shutterBusy || _switching) return;
+    setState(() => _switching = true);
+    final job = _service.switchCamera();
+    _switchJob = job.then<void>((_) {}, onError: (Object _) {});
+    try {
+      await job;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Couldn't switch camera. The previous camera is still on.",
+            ),
+          ),
+        );
+      }
+    } finally {
+      _switchJob = null;
+      if (mounted) setState(() => _switching = false);
+    }
+  }
+
+  /// Which way the switch button points: the facing of the next camera.
+  CameraFacing? get _nextFacing {
+    if (_lenses.length < 2) return null;
+    final current = _service.camera.lens;
+    final at = _lenses.indexWhere((l) => l.id == current?.id);
+    return _lenses[(at + 1) % _lenses.length].facing;
+  }
+
   Future<void> _close() async {
+    await _switchJob;
     await Future.wait(List.of(_pending));
     if (mounted) Navigator.of(context).pop(_saved);
   }
@@ -204,7 +255,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                           const Spacer(),
                           _shutter(onSurface, live),
                           const Spacer(),
-                          const SizedBox(width: 56),
+                          SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: _switchButton(onSurface),
+                          ),
                         ],
                       ),
                     ),
@@ -253,7 +308,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Widget _shutter(Color ring, Color fill) {
-    final enabled = _state == _CameraState.ready && !_shutterBusy;
+    final enabled =
+        _state == _CameraState.ready && !_shutterBusy && !_switching;
     return Semantics(
       button: true,
       label: 'Take photo',
@@ -278,6 +334,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _switchButton(Color colour) {
+    final next = _nextFacing;
+    if (next == null || _state != _CameraState.ready) {
+      return const SizedBox.shrink();
+    }
+    final enabled = !_shutterBusy && !_switching;
+    final label = switch (next) {
+      CameraFacing.front => 'Switch to front camera',
+      CameraFacing.back => 'Switch to back camera',
+      CameraFacing.external => 'Switch to external camera',
+    };
+    return IconButton(
+      key: const Key('camera-switch-button'),
+      tooltip: label,
+      iconSize: 32,
+      onPressed: enabled ? _switchCamera : null,
+      icon: _switching
+          ? SizedBox.square(
+              dimension: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: colour),
+            )
+          : Icon(Icons.cameraswitch_outlined, color: colour),
     );
   }
 

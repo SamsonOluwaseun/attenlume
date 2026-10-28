@@ -70,10 +70,17 @@ class TestData {
 
   Future<void> close() => db.close();
 
+  /// [policyAcknowledged] skips the policy reminder before the first
+  /// recording (FR-PRI-01) for tests about something else.
   Future<Conference> conference({
-    String name = 'Data Summit London',
+    String name = 'Samlytics Conference 2026',
     String timezone = 'Europe/London',
-  }) => conferences.create(name: name, timezone: timezone);
+    bool policyAcknowledged = false,
+  }) => conferences.create(
+    name: name,
+    timezone: timezone,
+    policyAcknowledgedAt: policyAcknowledged ? clock() : null,
+  );
 
   Future<Activity> activity(
     String conferenceId, {
@@ -131,7 +138,7 @@ class SampleConference {
 
   static Future<SampleConference> build(TestData t) async {
     final conference = await t.conferences.create(
-      name: 'Data Summit London',
+      name: 'Samlytics Conference 2026',
       timezone: 'Europe/London',
       venue: 'ExCeL London',
       startDate: DateTime.utc(2026, 11, 4),

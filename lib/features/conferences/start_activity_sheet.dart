@@ -26,6 +26,7 @@ class StartActivitySheet extends ConsumerStatefulWidget {
     return showModalBottomSheet<Activity>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
