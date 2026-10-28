@@ -161,6 +161,61 @@ void main() {
     );
   });
 
+  group('FR-PHO-01 switching camera', () {
+    const back = CameraLens(id: 'back-0', facing: CameraFacing.back);
+    const front = CameraLens(id: 'front-1', facing: CameraFacing.front);
+
+    test('FR-PHO-01 switch goes back to front and round again', () async {
+      camera.lenses = const [back, front];
+      await service.open();
+      expect(camera.lens, back);
+
+      expect(await service.switchCamera(), front);
+      expect(camera.lens, front);
+      expect(await service.switchCamera(), back);
+      expect(camera.opened, [back, front, back]);
+    });
+
+    test('FR-PHO-01 the chosen camera is reopened next time', () async {
+      camera.lenses = const [back, front];
+      await service.open();
+      await service.switchCamera();
+      await service.close();
+
+      await service.open();
+      expect(camera.lens, front);
+    });
+
+    test('FR-PHO-01 with one camera nothing is reopened', () async {
+      await service.open();
+      expect(await service.switchCamera(), back);
+      expect(camera.opened, [back]);
+    });
+
+    test('FR-PHO-01 a camera that will not open leaves the previous one '
+        'on', () async {
+      camera.lenses = const [back, front];
+      camera.lensError = (l) => l == front ? Exception('busy') : null;
+      await service.open();
+
+      await expectLater(service.switchCamera(), throwsException);
+      expect(camera.isOpen, isTrue);
+      expect(camera.lens, back);
+    });
+
+    test('FR-PHO-01 photos after a switch come from the new camera', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      camera.lenses = const [back, front];
+      await service.open();
+      await service.switchCamera();
+
+      final photo = await service.capture(act.id);
+      expect(camera.lens, front);
+      expect((await t.media.photosFor(act.id)).single.id, photo.id);
+    });
+  });
+
   test('FR-PHO-06 imports copies of picked files with a label, originals untouched', () async {
     final conf = await t.conference();
     final act = await t.activity(conf.id);

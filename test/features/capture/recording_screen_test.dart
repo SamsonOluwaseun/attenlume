@@ -300,6 +300,51 @@ void main() {
       },
     );
 
+    testWidgets('FR-PHO-01 the switch button flips to the front camera and '
+        'back', (tester) async {
+      const back = CameraLens(id: 'back-0', facing: CameraFacing.back);
+      const front = CameraLens(id: 'front-1', facing: CameraFacing.front);
+      fakeCamera.lenses = const [back, front];
+      final conf = await t.conference(policyAcknowledged: true);
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      final button = find.byKey(const Key('camera-switch-button'));
+      expect(find.byTooltip('Switch to front camera'), findsOneWidget);
+      await tester.tap(button);
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      expect(fakeCamera.lens, front);
+      expect(find.byTooltip('Switch to back camera'), findsOneWidget);
+      expect(find.byKey(const Key('fake-camera-preview')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('camera-shutter-button')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      expect(fakeCamera.shots, 1);
+
+      await tester.tap(button);
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      expect(fakeCamera.lens, back);
+    });
+
+    testWidgets('FR-PHO-01 no switch button with only one camera', (
+      tester,
+    ) async {
+      final conf = await t.conference(policyAcknowledged: true);
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      expect(find.byKey(const Key('camera-screen')), findsOneWidget);
+      expect(find.byKey(const Key('camera-switch-button')), findsNothing);
+    });
+
     testWidgets('FR-PRI-04 the camera explains when access is denied', (
       tester,
     ) async {

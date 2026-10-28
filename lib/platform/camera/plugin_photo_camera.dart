@@ -21,9 +21,13 @@ class PluginPhotoCamera implements ours.PhotoCamera {
 
   CameraController? _controller;
   List<CameraDescription>? _cameras;
+  ours.CameraLens? _openLens;
 
   @override
   bool get isOpen => _controller?.value.isInitialized ?? false;
+
+  @override
+  ours.CameraLens? get lens => isOpen ? _openLens : null;
 
   Future<List<CameraDescription>> _descriptions() async =>
       _cameras ??= await availableCameras();
@@ -65,6 +69,7 @@ class PluginPhotoCamera implements ours.PhotoCamera {
       rethrow;
     }
     _controller = controller;
+    _openLens = _lens(chosen);
   }
 
   @override
@@ -89,6 +94,7 @@ class PluginPhotoCamera implements ours.PhotoCamera {
   Future<void> close() async {
     final controller = _controller;
     _controller = null;
+    _openLens = null;
     await controller?.dispose();
   }
 
