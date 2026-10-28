@@ -9,6 +9,7 @@ import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_banner.dart';
+import '../guide/quick_guide_screen.dart';
 import '../privacy/privacy_screen.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
@@ -69,8 +70,14 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
             tooltip: 'More',
             onSelected: (value) {
               if (value == 'privacy') unawaited(PrivacyScreen.open(context));
+              if (value == 'guide') unawaited(QuickGuideScreen.open(context));
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                key: Key('menu-quick-guide'),
+                value: 'guide',
+                child: Text('Quick guide'),
+              ),
               PopupMenuItem(
                 key: Key('menu-privacy'),
                 value: 'privacy',

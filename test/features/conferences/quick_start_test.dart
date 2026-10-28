@@ -52,6 +52,19 @@ void main() {
     return (panel.decoration as BoxDecoration).color;
   }
 
+  testWidgets('NFR-09 the welcome screen opens the quick guide', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(createSubject());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('welcome-quick-guide-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('quick-guide-screen')), findsOneWidget);
+  });
+
   testWidgets('NFR-09 the logo sits on a cream panel only in the dark theme, '
       'so its navy wordmark stays readable', (tester) async {
     await tester.pumpWidget(createSubject(theme: AppTheme.dark()));

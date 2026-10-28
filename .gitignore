@@ -31,3 +31,8 @@ tool/logs/
 # Secrets
 .env
 *.secret
+
+# Quick guide generator
+tool/guide/node_modules/
+tool/guide/package-lock.json
+tool/guide/guide.html

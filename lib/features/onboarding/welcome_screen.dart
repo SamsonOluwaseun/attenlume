@@ -8,6 +8,7 @@ import '../../domain/services/device_timezone.dart';
 import '../conferences/conference_home_screen.dart';
 import '../conferences/conference_list_screen.dart';
 import '../conferences/conference_wizard_screen.dart';
+import '../guide/quick_guide_screen.dart';
 
 /// First screen. No sign-in (NFR-01).
 ///
@@ -252,7 +253,17 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: TokenSpace.space5),
+                  const SizedBox(height: TokenSpace.space2),
+                  Center(
+                    child: TextButton.icon(
+                      key: const Key('welcome-quick-guide-button'),
+                      onPressed: () => QuickGuideScreen.open(context),
+                      icon: const Icon(Icons.menu_book_outlined),
+                      label: const Text('New here? Read the quick guide'),
+                    ),
+                  ),
+
+                  const SizedBox(height: TokenSpace.space4),
 
                   // Recent conferences
                   Builder(
