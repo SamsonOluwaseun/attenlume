@@ -91,14 +91,36 @@ void main() {
       expect(rows.single.autoResumed, isFalse);
     });
 
-    test('FR-REC-05 the call is never recorded: resume is refused while '
-        'interrupted', () async {
+    test('FR-REC-05 nothing restarts on its own while interrupted', () async {
       await recordThenInterrupt();
+      t.clock.advance(const Duration(minutes: 30));
 
-      expect(await service.resume(), isFalse);
       expect(engine.isCapturing, isFalse);
       expect(engine.startedPaths, hasLength(1));
       expect(service.status.state, RecordingState.interrupted);
+    });
+
+    test('FR-REC-05 the user can resume before the system says the '
+        'interruption is over (ADR-043)', () async {
+      await recordThenInterrupt();
+      t.clock.advance(const Duration(minutes: 2));
+
+      expect(await service.resume(), isTrue);
+
+      expect(service.status.state, RecordingState.recording);
+      expect(service.status.interruption, isNull);
+      expect(engine.isCapturing, isTrue);
+      final segs = await t.media.segmentsFor(keynote.id);
+      expect(segs, hasLength(2));
+      expect(segs.last.startUtc, t.clock.now);
+      final row = (await t.media.interruptionsFor(keynote.id)).single;
+      expect(row.endUtc, t.clock.now);
+      expect(row.autoResumed, isFalse);
+      // A late "interruption ended" from the system changes nothing.
+      expect(
+        (await service.interruptionEnded(mayResume: true)).outcome,
+        InterruptionEndOutcome.notInterrupted,
+      );
     });
 
     test('FR-REC-05 a second interrupt changes nothing', () async {

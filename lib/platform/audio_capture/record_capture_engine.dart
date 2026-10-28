@@ -44,6 +44,11 @@ class RecordCaptureEngine implements AudioCaptureEngine {
         sampleRate: request.sampleRateHz,
         numChannels: request.channelCount,
         device: device,
+        // The app's audio session owns audio focus and interruptions
+        // (ADR-021). Left on, `record` asks Android for focus itself, takes
+        // it from that session, and every recording looks interrupted at
+        // once (ADR-043).
+        audioInterruption: AudioInterruptionMode.none,
       ),
       path: path,
     );
