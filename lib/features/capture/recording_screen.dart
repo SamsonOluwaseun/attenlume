@@ -19,6 +19,7 @@ import '../../domain/services/safety_prompt_service.dart';
 import '../../presentation/components/bookmark_chip.dart';
 import '../../presentation/components/record_button.dart';
 import '../../presentation/components/storage_meter.dart';
+import '../privacy/recording_privacy_check.dart';
 import 'camera_screen.dart';
 import 'mic_test_sheet.dart';
 import 'one_active_prompt_dialog.dart';
@@ -211,6 +212,28 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   };
 
   Future<void> _handleStartRecord() async {
+    // Policy reminder and conversation awareness check (FR-PRI-01).
+    final privacy = await checkRecordingPrivacy(
+      context,
+      conferences: ref.read(conferenceRepositoryProvider),
+      activities: ref.read(activityRepositoryProvider),
+      activityId: widget.activityId,
+    );
+    if (!mounted) return;
+    if (privacy != RecordingPrivacyCheck.proceed) {
+      if (privacy == RecordingPrivacyCheck.notRecordingAudio) {
+        await _loadData();
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              _startRefusalMessage(StartOutcome.recordingNotPermitted),
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final coordinator = ref.read(oneActiveCoordinatorProvider);
     final result = await startRecordingFromUi(
       context,

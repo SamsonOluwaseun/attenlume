@@ -150,7 +150,10 @@ void main() {
     testWidgets('FR-UI-02 displays conference title, activity title and room', (
       tester,
     ) async {
-      final conf = await t.conference(name: 'DevFest London');
+      final conf = await t.conference(
+        policyAcknowledged: true,
+        name: 'DevFest London',
+      );
       final act = await t.activity(conf.id, title: 'Building with Flutter');
       await t.activities.update(
         act.id,
@@ -175,7 +178,7 @@ void main() {
     testWidgets(
       'FR-UI-01 starts recording on Record tap and displays LIVE controls',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Keynote Session');
 
         await tester.pumpWidget(
@@ -202,7 +205,7 @@ void main() {
     testWidgets('FR-UI-01 Pause, Resume, and Stop controls work cleanly', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Session');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -239,7 +242,7 @@ void main() {
       'FR-UI-01 says microphone access is needed when permission is refused',
       (tester) async {
         fakeEngine.permission = false;
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Session');
 
         await tester.pumpWidget(
@@ -264,7 +267,7 @@ void main() {
     testWidgets(
       'FR-UI-03 Photo opens the camera, the shutter stays ready, and the count updates',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Panel Discussion');
 
         await tester.pumpWidget(
@@ -301,7 +304,7 @@ void main() {
       tester,
     ) async {
       fakeCamera.openError = const CameraAccessDeniedException();
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Panel Discussion');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -323,7 +326,7 @@ void main() {
       tester,
     ) async {
       fakeCamera.lenses = const [];
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Panel Discussion');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -340,7 +343,7 @@ void main() {
     testWidgets('FR-UI-04 tapping bookmark button creates default bookmark', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Workshop');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -357,7 +360,7 @@ void main() {
     testWidgets('FR-UI-04 tapping standard chips creates labeled bookmark', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Workshop');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -381,7 +384,7 @@ void main() {
     testWidgets('FR-BMK-03 Ctrl+B adds a bookmark with source hotkey', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Workshop');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -403,7 +406,7 @@ void main() {
     testWidgets(
       'FR-UI-05 note button opens QuickThoughtSheet and saves text reflection',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Roundtable');
 
         await tester.pumpWidget(
@@ -453,7 +456,7 @@ void main() {
     testWidgets('FR-UI-06 mic test button in app bar opens MicTestSheet', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Session');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -471,7 +474,7 @@ void main() {
     testWidgets('FR-UI-08 profile selector is present on screen', (
       tester,
     ) async {
-      final conf = await t.conference();
+      final conf = await t.conference(policyAcknowledged: true);
       final act = await t.activity(conf.id, title: 'Session');
 
       await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
@@ -487,7 +490,7 @@ void main() {
     testWidgets(
       'ADR-021 displays interruption banner when recording is interrupted',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Session');
 
         final interruptedStatus = RecordingStatus(
@@ -534,7 +537,7 @@ void main() {
     testWidgets(
       'FR-REC-06 after 2 hours asks "Still in" and Keep recording dismisses it',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Keynote');
         final safety = safetyFor(-20);
         addTearDown(safety.dispose);
@@ -570,7 +573,7 @@ void main() {
     testWidgets(
       'FR-REC-06 after 10 minutes of silence the user can stop and save',
       (tester) async {
-        final conf = await t.conference();
+        final conf = await t.conference(policyAcknowledged: true);
         final act = await t.activity(conf.id, title: 'Breakout');
         final safety = safetyFor(-80);
         addTearDown(safety.dispose);

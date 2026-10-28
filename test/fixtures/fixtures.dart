@@ -70,10 +70,17 @@ class TestData {
 
   Future<void> close() => db.close();
 
+  /// [policyAcknowledged] skips the policy reminder before the first
+  /// recording (FR-PRI-01) for tests about something else.
   Future<Conference> conference({
     String name = 'Data Summit London',
     String timezone = 'Europe/London',
-  }) => conferences.create(name: name, timezone: timezone);
+    bool policyAcknowledged = false,
+  }) => conferences.create(
+    name: name,
+    timezone: timezone,
+    policyAcknowledgedAt: policyAcknowledged ? clock() : null,
+  );
 
   Future<Activity> activity(
     String conferenceId, {
