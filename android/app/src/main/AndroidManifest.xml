@@ -9,6 +9,8 @@
     <!-- Gallery import by time window (FR-PHO-05, ADR-035). Android 14+ partial access. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <!-- Optional app lock through the system prompt (FR-PRI-06, ADR-041). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application
         android:label="Attenlume"
         android:name="${applicationName}"

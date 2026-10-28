@@ -119,6 +119,8 @@ Store listings (build guide 14) must state that no data is collected and give an
 
 Optional lock using device biometrics or PIN through the OS (FR-PRI-06). Off by default. The app never sees or stores biometric data.
 
+Implemented in P1-24 (ADR-041): `local_auth` (Android BiometricPrompt with device credential, iOS Face ID, Touch ID or passcode, Windows Hello). Turning it on needs one successful OS prompt. It locks on start and after the app has been in the background for the chosen grace period (Immediately, 1 minute by default, or 5 minutes). Recording, the notification and its actions keep running while locked, and the lock screen shows that a recording is on with a Stop button but not its title. If the device can no longer check (for example the PIN was removed), the lock screen explains this and offers to turn the lock off rather than keep the person from their recordings. Unverified on real devices.
+
 ---
 
 ## 10. Safety of the user's data

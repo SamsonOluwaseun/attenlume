@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 148 Dart and Flutter packages in `pubspec.lock`: 110 can be part of the app, 38 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (78), Flutter engine bundle (permissive, see note) (1), MIT (22).
+- 154 Dart and Flutter packages in `pubspec.lock`: 116 can be part of the app, 38 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (84), Flutter engine bundle (permissive, see note) (1), MIT (22).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -67,6 +67,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `http` | 1.6.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `http_parser` | 4.1.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `image` | 4.12.0 | pub.dev | direct main | MIT | Copyright (c) 2013-2022 Brendan Duncan. |
+| `intl` | 0.20.3 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `jni` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `jni_flutter` | 1.0.4+1 | pub.dev | transitive | BSD-3-Clause | Copyright 2026, the Dart project authors. |
 | `jni_util` | 1.0.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2026, the Dart project authors. |
@@ -74,6 +75,11 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `leak_tracker_flutter_testing` | 3.0.10 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `leak_tracker_testing` | 3.0.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2022, the Dart project authors. |
 | `listen` | 1.0.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth` | 3.0.2 | pub.dev | direct main | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_android` | 2.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_darwin` | 2.0.5 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_platform_interface` | 1.1.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
+| `local_auth_windows` | 2.0.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2013 The Flutter Authors |
 | `logging` | 1.3.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `matcher` | 0.12.20 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `material_color_utilities` | 0.13.0 | pub.dev | transitive | Apache-2.0 | Copyright 2021 Google LLC |
@@ -335,7 +341,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### BSD-3-Clause: `args`, `logging`, `process`
+### BSD-3-Clause: `args`, `intl`, `logging`, `process`
 
 ```text
 Copyright 2013, the Dart project authors.
@@ -483,7 +489,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### BSD-3-Clause: `camera`, `camera_android_camerax`, `camera_avfoundation`, `camera_platform_interface`, `camera_web`, `camera_windows`, `cross_file`, `file_selector`, `file_selector_ios`, `file_selector_linux`, `file_selector_macos`, `file_selector_platform_interface`, `file_selector_web`, `file_selector_windows`, `flutter_plugin_android_lifecycle`, `listen`, `path_provider`, `path_provider_android`, `path_provider_foundation`, `path_provider_linux`, `path_provider_platform_interface`, `vector_math`
+### BSD-3-Clause: `camera`, `camera_android_camerax`, `camera_avfoundation`, `camera_platform_interface`, `camera_web`, `camera_windows`, `cross_file`, `file_selector`, `file_selector_ios`, `file_selector_linux`, `file_selector_macos`, `file_selector_platform_interface`, `file_selector_web`, `file_selector_windows`, `flutter_plugin_android_lifecycle`, `listen`, `local_auth`, `local_auth_android`, `local_auth_darwin`, `local_auth_platform_interface`, `local_auth_windows`, `path_provider`, `path_provider_android`, `path_provider_foundation`, `path_provider_linux`, `path_provider_platform_interface`, `vector_math`
 
 ```text
 Copyright 2013 The Flutter Authors
