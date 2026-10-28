@@ -650,3 +650,11 @@ Format: context, decision, alternatives, consequences.
 - **Alternatives:** native passthrough per platform (three implementations, iOS cannot be built or tested here, and Media Foundation needs a new plugin); one joined file per segment (shorter timeline, so every photo, bookmark and later segment offset would need remapping); FFmpeg (rejected in ADR-003); deleting originals straight away (against FR-REV-06 and NFR-07).
 - **Consequences:** Only MP4/M4A AAC works; a WAV option (ADR-023) would need its own trimmer. If the app is killed between writing files and the transaction, the new files sit unlinked in `audio/` and crash recovery lists them; nothing is lost. Kept originals in `audio/originals/` are not in any row: P1-20 (Storage Manager) should list and remove them, and P1-21 (export) should leave them out unless asked. Undo is not offered after a permanent trim (the originals are the undo while kept). Tested with synthetic MP4 files shaped like Android and Windows recordings (moov at the end, two-row `stsc`, edit list, `co64`); real recordings from each platform and playback of the results in other players are unverified (MT-26).
 
+
+## ADR-038: Partial recordings are never disposable Storage Manager cache (P1-20)
+
+- **Date:** 27 October 2026. **Decided by:** Codex, unattended relay.
+- **Context:** The uncommitted Storage Manager implementation classified every `.partial` file under media as safe temporary data. Recording writes use that suffix and crash recovery can recover files without a database row. An open or orphaned partial file may contain original audio.
+- **Decision:** General temporary cleanup must preserve all partial recording files, whether referenced or orphaned. Exclude them from its reclaimable-space estimate. Recovery, not generic cache cleanup, owns these files. Add a regression assertion that orphaned partial bytes survive cleanup.
+- **Alternatives:** Treat age, missing database rows or an unlocked file as proof it is disposable (rejected: none proves the audio is unwanted).
+- **Consequences:** Some disk usage remains until recovery and an explicit user decision. P1-20 still needs validation and review of the other cleanup paths before completion.

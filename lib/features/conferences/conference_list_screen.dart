@@ -6,6 +6,7 @@ import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../storage_manager/storage_manager_screen.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
 
@@ -57,6 +58,20 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('My conferences'),
+        actions: [
+          IconButton(
+            key: const Key('open-storage-manager-button'),
+            icon: const Icon(Icons.storage_outlined),
+            tooltip: 'Storage Manager',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => const StorageManagerScreen(),
+                ),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [

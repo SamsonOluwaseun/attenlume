@@ -699,3 +699,12 @@ Owner report from the first Android tablet install: microphone, camera preview a
 | P1-15 | done (devices unverified) | Gallery import by time window: phones via `photo_manager`, Windows via folder and EXIF, margin, duplicate and large warnings, 17 new tests (665 total). ADR-035. MT-24 for devices |
 | P1-18 | done (devices unverified) | Trim start and end, middle cuts with undo, cut skipping in the player, split at the playhead with a shared segment and divided cuts, 16 new tests (681 total). ADR-036. MT-25 for devices |
 | P1-19 | done (devices unverified) | `Mp4SampleTrimmer` passthrough sample-table rewrite, permanent trim service with verified files then one transaction, originals kept in `audio/originals/` until removed, 22 new tests (703 total). ADR-037. MT-26 for devices |
+
+## 27 October 2026: P1-20 resumed, validation and Git blocked (Codex)
+
+- Initial working tree already contained an uncommitted Storage Manager implementation, repository helpers, navigation and tests on `main`. Preserved that work; P1-20 remains **in progress**, not done.
+- Before editing, attempted `flutter analyze` and `flutter test`. Neither completed: the SDK cache is outside the writable sandbox. Direct invocation of `flutter_tools.snapshot` for both commands confirmed access denied opening `C:\dev\flutter\bin\cache\lockfile`. No passing baseline or test count is claimed.
+- Reviewed cleanup safety and removed `.partial` recordings from disposable temporary files and the reclaimable-space estimate. Orphaned partial recordings must remain available to crash recovery. Updated the FR-STO-06 / FR-REC-08 regression test to assert their bytes survive and corrected the confirmation copy.
+- `dart format` passed for the three changed Dart files. `git diff --check` passed for tracked changes. Direct Dart analysis also failed: access denied creating the analysis server plugin state under the user profile. These checks do not establish that the implementation builds or tests pass.
+- Could not switch to the existing task branch: Git could not create `.git/index.lock` (permission denied). Commit and merge are likewise unavailable with this session's read-only `.git` permissions. No push, merge, build or device test performed.
+- Next: finish the safety review in HANDOVER, run all checks with writable SDK/Git access, and commit on `phase-1/P1-20-storage-manager`. Do not mark P1-20 done or OVERNIGHT-COMPLETE.

@@ -13,6 +13,7 @@ import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/consent_check_dialog.dart';
 import '../capture/recording_screen.dart';
+import '../storage_manager/storage_manager_screen.dart';
 import 'activity_detail_sheet.dart';
 import 'conference_delete_dialog.dart';
 import 'conference_wizard_screen.dart';
@@ -201,6 +202,17 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     }
   }
 
+  Future<void> _openStorageManager() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            StorageManagerScreen(initialConferenceId: widget.conferenceId),
+      ),
+    );
+    if (!mounted) return;
+    await _loadConference();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -230,13 +242,25 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
           PopupMenuButton<String>(
             key: const Key('conference-menu-button'),
             onSelected: (val) {
-              if (val == 'archive') {
+              if (val == 'storage') {
+                _openStorageManager();
+              } else if (val == 'archive') {
                 _handleArchiveToggle();
               } else if (val == 'delete') {
                 _handleDelete();
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'storage',
+                child: Row(
+                  children: [
+                    Icon(Icons.storage_outlined, size: 20),
+                    SizedBox(width: TokenSpace.space2),
+                    Text('Storage manager'),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'archive',
                 child: Row(
@@ -433,6 +457,7 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                             attenlume,
                             label: 'Storage used',
                             value: formatStorageBytes(_stats.totalStorageBytes),
+                            onTap: _openStorageManager,
                           ),
                         ],
                       ),
@@ -702,33 +727,45 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     AttenlumeColors? attenlume, {
     required String label,
     required String value,
+    VoidCallback? onTap,
   }) {
+    final col = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          style:
+              attenlume?.stat ??
+              theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: TokenSpace.space1),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+
     return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style:
-                attenlume?.stat ??
-                theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: TokenSpace.space1),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+      child: onTap != null
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(TokenRadius.radiusSm),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: col,
+              ),
+            )
+          : col,
     );
   }
 
