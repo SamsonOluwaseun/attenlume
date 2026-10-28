@@ -84,6 +84,8 @@ flutter:
   assets:
     - assets/brand/logos/attenlume-logo-horizontal.png
     - assets/brand/logos/attenlume-logo-stacked.png
+    # Quick guide screenshots (tool/guide).
+    - assets/guide/
 
   # Montserrat, SIL Open Font License 1.1 (assets/fonts/OFL.txt).
   # Static TTFs from https://github.com/JulietaUla/Montserrat (fonts/ttf).

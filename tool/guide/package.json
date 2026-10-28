@@ -1,0 +1,6 @@
+{
+  "name": "attenlume-quick-guide",
+  "private": true,
+  "description": "Builds the Attenlume quick guide deck, PDF and in-app text",
+  "dependencies": { "pptxgenjs": "3.12.0" }
+}
