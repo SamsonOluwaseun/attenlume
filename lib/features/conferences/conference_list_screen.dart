@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,8 @@ import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../capture/recording_banner.dart';
+import '../privacy/privacy_screen.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
 
@@ -57,6 +61,24 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('My conferences'),
+        actions: [
+          // Settings (P1-25) will take this over; Privacy lives here until
+          // then (FR-PRI-03, FR-PRI-06).
+          PopupMenuButton<String>(
+            key: const Key('conference-list-menu'),
+            tooltip: 'More',
+            onSelected: (value) {
+              if (value == 'privacy') unawaited(PrivacyScreen.open(context));
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                key: Key('menu-privacy'),
+                value: 'privacy',
+                child: Text('Privacy'),
+              ),
+            ],
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -71,31 +93,33 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
         icon: const Icon(Icons.add),
         label: const Text('New conference'),
       ),
-      body: Builder(
-        builder: (context) {
-          final asyncVal = ref.watch(allConferencesFutureProvider);
-          if (asyncVal.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: WithRecordingBanner(
+        child: Builder(
+          builder: (context) {
+            final asyncVal = ref.watch(allConferencesFutureProvider);
+            if (asyncVal.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final all = asyncVal.asData?.value ?? const <Conference>[];
-          final active = all.where((c) => !c.isArchived).toList();
-          final archived = all.where((c) => c.isArchived).toList();
+            final all = asyncVal.asData?.value ?? const <Conference>[];
+            final active = all.where((c) => !c.isArchived).toList();
+            final archived = all.where((c) => c.isArchived).toList();
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildConferenceList(
-                active,
-                emptyMessage: 'No active conferences. Tap "New conference" to get started.',
-              ),
-              _buildConferenceList(
-                archived,
-                emptyMessage: 'No archived conferences.',
-              ),
-            ],
-          );
-        },
+            return TabBarView(
+              controller: _tabController,
+              children: [
+                _buildConferenceList(
+                  active,
+                  emptyMessage: 'No active conferences. Tap "New conference" to get started.',
+                ),
+                _buildConferenceList(
+                  archived,
+                  emptyMessage: 'No archived conferences.',
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

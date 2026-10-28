@@ -33,7 +33,7 @@ powershell -NoProfile -Command ^
   "$w = New-Object -ComObject WScript.Shell;" ^
   "foreach ($dir in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {" ^
   "  $s = $w.CreateShortcut((Join-Path $dir 'Attenlume (test).lnk'));" ^
-  "  $s.TargetPath = '%DEST%\attenlume.exe'; $s.WorkingDirectory = '%DEST%';" ^
+  "  $s.TargetPath = Join-Path $env:DEST 'attenlume.exe'; $s.WorkingDirectory = $env:DEST;" ^
   "  $s.Description = 'Attenlume test build'; $s.Save() }"
 
 echo.

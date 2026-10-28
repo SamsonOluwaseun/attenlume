@@ -64,8 +64,9 @@ try {
     $built = Get-Date -Format 'd MMMM yyyy HH:mm'
     Set-Content (Join-Path $package 'VERSION.txt') "Attenlume $version, commit $commit, built $built" -Encoding ascii
     if ($ShareDir) {
-        if (Test-Path $ShareDir) { Remove-Item $ShareDir -Recurse -Force }
-        Copy-Item $package $ShareDir -Recurse
+        # Replace only the package's own files; anything else in the folder stays.
+        New-Item -ItemType Directory -Force $ShareDir | Out-Null
+        Copy-Item "$package\*" $ShareDir -Force
     }
 
     $shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Attenlume (preview).lnk'

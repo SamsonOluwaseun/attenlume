@@ -12,6 +12,7 @@ import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/consent_check_dialog.dart';
+import '../capture/recording_banner.dart';
 import '../capture/recording_screen.dart';
 import '../export/export_sheet.dart';
 import 'activity_detail_sheet.dart';
@@ -277,425 +278,439 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(TokenSpace.space4),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (conf.isArchived) ...[
-                    Container(
-                      padding: const EdgeInsets.all(TokenSpace.space3),
-                      margin: const EdgeInsets.only(bottom: TokenSpace.space4),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainer,
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(TokenRadius.radiusMd),
+      body: WithRecordingBanner(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(TokenSpace.space4),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (conf.isArchived) ...[
+                      Container(
+                        padding: const EdgeInsets.all(TokenSpace.space3),
+                        margin: const EdgeInsets.only(
+                          bottom: TokenSpace.space4,
                         ),
-                        border: Border.all(color: theme.colorScheme.outline),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.archive_outlined),
-                          const SizedBox(width: TokenSpace.space3),
-                          Expanded(
-                            child: Text(
-                              'This conference is archived.',
-                              style: theme.textTheme.bodyMedium,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainer,
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(TokenRadius.radiusMd),
+                          ),
+                          border: Border.all(color: theme.colorScheme.outline),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.archive_outlined),
+                            const SizedBox(width: TokenSpace.space3),
+                            Expanded(
+                              child: Text(
+                                'This conference is archived.',
+                                style: theme.textTheme.bodyMedium,
+                              ),
                             ),
-                          ),
-                          TextButton(
-                            onPressed: _handleArchiveToggle,
-                            child: const Text('Unarchive'),
-                          ),
-                        ],
+                            TextButton(
+                              onPressed: _handleArchiveToggle,
+                              child: const Text('Unarchive'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
 
-                  // Conference Header Card (FR-ACT-01)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(TokenSpace.space4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            conf.name,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
+                    // Conference Header Card (FR-ACT-01)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(TokenSpace.space4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              conf.name,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: TokenSpace.space2),
-                          Row(
-                            children: [
-                              const Icon(Icons.calendar_today, size: 16),
-                              const SizedBox(width: TokenSpace.space2),
-                              Text(dateText, style: theme.textTheme.bodyMedium),
+                            const SizedBox(height: TokenSpace.space2),
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today, size: 16),
+                                const SizedBox(width: TokenSpace.space2),
+                                Text(
+                                  dateText,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                            if (conf.venue != null &&
+                                conf.venue!.isNotEmpty) ...[
+                              const SizedBox(height: TokenSpace.space1),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: TokenSpace.space2),
+                                  Expanded(
+                                    child: Text(
+                                      conf.venue!,
+                                      style: theme.textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
-                          ),
-                          if (conf.venue != null && conf.venue!.isNotEmpty) ...[
                             const SizedBox(height: TokenSpace.space1),
                             Row(
                               children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  size: 16,
-                                ),
+                                const Icon(Icons.access_time, size: 16),
                                 const SizedBox(width: TokenSpace.space2),
-                                Expanded(
-                                  child: Text(
-                                    conf.venue!,
-                                    style: theme.textTheme.bodyMedium,
+                                Text(
+                                  conf.timezone,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                          const SizedBox(height: TokenSpace.space1),
-                          Row(
-                            children: [
-                              const Icon(Icons.access_time, size: 16),
-                              const SizedBox(width: TokenSpace.space2),
+                            if (conf.description != null &&
+                                conf.description!.isNotEmpty) ...[
+                              const SizedBox(height: TokenSpace.space3),
                               Text(
-                                conf.timezone,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                                conf.description!,
+                                style: theme.textTheme.bodyMedium,
                               ),
                             ],
-                          ),
-                          if (conf.description != null &&
-                              conf.description!.isNotEmpty) ...[
                             const SizedBox(height: TokenSpace.space3),
-                            Text(
-                              conf.description!,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ],
-                          const SizedBox(height: TokenSpace.space3),
-                          Wrap(
-                            spacing: TokenSpace.space2,
-                            runSpacing: TokenSpace.space2,
-                            children: [
-                              Chip(
-                                label: Text(
-                                  'Profile: ${conf.defaultRecordingProfile.label}',
-                                ),
-                              ),
-                              if (conf.roleType != null)
+                            Wrap(
+                              spacing: TokenSpace.space2,
+                              runSpacing: TokenSpace.space2,
+                              children: [
                                 Chip(
                                   label: Text(
-                                    conf.roleText != null &&
-                                            conf.roleText!.isNotEmpty
-                                        ? '${conf.roleType!.label}: ${conf.roleText}'
-                                        : conf.roleType!.label,
+                                    'Profile: ${conf.defaultRecordingProfile.label}',
+                                  ),
+                                ),
+                                if (conf.roleType != null)
+                                  Chip(
+                                    label: Text(
+                                      conf.roleText != null &&
+                                              conf.roleText!.isNotEmpty
+                                          ? '${conf.roleType!.label}: ${conf.roleText}'
+                                          : conf.roleType!.label,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Conference Stats Card (FR-ACT-01: activity count, recorded time, storage used)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: TokenSpace.space4,
+                          horizontal: TokenSpace.space3,
+                        ),
+                        child: Row(
+                          children: [
+                            _buildStatColumn(
+                              theme,
+                              attenlume,
+                              label: 'Activities',
+                              value: '${_stats.activityCount}',
+                            ),
+                            Container(
+                              width: 1,
+                              height: 36,
+                              color: theme.colorScheme.outlineVariant,
+                            ),
+                            _buildStatColumn(
+                              theme,
+                              attenlume,
+                              label: 'Recorded',
+                              value: formatDuration(
+                                _stats.totalRecordedDuration,
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 36,
+                              color: theme.colorScheme.outlineVariant,
+                            ),
+                            _buildStatColumn(
+                              theme,
+                              attenlume,
+                              label: 'Storage used',
+                              value: formatStorageBytes(
+                                _stats.totalStorageBytes,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Dominant Start Activity Action (FR-ACT-01)
+                    AttenlumeButton(
+                      key: const Key('start-activity-button'),
+                      variant: AttenlumeButtonVariant.primary,
+                      label: 'Start activity',
+                      leading: const Icon(Icons.mic_rounded, size: 24),
+                      onPressed: _openStartActivitySheet,
+                    ),
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Quick-start buttons (FR-ACT-02: Session, Conversation, Exhibit, Reflection)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Quick start',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: TokenSpace.space2),
+                        Wrap(
+                          spacing: TokenSpace.space2,
+                          runSpacing: TokenSpace.space2,
+                          children: [
+                            _buildQuickStartButton(
+                              label: 'Session',
+                              icon: Icons.slideshow_rounded,
+                              keyName: 'quick-start-session',
+                              typeKey: 'session',
+                            ),
+                            _buildQuickStartButton(
+                              label: 'Conversation',
+                              icon: Icons.handshake_rounded,
+                              keyName: 'quick-start-conversation',
+                              typeKey: 'business_conversation',
+                            ),
+                            _buildQuickStartButton(
+                              label: 'Exhibit',
+                              icon: Icons.store_rounded,
+                              keyName: 'quick-start-exhibit',
+                              typeKey: 'exhibit',
+                            ),
+                            _buildQuickStartButton(
+                              label: 'Reflection',
+                              icon: Icons.lightbulb_rounded,
+                              keyName: 'quick-start-reflection',
+                              typeKey: 'personal_reflection',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Chronological Activity List (FR-ACT-03)
+                    if (_activities.isEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(TokenSpace.space6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainer,
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(TokenRadius.radiusMd),
+                          ),
+                          border: Border.all(
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.mic_none_rounded,
+                              size: 40,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(height: TokenSpace.space3),
+                            Text(
+                              'Nothing captured yet. Start your first activity when the session begins.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Text(
+                            'Activities',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: TokenSpace.space2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(TokenRadius.radiusPill),
+                              ),
+                            ),
+                            child: Text(
+                              '${_activities.length}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: TokenSpace.space3),
+                      for (final summary in _activities)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: TokenSpace.space3,
+                          ),
+                          child: ActivityCard.fromSummary(
+                            key: Key('activity-card-${summary.activity.id}'),
+                            summary: summary,
+                            formattedStartTime: formatTimeOfDayInTimezone(
+                              summary.activity.actualStart ??
+                                  summary.activity.plannedStart ??
+                                  summary.activity.createdAt,
+                              conf.timezone,
+                            ),
+                            formattedDuration: formatDuration(summary.duration),
+                            onOpen: () => _openActivityDetails(summary),
+                          ),
+                        ),
+                    ],
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Goals Section (FR-CONF-04)
+                    if (_goals.isNotEmpty) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(TokenSpace.space4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Conference goals',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: TokenSpace.space2),
+                              for (final goal in _goals)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: TokenSpace.space1,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (goal.priority != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          margin: const EdgeInsets.only(
+                                            right: TokenSpace.space2,
+                                            top: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: theme
+                                                .colorScheme
+                                                .primaryContainer,
+                                            borderRadius:
+                                                const BorderRadius.all(
+                                                  Radius.circular(
+                                                    TokenRadius.radiusPill,
+                                                  ),
+                                                ),
+                                          ),
+                                          child: Text(
+                                            'P${goal.priority}',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color:
+                                                      theme.colorScheme.primary,
+                                                ),
+                                          ),
+                                        )
+                                      else
+                                        const Padding(
+                                          padding: EdgeInsets.only(
+                                            right: TokenSpace.space2,
+                                            top: 4,
+                                          ),
+                                          child: Icon(Icons.circle, size: 6),
+                                        ),
+                                      Expanded(
+                                        child: Text(
+                                          goal.goalText,
+                                          style: theme.textTheme.bodyMedium,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: TokenSpace.space4),
-
-                  // Conference Stats Card (FR-ACT-01: activity count, recorded time, storage used)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: TokenSpace.space4,
-                        horizontal: TokenSpace.space3,
-                      ),
-                      child: Row(
-                        children: [
-                          _buildStatColumn(
-                            theme,
-                            attenlume,
-                            label: 'Activities',
-                            value: '${_stats.activityCount}',
-                          ),
-                          Container(
-                            width: 1,
-                            height: 36,
-                            color: theme.colorScheme.outlineVariant,
-                          ),
-                          _buildStatColumn(
-                            theme,
-                            attenlume,
-                            label: 'Recorded',
-                            value: formatDuration(_stats.totalRecordedDuration),
-                          ),
-                          Container(
-                            width: 1,
-                            height: 36,
-                            color: theme.colorScheme.outlineVariant,
-                          ),
-                          _buildStatColumn(
-                            theme,
-                            attenlume,
-                            label: 'Storage used',
-                            value: formatStorageBytes(_stats.totalStorageBytes),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: TokenSpace.space4),
-
-                  // Dominant Start Activity Action (FR-ACT-01)
-                  AttenlumeButton(
-                    key: const Key('start-activity-button'),
-                    variant: AttenlumeButtonVariant.primary,
-                    label: 'Start activity',
-                    leading: const Icon(Icons.mic_rounded, size: 24),
-                    onPressed: _openStartActivitySheet,
-                  ),
-
-                  const SizedBox(height: TokenSpace.space4),
-
-                  // Quick-start buttons (FR-ACT-02: Session, Conversation, Exhibit, Reflection)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Quick start',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: TokenSpace.space2),
-                      Wrap(
-                        spacing: TokenSpace.space2,
-                        runSpacing: TokenSpace.space2,
-                        children: [
-                          _buildQuickStartButton(
-                            label: 'Session',
-                            icon: Icons.slideshow_rounded,
-                            keyName: 'quick-start-session',
-                            typeKey: 'session',
+                      const SizedBox(height: TokenSpace.space4),
+                    ],
+
+                    // Expected Outputs Section (FR-CONF-05)
+                    if (conf.requestedOutputs.isNotEmpty) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(TokenSpace.space4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Expected outputs',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: TokenSpace.space2),
+                              Wrap(
+                                spacing: TokenSpace.space2,
+                                runSpacing: TokenSpace.space2,
+                                children: conf.requestedOutputs
+                                    .map((out) => Chip(label: Text(out.label)))
+                                    .toList(),
+                              ),
+                            ],
                           ),
-                          _buildQuickStartButton(
-                            label: 'Conversation',
-                            icon: Icons.handshake_rounded,
-                            keyName: 'quick-start-conversation',
-                            typeKey: 'business_conversation',
-                          ),
-                          _buildQuickStartButton(
-                            label: 'Exhibit',
-                            icon: Icons.store_rounded,
-                            keyName: 'quick-start-exhibit',
-                            typeKey: 'exhibit',
-                          ),
-                          _buildQuickStartButton(
-                            label: 'Reflection',
-                            icon: Icons.lightbulb_rounded,
-                            keyName: 'quick-start-reflection',
-                            typeKey: 'personal_reflection',
-                          ),
-                        ],
+                        ),
                       ),
                     ],
-                  ),
-
-                  const SizedBox(height: TokenSpace.space4),
-
-                  // Chronological Activity List (FR-ACT-03)
-                  if (_activities.isEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(TokenSpace.space6),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainer,
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(TokenRadius.radiusMd),
-                        ),
-                        border: Border.all(
-                          color: theme.colorScheme.outlineVariant,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.mic_none_rounded,
-                            size: 40,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: TokenSpace.space3),
-                          Text(
-                            'Nothing captured yet. Start your first activity when the session begins.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Text(
-                          'Activities',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: TokenSpace.space2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer,
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(TokenRadius.radiusPill),
-                            ),
-                          ),
-                          child: Text(
-                            '${_activities.length}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: TokenSpace.space3),
-                    for (final summary in _activities)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: TokenSpace.space3,
-                        ),
-                        child: ActivityCard.fromSummary(
-                          key: Key('activity-card-${summary.activity.id}'),
-                          summary: summary,
-                          formattedStartTime: formatTimeOfDayInTimezone(
-                            summary.activity.actualStart ??
-                                summary.activity.plannedStart ??
-                                summary.activity.createdAt,
-                            conf.timezone,
-                          ),
-                          formattedDuration: formatDuration(summary.duration),
-                          onOpen: () => _openActivityDetails(summary),
-                        ),
-                      ),
                   ],
-
-                  const SizedBox(height: TokenSpace.space4),
-
-                  // Goals Section (FR-CONF-04)
-                  if (_goals.isNotEmpty) ...[
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(TokenSpace.space4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Conference goals',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: TokenSpace.space2),
-                            for (final goal in _goals)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: TokenSpace.space1,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (goal.priority != null)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        margin: const EdgeInsets.only(
-                                          right: TokenSpace.space2,
-                                          top: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: theme
-                                              .colorScheme
-                                              .primaryContainer,
-                                          borderRadius: const BorderRadius.all(
-                                            Radius.circular(
-                                              TokenRadius.radiusPill,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'P${goal.priority}',
-                                          style: theme.textTheme.labelSmall
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.bold,
-                                                color:
-                                                    theme.colorScheme.primary,
-                                              ),
-                                        ),
-                                      )
-                                    else
-                                      const Padding(
-                                        padding: EdgeInsets.only(
-                                          right: TokenSpace.space2,
-                                          top: 4,
-                                        ),
-                                        child: Icon(Icons.circle, size: 6),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        goal.goalText,
-                                        style: theme.textTheme.bodyMedium,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: TokenSpace.space4),
-                  ],
-
-                  // Expected Outputs Section (FR-CONF-05)
-                  if (conf.requestedOutputs.isNotEmpty) ...[
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(TokenSpace.space4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Expected outputs',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: TokenSpace.space2),
-                            Wrap(
-                              spacing: TokenSpace.space2,
-                              runSpacing: TokenSpace.space2,
-                              children: conf.requestedOutputs
-                                  .map((out) => Chip(label: Text(out.label)))
-                                  .toList(),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           ),

@@ -66,6 +66,8 @@
 	<string>Attenlume takes photos of slides and posters for the activity you are capturing. Photos stay on this device unless you export them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Attenlume records audio of sessions you choose to capture. Recordings stay on this device unless you export them.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Attenlume uses Face ID only if you turn on app lock, to check it is you before showing your conferences. Attenlume never sees or stores your face data.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
