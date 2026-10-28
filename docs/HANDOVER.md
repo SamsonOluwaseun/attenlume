@@ -1,11 +1,13 @@
 # Handover
 
-Date and agent: 28 October 2026, Claude Code (Opus 5.5) as Lead of an agent-team trial (two Claude builders in worktrees, Codex reviewer)
+Date and agent: 28 October 2026, Claude Code (Opus 5.5) as Lead
 Branch: main (merged from `phase-1/P1-24-privacy` and `phase-1/P1-21-export`)
-Current task ID: P1-21 and P1-24 (done). Next: P1-22, then P1-20
+Current task ID: Android fixes (ADR-043) and mobile export sharing (ADR-042) done, 0.1.2. Next: P1-22, then P1-20
 Status: done
 
 ## Done in this session
+
+- **0.1.2 (ADR-042, ADR-043):** Android first-run database repair, recording no longer interrupted by `record`'s own audio focus, Resume from interrupted, branded launch screen, Share button for ZIP exports on Android and iOS. Verified on an Android 14 tablet emulator (`attenlume_test` AVD, started with `emulator -avd attenlume_test -gpu swiftshader_indirect`).
 
 - **P1-24 Privacy UX and optional app lock** (ADR-041, report `docs/reports/P1-24.md`): `local_auth` behind `DeviceAuthenticator`, lock off by default with a 1-minute grace period, never stops a recording (Stop on the lock screen), fail-safe "Turn off app lock" when the device cannot check. Policy reminder before Record, recording banner, Privacy screen from My conferences. `MainActivity` is now `FlutterFragmentActivity` with AppCompat themes.
 - **P1-21 Export service** (ADR-040, report `docs/reports/P1-21.md`): scopes, folder or stored ZIP, originals / trimmed copies / originals plus `cuts.json`, streaming on a background isolate, preflight, `checksums.sha256`, safe paths, private items excluded by default, sensitive-export warning before every export, sheet cannot be dismissed while running. `ExportContributor` is the extension point for P1-22.
