@@ -6,7 +6,7 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 147 Dart and Flutter packages in `pubspec.lock`: 110 can be part of the app, 37 are build and test tools only.
+- 148 Dart and Flutter packages in `pubspec.lock`: 110 can be part of the app, 38 are build and test tools only.
 - Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (78), Flutter engine bundle (permissive, see note) (1), MIT (22).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
@@ -143,10 +143,11 @@ Reachable only from `dev_dependencies`. Used to generate code, lint and test. No
 | `built_value` | 8.13.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, Google Inc. All rights reserved. |
 | `charcode` | 1.4.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. All rights reserved. |
 | `checked_yaml` | 2.0.4 | pub.dev | transitive | BSD-3-Clause | Copyright 2019, the Dart project authors. All rights reserved. |
-| `cli_util` | 0.6.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
+| `cli_util` | 0.4.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
 | `dart_style` | 3.1.14 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `drift_dev` | 2.35.2 | pub.dev | direct dev | MIT | Copyright (c) 2021 Simon Binder |
 | `flutter_driver` | 0.0.0 | Flutter SDK | transitive | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
+| `flutter_launcher_icons` | 0.14.4 | pub.dev | direct dev | MIT | Copyright (c) 2019 Mark O'Sullivan |
 | `flutter_lints` | 6.0.0 | pub.dev | direct dev | BSD-3-Clause | Copyright 2013 The Flutter Authors. All rights reserved. |
 | `fuchsia_remote_debug_protocol` | 0.0.0 | Flutter SDK | transitive | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
 | `graphs` | 2.3.2 | pub.dev | transitive | BSD-3-Clause | Copyright 2017, the Dart project authors. |
