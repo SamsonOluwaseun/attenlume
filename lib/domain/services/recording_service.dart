@@ -373,8 +373,14 @@ class RecordingService {
 
   /// Resumes a paused recording in a new segment. Returns false if there
   /// was nothing to resume, or capture failed (see [status]).
+  ///
+  /// While [RecordingState.interrupted], Resume is the user deciding to
+  /// carry on before the system says the interruption is over, which it
+  /// may never do (ADR-043). The interruption row closes now, not
+  /// auto-resumed.
   Future<bool> resume() => _lock.run(() async {
     final state = _status.state;
+    if (state == RecordingState.interrupted) return _resumeInterrupted();
     if (state != RecordingState.paused &&
         state != RecordingState.userResumeRequired) {
       return false;
@@ -392,6 +398,34 @@ class RecordingService {
       return began;
     });
   });
+
+  /// [resume] from [RecordingState.interrupted]; runs inside the lock.
+  Future<bool> _resumeInterrupted() {
+    final activityId = _status.activityId!;
+    final profile = _status.profile!;
+    final reason = _status.interruption ?? InterruptionReason.system;
+    return _guard(() async {
+      final endedAt = _clock();
+      _moveTo(_copyStatus(RecordingState.recovering, interruption: reason));
+      await _activateSession();
+      final conferenceId = (await _activities.get(activityId))!.conferenceId;
+      final error = await _tryBeginSegment(activityId, conferenceId, profile);
+      await _closeInterruption(autoResumed: false, endUtc: endedAt);
+      if (error == null) return true;
+      _moveTo(
+        RecordingStatus(
+          state: RecordingState.userResumeRequired,
+          activityId: activityId,
+          profile: profile,
+          errorMessage:
+              'Recording could not restart. Your audio so far is saved. '
+              'Tap Resume to try again.',
+          interruption: reason,
+        ),
+      );
+      return false;
+    });
+  }
 
   /// Cuts the recording off for a call, alarm, another app or the camera
   /// (FR-REC-05, FR-PHO-07) [P1-07].
