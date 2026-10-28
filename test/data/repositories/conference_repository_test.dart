@@ -14,10 +14,10 @@ void main() {
   group('FR-CONF-01 and FR-CONF-02 create', () {
     test('FR-CONF-01 a name and timezone are enough', () async {
       final c = await t.conferences.create(
-        name: '  Data Summit  ',
+        name: '  Samlytics Conference 2026  ',
         timezone: 'Europe/London',
       );
-      expect(c.name, 'Data Summit');
+      expect(c.name, 'Samlytics Conference 2026');
       expect(c.requestedOutputs, isEmpty);
       expect(c.startDate, isNull);
       expect(c.isArchived, isFalse);

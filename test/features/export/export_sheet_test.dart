@@ -63,7 +63,7 @@ class _RecordingExportService extends ExportService {
     return ExportOutcome(
       jobId: 'job',
       outputPath:
-          '$destinationParent/2026-11-04_data-summit-london'
+          '$destinationParent/2026-11-04_samlytics-conference-2026'
           '${request.format == ExportFormat.zip ? '.zip' : ''}',
       fileCount: 7,
       bytes: 2048,
@@ -231,7 +231,7 @@ void main() {
     expect(request.selection, isA<WholeConference>());
     expect(find.text('Export saved'), findsOneWidget);
     expect(
-      find.text('/exports/2026-11-04_data-summit-london.zip'),
+      find.text('/exports/2026-11-04_samlytics-conference-2026.zip'),
       findsOneWidget,
     );
   });
@@ -446,7 +446,7 @@ void main() {
       expect(find.byKey(const Key('export-share')), findsOneWidget);
       expect(
         tester.widget<Text>(find.byKey(const Key('export-share-size'))).data,
-        startsWith('2026-11-04_data-summit-london.zip, 2.0 KB.'),
+        startsWith('2026-11-04_samlytics-conference-2026.zip, 2.0 KB.'),
       );
       expect(sharer.shared, isEmpty);
 
@@ -454,8 +454,8 @@ void main() {
       await tester.tap(find.byKey(const Key('export-share')));
       await tester.pumpAndSettle();
       final call = sharer.shared.single;
-      expect(call.path, '/exports/2026-11-04_data-summit-london.zip');
-      expect(call.subject, '2026-11-04_data-summit-london');
+      expect(call.path, '/exports/2026-11-04_samlytics-conference-2026.zip');
+      expect(call.subject, '2026-11-04_samlytics-conference-2026');
       expect(call.origin, isNotNull);
       // Sharing does not close the sheet or remove the result.
       expect(find.text('Export saved'), findsOneWidget);

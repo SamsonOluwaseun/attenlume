@@ -133,7 +133,7 @@ void main() {
   /// reflection on day one.
   Future<(String, Activity, Activity, Activity)> conference() async {
     final c = await t.conferences.create(
-      name: 'Data Summit London',
+      name: 'Samlytics Conference 2026',
       timezone: 'Europe/London',
       startDate: DateTime.utc(2026, 11, 4),
       endDate: DateTime.utc(2026, 11, 5),
@@ -192,7 +192,7 @@ void main() {
       () async {
         final (id, _, _, _) = await conference();
         final plan = await service.plan(ExportRequest(conferenceId: id));
-        expect(plan.rootName, '2026-11-04_data-summit-london');
+        expect(plan.rootName, '2026-11-04_samlytics-conference-2026');
         expect(plan.activityCount, 2);
         expect(plan.privateActivitiesExcluded, 1);
         final paths = pathsOf(plan);
@@ -240,7 +240,7 @@ void main() {
           selection: OneDay(DateTime(2026, 11, 5)),
         ),
       );
-      expect(plan.rootName, '2026-11-05_data-summit-london');
+      expect(plan.rootName, '2026-11-05_samlytics-conference-2026');
       expect(plan.activityCount, 1);
       expect(
         pathsOf(plan),
@@ -402,7 +402,10 @@ void main() {
         ExportRequest(conferenceId: id),
         destinationParent: dest.path,
       );
-      expect(p.basename(out.outputPath), '2026-11-04_data-summit-london');
+      expect(
+        p.basename(out.outputPath),
+        '2026-11-04_samlytics-conference-2026',
+      );
       expect(out.verification, VerificationLevel.checksum);
       expect(await verifyChecksums(Directory(out.outputPath)), isEmpty);
       final job = await t.exports.get(out.jobId);
@@ -417,15 +420,24 @@ void main() {
         ExportRequest(conferenceId: id, format: ExportFormat.zip),
         destinationParent: dest.path,
       );
-      expect(p.basename(out.outputPath), '2026-11-04_data-summit-london.zip');
+      expect(
+        p.basename(out.outputPath),
+        '2026-11-04_samlytics-conference-2026.zip',
+      );
       final input = InputFileStream(out.outputPath);
       final archive = ZipDecoder().decodeStream(input);
       final names = archive.files.map((f) => f.name).toList();
-      expect(names, everyElement(startsWith('2026-11-04_data-summit-london/')));
-      expect(names, contains('2026-11-04_data-summit-london/checksums.sha256'));
+      expect(
+        names,
+        everyElement(startsWith('2026-11-04_samlytics-conference-2026/')),
+      );
+      expect(
+        names,
+        contains('2026-11-04_samlytics-conference-2026/checksums.sha256'),
+      );
       final sums = utf8.decode(
         archive
-            .findFile('2026-11-04_data-summit-london/checksums.sha256')!
+            .findFile('2026-11-04_samlytics-conference-2026/checksums.sha256')!
             .content,
       );
       expect(sums.trim().split('\n'), hasLength(names.length - 1));
@@ -442,7 +454,10 @@ void main() {
         ExportRequest(conferenceId: id),
         destinationParent: dest.path,
       );
-      expect(p.basename(b.outputPath), '2026-11-04_data-summit-london-2');
+      expect(
+        p.basename(b.outputPath),
+        '2026-11-04_samlytics-conference-2026-2',
+      );
       expect(Directory(a.outputPath).existsSync(), isTrue);
     });
   });
