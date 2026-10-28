@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/theme/tokens.dart';
 import '../../data/filesystem/export_space.dart';
@@ -21,7 +22,8 @@ enum _Scope { conference, day, activities }
 /// The export sheet (BUILD_GUIDE section 11 screen 7; FR-EXP-01 to 05,
 /// FR-EXP-10, ADR-040) [P1-21]: scope, what to include, folder or ZIP,
 /// audio option, the private toggle, the size and space check, progress
-/// and where the export was saved.
+/// and where the export was saved. On Android and iOS a ZIP is the default
+/// and the result offers the system share sheet (ADR-042).
 class ExportSheet extends ConsumerStatefulWidget {
   const ExportSheet({super.key, required this.conferenceId, this.activityId});
 
@@ -71,6 +73,14 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
   ExportOutcome? _outcome;
   String? _error;
 
+  /// Android and iOS: exports land in private app storage, so the result
+  /// offers the share sheet and ZIP is the default (ADR-042).
+  late final bool _canShare = ref.read(exportSharerProvider).canShare;
+
+  /// The format of [_outcome], fixed when the export started.
+  ExportFormat? _outcomeFormat;
+  bool _sharing = false;
+
   @override
   void dispose() {
     // Safety net: if the sheet goes while an export runs, stop the export
@@ -83,6 +93,8 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
   @override
   void initState() {
     super.initState();
+    // One file is what share targets and AI apps accept (ADR-042).
+    if (_canShare) _format = ExportFormat.zip;
     if (widget.activityId != null) {
       _scope = _Scope.activities;
       _selected.add(widget.activityId!);
@@ -174,6 +186,7 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
     final proceed = await SensitiveExportWarning.show(context);
     if (!proceed || !mounted) return;
     final cancel = Completer<void>();
+    final format = _format;
     setState(() {
       _running = true;
       _progress = null;
@@ -216,6 +229,7 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
       _running = false;
       _cancel = null;
       _outcome = outcome;
+      _outcomeFormat = outcome == null ? null : format;
       _error = error;
     });
     if (outcome == null) unawaited(_check());
@@ -377,13 +391,19 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
         (v) => _format = v,
       ),
       const SizedBox(height: TokenSpace.space1),
-      Text(
-        _format == ExportFormat.zip
-            ? 'One file to share. Audio and photos are already compressed, '
-                  'so the ZIP is about the same size.'
-            : 'A folder you can open straight away.',
-        style: muted,
-      ),
+      Text(key: const Key('export-format-hint'), switch ((_format, _canShare)) {
+        (ExportFormat.zip, true) =>
+          'One file you can share to Files, Google Drive or an AI app. '
+              'Audio and photos are already compressed, so the ZIP is '
+              'about the same size.',
+        (ExportFormat.zip, false) =>
+          'One file to share. Audio and photos are already compressed, '
+              'so the ZIP is about the same size.',
+        (_, true) =>
+          "A folder stays in the app's storage and can't be shared from "
+              'here. Choose ZIP to send the export to another app.',
+        _ => 'A folder you can open straight away.',
+      }, style: muted),
       const SizedBox(height: TokenSpace.space2),
       SwitchListTile(
         key: const Key('export-include-private'),
@@ -561,6 +581,7 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
       '${outcome.verification == VerificationLevel.checksum ? 'Every copy was checked against checksums.sha256.' : 'Checksums are in checksums.sha256 inside the ZIP.'}',
       style: theme.textTheme.bodyMedium,
     ),
+    if (_canShare) ..._share(theme, outcome),
     const SizedBox(height: TokenSpace.space3),
     SelectableText(
       outcome.outputPath,
@@ -583,7 +604,80 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
     AttenlumeButton(
       key: const Key('export-done'),
       label: 'Done',
+      variant: _canShare && _outcomeFormat == ExportFormat.zip
+          ? AttenlumeButtonVariant.secondary
+          : AttenlumeButtonVariant.primary,
       onPressed: () => Navigator.of(context).pop(),
     ),
   ];
+
+  /// Android and iOS (ADR-042): the ZIP goes to the system share sheet. The
+  /// file stays in the app's exports folder; nothing deletes it.
+  List<Widget> _share(ThemeData theme, ExportOutcome outcome) {
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    if (_outcomeFormat != ExportFormat.zip) {
+      return [
+        const SizedBox(height: TokenSpace.space3),
+        Text(
+          "A folder can't be shared from here. To send the export to "
+          'another app, export again as a ZIP.',
+          key: const Key('export-share-zip-hint'),
+          style: theme.textTheme.bodyMedium,
+        ),
+      ];
+    }
+    return [
+      const SizedBox(height: TokenSpace.space4),
+      Builder(
+        builder: (buttonContext) => AttenlumeButton(
+          key: const Key('export-share'),
+          label: 'Share',
+          leading: const Icon(Icons.share_rounded),
+          disabled: _sharing,
+          onPressed: () => _shareExport(buttonContext, outcome),
+        ),
+      ),
+      const SizedBox(height: TokenSpace.space1),
+      Text(
+        '${p.basename(outcome.outputPath)}, ${formatStorageBytes(outcome.bytes)}. '
+        'A copy stays in the app after sharing.',
+        key: const Key('export-share-size'),
+        style: muted,
+      ),
+    ];
+  }
+
+  Future<void> _shareExport(
+    BuildContext buttonContext,
+    ExportOutcome outcome,
+  ) async {
+    if (_sharing) return;
+    // iPad shows the share sheet as a popover anchored to the button.
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    final origin = box == null || !box.hasSize
+        ? null
+        : box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _sharing = true);
+    try {
+      await ref
+          .read(exportSharerProvider)
+          .shareFile(
+            outcome.outputPath,
+            subject: p.basenameWithoutExtension(outcome.outputPath),
+            origin: origin,
+          );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't open the share options. Try again."),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 }

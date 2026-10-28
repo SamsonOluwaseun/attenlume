@@ -195,6 +195,7 @@ Versions from `pubspec.lock` on `main` after P0-02. "Tested" means `flutter anal
 | crypto | 3.0.8 | Streaming SHA-256 in folder export tests (P0-06) | 2026-10-27 |
 | integration_test (dev, SDK) | Flutter 3.47.8 | P0-06 harness on Windows desktop | 2026-10-27 |
 | yaml (dev) | 3.1.4 | Reads `pubspec.lock` in `tool/licence_audit.dart` (P0-08). Already in the lock through `hooks` | 2026-10-27 |
+| share_plus | 13.3.1 (share_plus_platform_interface 7.2.0) | Adopted behind `ExportSharer` (ADR-042). `flutter build apk --debug`; plugin `ShareFileProvider` in the merged manifest. No share sheet opened on any device; iOS not built | 2026-10-28 |
 
 Build notes: Gradle installed CMake 3.22.1 into the Android SDK on the first APK build. Montserrat static TTFs (400, 500, 600, 700) come from the upstream Montserrat Project repo (`JulietaUla/Montserrat`, `fonts/ttf`), because the Google Fonts repo now ships only the variable font. SHA-256:
 
@@ -314,6 +315,11 @@ bc6e854971cea46b463be6f9eef4d9cd52f51cfc1fc0dd90c9d3e6483dc0ec61  Montserrat-Bol
 - `lib/domain/services/waveform_summary_recorder.dart`: samples the input level while each segment records. Provider `waveformSummaryRecorderProvider`, started with `oneActiveCoordinatorProvider`.
 - `lib/platform/audio_playback/`: `AudioPlaybackEngine` interface, `AudioplayersPlaybackEngine`. Fixture `test/fixtures/fake_playback_engine.dart`.
 - `lib/features/playback_review/`: `ReviewPlayerController` (joins segments, play/pause, scrub, 15 s skips, speeds 0.75 to 2), `WaveformPager` and `WaveformView` (2-minute pages), `TimelineStrip`, `ReviewScreen` (opened with "Play and review" in the activity details). Provider `audioPlaybackEngineFactoryProvider`. ADR-034.
+
+### 8.18 Added for mobile export sharing (ADR-042)
+
+- `lib/platform/share/export_sharer.dart`: `ExportSharer` interface (`canShare`, `shareFile`), `SharePlusExportSharer`. Provider `exportSharerProvider` in `lib/features/export/export_providers.dart`. Fixture `test/fixtures/fake_export_sharer.dart`.
+- `lib/features/export/export_sheet.dart`: ZIP default and a Share button after a ZIP export on Android and iOS.
 
 ## 9. Open risks
 

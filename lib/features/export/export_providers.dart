@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../data/filesystem/app_data_directory.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/services/export_service.dart';
+import '../../platform/share/export_sharer.dart';
 import '../capture/recording_providers.dart';
 
 /// Local export (FR-EXP-01 to 07, FR-EXP-10, ADR-040) [P1-21].
@@ -61,4 +62,10 @@ class PlatformExportDestinations implements ExportDestinations {
 
 final exportDestinationsProvider = Provider<ExportDestinations>(
   (ref) => const PlatformExportDestinations(),
+);
+
+/// The system share sheet for exports on Android and iOS (ADR-042). Tests
+/// override it with a fake.
+final exportSharerProvider = Provider<ExportSharer>(
+  (ref) => const SharePlusExportSharer(),
 );
