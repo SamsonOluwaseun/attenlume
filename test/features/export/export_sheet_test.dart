@@ -10,11 +10,13 @@ import 'package:attenlume/domain/services/export_service.dart';
 import 'package:attenlume/features/conferences/conference_home_screen.dart';
 import 'package:attenlume/features/export/export_providers.dart';
 import 'package:attenlume/features/export/export_sheet.dart';
+import 'package:attenlume/platform/share/export_sharer.dart';
 import 'package:attenlume/platform/storage/free_space_probe.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../fixtures/fake_export_sharer.dart';
 import '../../fixtures/fake_free_space_probe.dart';
 import '../../fixtures/fixtures.dart';
 
@@ -60,7 +62,9 @@ class _RecordingExportService extends ExportService {
     if (gate case final g?) await g.future;
     return ExportOutcome(
       jobId: 'job',
-      outputPath: '$destinationParent/2026-11-04_data-summit-london',
+      outputPath:
+          '$destinationParent/2026-11-04_data-summit-london'
+          '${request.format == ExportFormat.zip ? '.zip' : ''}',
       fileCount: 7,
       bytes: 2048,
       verification: VerificationLevel.checksum,
@@ -115,6 +119,7 @@ void main() {
     WidgetTester tester,
     Widget child, {
     ExportDestinations? destinations,
+    ExportSharer? sharer,
   }) {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -131,6 +136,10 @@ void main() {
         exportServiceProvider.overrideWithValue(service),
         exportDestinationsProvider.overrideWithValue(
           destinations ?? _FakeDestinations(initial: '/exports'),
+        ),
+        // Windows-like unless a test says otherwise: no share sheet.
+        exportSharerProvider.overrideWithValue(
+          sharer ?? FakeExportSharer(canShare: false),
         ),
       ],
       child: MaterialApp(
@@ -221,7 +230,10 @@ void main() {
     expect(request.includePrivate, isTrue);
     expect(request.selection, isA<WholeConference>());
     expect(find.text('Export saved'), findsOneWidget);
-    expect(find.text('/exports/2026-11-04_data-summit-london'), findsOneWidget);
+    expect(
+      find.text('/exports/2026-11-04_data-summit-london.zip'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('FR-EXP-01 one activity from the activity details', (
@@ -376,5 +388,148 @@ void main() {
     await tester.tap(find.byKey(const Key('export-conference-button')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('export-sheet')), findsOneWidget);
+  });
+  group('FR-EXP-02 ADR-042 sharing on Android and iOS', () {
+    bool selected(WidgetTester tester, String label) => tester
+        .widget<ChoiceChip>(find.byKey(Key('export-option-$label')))
+        .selected;
+
+    testWidgets('FR-EXP-02 ZIP is the default format on Android and iOS', (
+      tester,
+    ) async {
+      final sample = await SampleConference.build(t);
+      await tester.pumpWidget(
+        subject(
+          tester,
+          ExportSheet(conferenceId: sample.conference.id),
+          sharer: FakeExportSharer(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(selected(tester, 'ZIP'), isTrue);
+      expect(selected(tester, 'Folder'), isFalse);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('export-format-hint'))).data,
+        contains('share to Files, Google Drive or an AI app'),
+      );
+      await startExport(tester);
+      expect(service.runs.single.$1.format, ExportFormat.zip);
+    });
+
+    testWidgets('FR-EXP-02 Folder stays the default on Windows', (
+      tester,
+    ) async {
+      final sample = await SampleConference.build(t);
+      await tester.pumpWidget(
+        subject(tester, ExportSheet(conferenceId: sample.conference.id)),
+      );
+      await tester.pumpAndSettle();
+      expect(selected(tester, 'Folder'), isTrue);
+      expect(selected(tester, 'ZIP'), isFalse);
+    });
+
+    testWidgets('FR-EXP-02 after a ZIP export Share opens the share sheet '
+        'with the export file and shows its size', (tester) async {
+      final sample = await SampleConference.build(t);
+      final sharer = FakeExportSharer();
+      await tester.pumpWidget(
+        subject(
+          tester,
+          ExportSheet(conferenceId: sample.conference.id),
+          sharer: sharer,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await startExport(tester);
+
+      expect(find.text('Export saved'), findsOneWidget);
+      expect(find.byKey(const Key('export-share')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const Key('export-share-size'))).data,
+        startsWith('2026-11-04_data-summit-london.zip, 2.0 KB.'),
+      );
+      expect(sharer.shared, isEmpty);
+
+      await tester.ensureVisible(find.byKey(const Key('export-share')));
+      await tester.tap(find.byKey(const Key('export-share')));
+      await tester.pumpAndSettle();
+      final call = sharer.shared.single;
+      expect(call.path, '/exports/2026-11-04_data-summit-london.zip');
+      expect(call.subject, '2026-11-04_data-summit-london');
+      expect(call.origin, isNotNull);
+      // Sharing does not close the sheet or remove the result.
+      expect(find.text('Export saved'), findsOneWidget);
+    });
+
+    testWidgets('FR-EXP-02 a share sheet that fails to open says so', (
+      tester,
+    ) async {
+      final sample = await SampleConference.build(t);
+      final sharer = FakeExportSharer()..error = StateError('no activity');
+      await tester.pumpWidget(
+        subject(
+          tester,
+          ExportSheet(conferenceId: sample.conference.id),
+          sharer: sharer,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await startExport(tester);
+      await tester.ensureVisible(find.byKey(const Key('export-share')));
+      await tester.tap(find.byKey(const Key('export-share')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Couldn\'t open the share options. Try again.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('FR-EXP-02 a folder export on Android and iOS steers to ZIP '
+        'instead of offering Share', (tester) async {
+      final sample = await SampleConference.build(t);
+      await tester.pumpWidget(
+        subject(
+          tester,
+          ExportSheet(conferenceId: sample.conference.id),
+          sharer: FakeExportSharer(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Folder'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const Key('export-format-hint'))).data,
+        contains('Choose ZIP'),
+      );
+      await startExport(tester);
+      expect(service.runs.single.$1.format, ExportFormat.folder);
+      expect(find.byKey(const Key('export-share')), findsNothing);
+      expect(find.byKey(const Key('export-share-zip-hint')), findsOneWidget);
+    });
+
+    testWidgets('FR-EXP-02 on Windows there is no Share button after an '
+        'export', (tester) async {
+      final sample = await SampleConference.build(t);
+      await tester.pumpWidget(
+        subject(tester, ExportSheet(conferenceId: sample.conference.id)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ZIP'));
+      await tester.pumpAndSettle();
+      await startExport(tester);
+      expect(find.text('Export saved'), findsOneWidget);
+      expect(find.byKey(const Key('export-share')), findsNothing);
+      expect(find.byKey(const Key('export-share-zip-hint')), findsNothing);
+      expect(find.byKey(const Key('export-copy-path')), findsOneWidget);
+    });
+
+    test('ADR-042 a ZIP is shared as application/zip', () {
+      expect(SharePlusExportSharer.mimeTypeFor('/x/a.zip'), 'application/zip');
+      expect(SharePlusExportSharer.mimeTypeFor('/x/A.ZIP'), 'application/zip');
+      expect(
+        SharePlusExportSharer.mimeTypeFor('/x/a'),
+        'application/octet-stream',
+      );
+    });
   });
 }
