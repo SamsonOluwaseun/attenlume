@@ -29,6 +29,9 @@ class FakePhotoCamera implements PhotoCamera {
   /// When it returns an error for a lens, opening that lens throws it.
   Object? Function(CameraLens lens) lensError = (_) => null;
 
+  /// When set, [open] waits for it before the camera is open.
+  Future<void>? openGate;
+
   final List<String> paths = [];
 
   /// Every lens opened, in order.
@@ -61,6 +64,7 @@ class FakePhotoCamera implements PhotoCamera {
         lenses.first;
     final error = lensError(chosen);
     if (error != null) throw error;
+    await openGate;
     opened.add(chosen);
     _lens = chosen;
     _open = true;

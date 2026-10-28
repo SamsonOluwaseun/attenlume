@@ -330,6 +330,38 @@ void main() {
       expect(fakeCamera.lens, back);
     });
 
+    testWidgets('FR-PHO-01 closing during a switch leaves no camera '
+        'running', (tester) async {
+      fakeCamera.lenses = const [
+        CameraLens(id: 'back-0', facing: CameraFacing.back),
+        CameraLens(id: 'front-1', facing: CameraFacing.front),
+      ];
+      final conf = await t.conference(policyAcknowledged: true);
+      final act = await t.activity(conf.id, title: 'Panel Discussion');
+
+      await tester.pumpWidget(buildSubject(activityId: act.id, tester: tester));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('record-action-photo')));
+      await settleAsync(tester, const Duration(milliseconds: 700));
+
+      final gate = Completer<void>();
+      fakeCamera.openGate = gate.future;
+      await tester.tap(find.byKey(const Key('camera-switch-button')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('camera-close-button')));
+      // Give the screen time to close before the next camera opens.
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      gate.complete();
+      await settleAsync(tester, const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('camera-screen')), findsNothing);
+      expect(fakeCamera.isOpen, isFalse);
+    });
+
     testWidgets('FR-PHO-01 no switch button with only one camera', (
       tester,
     ) async {

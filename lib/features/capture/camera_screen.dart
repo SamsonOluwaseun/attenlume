@@ -43,6 +43,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   String? _error;
   bool _shutterBusy = false;
   bool _switching = false;
+
+  /// The switch in progress, so closing waits for it and never leaves a
+  /// newly opened camera running behind a closed screen.
+  Future<void>? _switchJob;
   List<CameraLens> _lenses = const [];
   bool _flash = false;
   int _saved = 0;
@@ -59,7 +63,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   @override
   void dispose() {
-    unawaited(_service.close());
+    final switching = _switchJob;
+    unawaited(
+      switching == null
+          ? _service.close()
+          : switching.whenComplete(_service.close),
+    );
     super.dispose();
   }
 
@@ -135,8 +144,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   Future<void> _switchCamera() async {
     if (_state != _CameraState.ready || _shutterBusy || _switching) return;
     setState(() => _switching = true);
+    final job = _service.switchCamera();
+    _switchJob = job.then<void>((_) {}, onError: (Object _) {});
     try {
-      await _service.switchCamera();
+      await job;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -148,6 +159,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         );
       }
     } finally {
+      _switchJob = null;
       if (mounted) setState(() => _switching = false);
     }
   }
@@ -161,6 +173,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Future<void> _close() async {
+    await _switchJob;
     await Future.wait(List.of(_pending));
     if (mounted) Navigator.of(context).pop(_saved);
   }
