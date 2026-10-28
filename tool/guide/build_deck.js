@@ -85,7 +85,7 @@ function stepSlide(section, step) {
   s.addImage({ path: ICON, x: 4.35, y: 0.95, w: 1.3, h: 1.3, altText: 'Attenlume app icon' });
   s.addText(G.title, { x: 0.75, y: 2.45, w: 8.5, h: 0.9, fontFace: FONT, fontSize: 42, bold: true, color: C.cream, align: 'center', margin: 0, isTextBox: true });
   s.addText(G.subtitle, { x: 1.25, y: 3.4, w: 7.5, h: 0.75, fontFace: FONT, fontSize: 17, color: C.lime, align: 'center', margin: 0, isTextBox: true });
-  s.addText('For Android. Windows test build available.', { x: 1.25, y: 4.45, w: 7.5, h: 0.35, fontFace: FONT, fontSize: 11, color: C.cream, align: 'center', margin: 0, isTextBox: true });
+  s.addText(G.platforms, { x: 1.25, y: 4.45, w: 7.5, h: 0.35, fontFace: FONT, fontSize: 11, color: C.cream, align: 'center', margin: 0, isTextBox: true });
 }
 
 // 2. Overview
@@ -154,7 +154,7 @@ for (const section of G.sections) {
   s.addImage({ path: ICON, x: 4.4, y: 0.9, w: 1.2, h: 1.2, altText: 'Attenlume app icon' });
   s.addText(G.closing, { x: 0.75, y: 2.35, w: 8.5, h: 0.9, fontFace: FONT, fontSize: 36, bold: true, color: C.cream, align: 'center', margin: 0, isTextBox: true });
   s.addText([
-    { text: 'Download the latest Android version', options: { breakLine: true } },
+    { text: 'Download for Android or Windows', options: { breakLine: true } },
     { text: G.download, options: { bold: true } },
   ], { x: 1.5, y: 3.4, w: 7, h: 0.8, fontFace: FONT, fontSize: 15, color: C.lime, align: 'center', margin: 0, isTextBox: true });
   s.addText('Samlytics Data Services', { x: 1.5, y: 4.55, w: 7, h: 0.3, fontFace: FONT, fontSize: 11, color: C.cream, align: 'center', margin: 0, isTextBox: true });
