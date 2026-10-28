@@ -141,5 +141,6 @@ module.exports = {
     { title: 'Before you uninstall', text: 'Uninstalling deletes everything in the app. Export and share your conferences first.' },
   ],
   closing: 'Be present. Bring ideas to light.',
+  platforms: 'For Android phones and tablets, and Windows.',
   download: 'github.com/SamsonOluwaseun/attenlume',
 };

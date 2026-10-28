@@ -133,7 +133,7 @@ ${(() => {
   </section>
   <h2 style="margin-top:4mm">Good to know</h2>
   <div class="tips">${G.tips.map((t) => `<div class="tip"><b>${esc(t.title)}</b>${esc(t.text)}</div>`).join('')}</div>
-  <div class="closing"><p class="big">${esc(G.closing)}</p><p>Download the latest Android version: <span class="link">${esc(G.download)}</span></p></div>
+  <div class="closing"><p class="big">${esc(G.closing)}</p><p>Download for Android or Windows: <span class="link">${esc(G.download)}</span></p></div>
   <div class="footer"><span>${esc(G.title)}</span><span>Samlytics Data Services</span></div>
 </div>
 

@@ -15,7 +15,7 @@ Status: done
 - Team tooling: `tool/team_check.ps1` (analyze, format, tests and a Codex review for a worktree branch).
 - `flutter test` 805 passed, analyze clean, J2 journey test passes on Windows.
 
-## Bugs found while capturing the quick guide (28 October 2026, not fixed yet)
+## Bugs found while capturing the quick guide (28 October 2026, all four fixed in 0.1.4)
 
 - **Android notification timer is wrong:** the recording notification shows a chronometer like 498110:29:20. The base time passed to the notification is not converted to the clock the chronometer uses (`SystemClock.elapsedRealtime`). `RecordingForegroundService.kt` / `ForegroundServiceCoordinator`.
 - **Activity details sheet overlaps the status bar** on phones: the type and Saved chip sit under the clock. Needs a top safe-area inset in `activity_detail_sheet.dart`.

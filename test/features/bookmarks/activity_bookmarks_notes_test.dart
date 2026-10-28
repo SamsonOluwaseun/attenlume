@@ -139,6 +139,19 @@ void main() {
   });
 
   group('FR-BMK-02 activity notes in plain Markdown [P1-16]', () {
+    test('FR-BMK-02 bold is rendered and the app labels lose their '
+        'brackets', () {
+      final spans = notesSpans('**[Quick thought]** Follow up on **slide 4**');
+      expect(
+        spans.map((s) => s.text).join(),
+        'Quick thought Follow up on slide 4',
+      );
+      expect(spans.first.style?.fontWeight, FontWeight.bold);
+      expect(spans.last.text, 'slide 4');
+      expect(spans.last.style?.fontWeight, FontWeight.bold);
+      expect(notesSpans('No markers').single.text, 'No markers');
+    });
+
     testWidgets('FR-BMK-02 adds notes and stores the Markdown as written', (
       tester,
     ) async {

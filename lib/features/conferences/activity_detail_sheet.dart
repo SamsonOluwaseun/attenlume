@@ -44,6 +44,8 @@ class ActivityDetailSheet extends ConsumerStatefulWidget {
     return showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
+      // Keeps a tall sheet below the status bar on phones.
+      useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(

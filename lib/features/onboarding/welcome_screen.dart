@@ -232,25 +232,39 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 
                   const SizedBox(height: TokenSpace.space4),
 
-                  // Secondary actions: Set up with wizard, Open previous
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          key: const Key('set-up-wizard-button'),
-                          onPressed: _openWizard,
-                          child: const Text('Set up with wizard'),
-                        ),
-                      ),
-                      const SizedBox(width: TokenSpace.space3),
-                      Expanded(
-                        child: OutlinedButton(
-                          key: const Key('open-previous-button'),
-                          onPressed: _openPrevious,
-                          child: const Text('Open previous'),
-                        ),
-                      ),
-                    ],
+                  // Secondary actions: Set up with wizard, Open previous.
+                  // Side by side when there is room, stacked on a phone so
+                  // neither label wraps.
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wizard = OutlinedButton(
+                        key: const Key('set-up-wizard-button'),
+                        onPressed: _openWizard,
+                        child: const Text('Set up with wizard'),
+                      );
+                      final previous = OutlinedButton(
+                        key: const Key('open-previous-button'),
+                        onPressed: _openPrevious,
+                        child: const Text('Open previous'),
+                      );
+                      if (constraints.maxWidth < 480) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            wizard,
+                            const SizedBox(height: TokenSpace.space2),
+                            previous,
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: wizard),
+                          const SizedBox(width: TokenSpace.space3),
+                          Expanded(child: previous),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: TokenSpace.space2),
