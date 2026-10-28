@@ -12,6 +12,7 @@ import 'package:attenlume/domain/models/activity.dart';
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/media.dart';
 import 'package:attenlume/domain/services/export_service.dart';
+import 'package:attenlume/domain/services/private_notes.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -270,6 +271,55 @@ void main() {
   });
 
   group('FR-EXP-10 private toggle', () {
+    Future<String> exportedNotes(String notesMd) async {
+      final c = await t.conference();
+      final a = await t.activity(c.id, title: 'Talk');
+      await t.activities.update(
+        a.id,
+        ActivitiesCompanion(notesMd: Value(notesMd)),
+      );
+      final out = await service.run(
+        ExportRequest(conferenceId: c.id, content: ExportContent.textOnly),
+        destinationParent: dest.path,
+      );
+      final notes = Directory(out.outputPath)
+          .listSync(recursive: true)
+          .whereType<File>()
+          .singleWhere((f) => p.basename(f.path) == 'notes.md');
+      return notes.readAsStringSync();
+    }
+
+    test('FR-EXP-10 a multi-paragraph private thought (new format) is left '
+        'out whole', () async {
+      final notes = await exportedNotes(
+        [
+          'Public before.',
+          formatQuickThought(
+            'Secret one.\n\nSecret two.\n\nSecret three.',
+            isPrivate: true,
+          ),
+          'Public after.',
+        ].join('\n\n'),
+      );
+      expect(notes, isNot(contains('Secret')));
+      expect(notes, isNot(contains('private reflection')));
+      expect(notes, contains('Public before.'));
+      expect(notes, contains('Public after.'));
+    });
+
+    test('FR-EXP-10 a multi-paragraph private thought (old format) is left '
+        'out, with what follows up to the next marker', () async {
+      final notes = await exportedNotes(
+        'Public before.\n\n'
+        '**[Private reflection]** Secret one.\n\n'
+        'Secret two.\n\n'
+        '**[Quick thought]** Shareable.',
+      );
+      expect(notes, isNot(contains('Secret')));
+      expect(notes, contains('Public before.'));
+      expect(notes, contains('Shareable.'));
+    });
+
     test('FR-EXP-10 private items stay out by default', () async {
       final (id, keynote, _, _) = await conference();
       final out = await service.run(
@@ -395,6 +445,84 @@ void main() {
   });
 
   group('FR-EXP-03 audio options', () {
+    test('FR-EXP-03 FR-EXP-06 activity.json describes the trimmed file '
+        'that was written', () async {
+      final c = await t.conference();
+      final a = await t.activity(c.id, title: 'Talk');
+      final s = await segment(a, DateTime.utc(2026, 11, 4, 9), mp4: true);
+      await t.cuts.add(a.id, startOffsetMs: 0, endOffsetMs: 5000);
+      final background = ExportService(
+        conferences: t.conferences,
+        activities: t.activities,
+        media: t.media,
+        cuts: t.cuts,
+        jobs: t.exports,
+        mediaRoot: () async => mediaRoot,
+        tempRoot: () async => Directory(p.join(temp.path, 'cache')),
+        reserveBytes: 0,
+        clock: t.clock.call,
+      );
+      for (final (name, svc) in [
+        ('inline', service),
+        ('isolate', background),
+      ]) {
+        final out = await svc.run(
+          ExportRequest(conferenceId: c.id, audioMode: ExportAudioMode.trimmed),
+          destinationParent: p.join(dest.path, name),
+        );
+        final root = Directory(out.outputPath);
+        expect(await verifyChecksums(root), isEmpty, reason: name);
+        final files = root.listSync(recursive: true).whereType<File>().toList();
+        final trimmed = files.singleWhere((f) => f.path.endsWith('.m4a'));
+        final json = jsonDecode(
+          files
+              .singleWhere((f) => p.basename(f.path) == 'activity.json')
+              .readAsStringSync(),
+        ) as Map<String, Object?>;
+        final seg = (json['segments'] as List).single as Map<String, Object?>;
+        expect(seg['file'], 'audio/segment-001-trimmed.m4a');
+        expect(seg['trimmed'], isTrue);
+        expect(seg['bytes'], trimmed.lengthSync(), reason: name);
+        expect(seg['sha256'], await hashFileSha256(trimmed), reason: name);
+        final sums = File(p.join(root.path, checksumFileName))
+            .readAsStringSync();
+        final rel = p.posix.joinAll(
+          p.split(p.relative(trimmed.path, from: root.path)),
+        );
+        expect(sums, contains('${seg['sha256']}  $rel\n'));
+        expect(seg['duration_ms'] as int, inInclusiveRange(4900, 5100));
+        expect(seg['source_duration_ms'], s.durationMs);
+        expect(seg['source_bytes'], s.bytes);
+        expect(seg['kept_ranges_ms'], [
+          [5000, s.durationMs],
+        ]);
+      }
+    });
+
+    test('FR-EXP-06 activity.json of copied audio matches checksums', () async {
+      final c = await t.conference();
+      final a = await t.activity(c.id, title: 'Talk');
+      await segment(a, DateTime.utc(2026, 11, 4, 9));
+      final out = await service.run(
+        ExportRequest(conferenceId: c.id),
+        destinationParent: dest.path,
+      );
+      final files = Directory(out.outputPath)
+          .listSync(recursive: true)
+          .whereType<File>()
+          .toList();
+      final audio = files.singleWhere((f) => f.path.endsWith('.m4a'));
+      final json = jsonDecode(
+        files
+            .singleWhere((f) => p.basename(f.path) == 'activity.json')
+            .readAsStringSync(),
+      ) as Map<String, Object?>;
+      final seg = (json['segments'] as List).single as Map<String, Object?>;
+      expect(seg['trimmed'], isFalse);
+      expect(seg['sha256'], await hashFileSha256(audio));
+      expect(seg.containsKey('source_sha256'), isFalse);
+    });
+
     test('FR-EXP-03 originals plus cuts.json', () async {
       final (id, keynote, _, _) = await conference();
       await t.cuts.add(keynote.id, startOffsetMs: 0, endOffsetMs: 2000);
@@ -732,7 +860,7 @@ void main() {
         (e) => e.relativePath.endsWith('activity.json'),
       );
       final map = jsonDecode(
-        utf8.decode((json.source as TextExportSource).bytes),
+        (json.source as GeneratedTextExportSource).build(const {}),
       ) as Map;
       expect(
         ((map['segments'] as List).last as Map)['not_exported_reason'],

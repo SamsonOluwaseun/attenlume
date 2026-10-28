@@ -35,6 +35,18 @@ class TextExportSource extends ExportSource {
   final Uint8List bytes;
 }
 
+/// Small text built while writing, from the files written before it
+/// (keyed by relative path), so it can describe them exactly: an
+/// `activity.json` listing the bytes and SHA-256 of trimmed copies
+/// (FR-EXP-03, FR-EXP-06). Entries it describes must come earlier in the
+/// plan. [build] crosses to the export isolate, so it must capture plain
+/// data only.
+class GeneratedTextExportSource extends ExportSource {
+  const GeneratedTextExportSource(this.build);
+
+  final String Function(Map<String, ExportedFile> written) build;
+}
+
 /// A trimmed copy of an MP4/M4A file keeping only [keepRanges]
 /// (milliseconds from the start of the file), written with
 /// [Mp4SampleTrimmer] (ADR-037).
@@ -171,8 +183,10 @@ Future<ExportWriteResult> writeExport(
   final total = plan.estimatedBytes;
   var bytesDone = 0;
   final files = <ExportedFile>[];
+  final written = <String, ExportedFile>{};
   void done(ExportedFile file, int estimate) {
     files.add(file);
+    written[file.relativePath] = file;
     bytesDone += estimate;
     onProgress?.call(
       ExportWriteProgress(
@@ -203,6 +217,10 @@ Future<ExportWriteResult> writeExport(
         TextExportSource(:final bytes) => await writer.addBytes(
           entry.relativePath,
           bytes,
+        ),
+        GeneratedTextExportSource(:final build) => await writer.addBytes(
+          entry.relativePath,
+          utf8.encode(build(Map.unmodifiable(written))),
         ),
         TrimmedAudioExportSource(:final path, :final keepRanges) =>
           await writer.addTrimmed(
@@ -339,6 +357,7 @@ class _FolderWriter implements _ExportOutput {
       relativePath: relativePath,
       bytes: result.bytes,
       sha256: check,
+      durationMs: result.durationMs,
     );
   }
 
@@ -414,12 +433,18 @@ class _ZipWriter implements _ExportOutput {
       ),
     );
     try {
-      await trimmer.trim(
+      final result = await trimmer.trim(
         sourceFile: source,
         targetFile: temp,
         keepRanges: keepRanges,
       );
-      return await addFile(relativePath, temp);
+      final added = await addFile(relativePath, temp);
+      return ExportedFile(
+        relativePath: added.relativePath,
+        bytes: added.bytes,
+        sha256: added.sha256,
+        durationMs: result.durationMs,
+      );
     } finally {
       // A trimmed copy, never unique media.
       await _deleteQuietly(temp);

@@ -6,33 +6,19 @@ library;
 
 import 'dart:convert';
 
+import '../../data/filesystem/folder_export.dart';
 import '../models/activity.dart';
 import '../models/conference.dart';
 import '../models/media.dart';
 import 'activity_title.dart';
+import 'cut_range_math.dart';
+import 'private_notes.dart';
 
 /// Version of the JSON written by this file. P1-22 raises it when it adds
 /// the full manifest fields.
 const exportSchemaVersion = 1;
 
-/// Marker the quick-thought sheet writes before a private reflection in
-/// the notes (FR-UI-05).
-const privateReflectionMarker = '**[Private reflection]**';
-
-/// Bookmark label the quick-thought sheet gives a private thought.
-const privateThoughtLabel = 'Private thought';
-
 const _json = JsonEncoder.withIndent('  ');
-
-/// [notes] without paragraphs that start with [privateReflectionMarker]
-/// (FR-EXP-10). Returns the kept text and how many paragraphs went.
-(String, int) stripPrivateReflections(String notes) {
-  final paragraphs = notes.split(RegExp(r'\n\s*\n'));
-  final kept = paragraphs
-      .where((para) => !para.trimLeft().startsWith(privateReflectionMarker))
-      .toList();
-  return (kept.join('\n\n').trim(), paragraphs.length - kept.length);
-}
 
 bool isPrivateThought(Bookmark b) => b.label == privateThoughtLabel;
 
@@ -90,10 +76,15 @@ String csvField(String? value) {
 /// Where each of an activity's segments and photos went in the export.
 class ActivityExportFiles {
   const ActivityExportFiles({
+    this.folder = '',
     this.segmentFiles = const {},
     this.segmentNotes = const {},
     this.photoFiles = const {},
+    this.trimmedKeepRanges = const {},
   });
+
+  /// The activity folder, relative to the export root.
+  final String folder;
 
   /// Segment id to its path in the activity folder.
   final Map<String, String> segmentFiles;
@@ -104,12 +95,22 @@ class ActivityExportFiles {
 
   /// Photo id to its path in the activity folder.
   final Map<String, String> photoFiles;
+
+  /// Segment id to the ranges (ms from the segment start) its trimmed
+  /// copy keeps. Only segments exported as trimmed copies.
+  final Map<String, List<TimeRange>> trimmedKeepRanges;
 }
 
 /// `activity.json`: the activity's details, segments with their quality
 /// fields, photos, bookmarks, cut ranges and interruptions (BUILD_GUIDE
 /// section 10 file contents, basic form). Contact name and details are
 /// left out (ADR-040).
+///
+/// [written] holds the files already written, by path from the export
+/// root. For an exported segment `bytes` and `sha256` come from the file
+/// actually written, so they match `checksums.sha256`; a trimmed copy
+/// also gets its own `duration_ms`, with the recording's values under
+/// `source_*` (FR-EXP-03, FR-EXP-06).
 String buildActivityJson({
   required Activity activity,
   required ActivityType type,
@@ -121,7 +122,14 @@ String buildActivityJson({
   required List<CutRange> cuts,
   required List<Interruption> interruptions,
   required ActivityExportFiles files,
+  Map<String, ExportedFile> written = const {},
 }) {
+  ExportedFile? outputOf(String segmentId) {
+    final rel = files.segmentFiles[segmentId];
+    if (rel == null) return null;
+    return written[files.folder.isEmpty ? rel : '${files.folder}/$rel'];
+  }
+
   final map = <String, Object?>{
     'schema_version': exportSchemaVersion,
     'id': activity.id,
@@ -145,28 +153,44 @@ String buildActivityJson({
     'audio_mode': audioMode,
     'segments': [
       for (final s in segments)
-        {
-          'id': s.id,
-          'sequence': s.sequence,
-          'file': files.segmentFiles[s.id],
-          if (files.segmentNotes[s.id] != null)
-            'not_exported_reason': files.segmentNotes[s.id],
-          'state': s.state.key,
-          'start_utc': _utc(s.startUtc),
-          'end_utc': s.endUtc == null ? null : _utc(s.endUtc),
-          'duration_ms': s.durationMs,
-          'bytes': s.bytes,
-          'sha256': s.sha256,
-          'codec': s.codec,
-          'container': s.container,
-          'channel_count': s.channelCount,
-          'sample_rate_hz': s.sampleRateHz,
-          'profile': s.requestedProfile.key,
-          'requested_bitrate_bps': s.requestedBitrateBps,
-          'observed_bitrate_bps': s.observedBitrateBps,
-          'input_route': s.inputRoute,
-          'end_reason': s.endReason?.key,
-        },
+        if ((outputOf(s.id), files.trimmedKeepRanges[s.id]) case (
+          final out,
+          final keep,
+        ))
+          {
+            'id': s.id,
+            'sequence': s.sequence,
+            'file': files.segmentFiles[s.id],
+            if (files.segmentNotes[s.id] != null)
+              'not_exported_reason': files.segmentNotes[s.id],
+            'trimmed': keep != null,
+            'state': s.state.key,
+            'start_utc': _utc(s.startUtc),
+            'end_utc': s.endUtc == null ? null : _utc(s.endUtc),
+            'duration_ms': keep == null
+                ? s.durationMs
+                : out?.durationMs ??
+                      keep.fold<int>(0, (n, r) => n + r.durationMs),
+            'bytes': out?.bytes ?? (keep == null ? s.bytes : null),
+            'sha256': out?.sha256 ?? (keep == null ? s.sha256 : null),
+            if (keep != null) ...{
+              'kept_ranges_ms': [
+                for (final r in keep) [r.startMs, r.endMs],
+              ],
+              'source_duration_ms': s.durationMs,
+              'source_bytes': s.bytes,
+              'source_sha256': s.sha256,
+            },
+            'codec': s.codec,
+            'container': s.container,
+            'channel_count': s.channelCount,
+            'sample_rate_hz': s.sampleRateHz,
+            'profile': s.requestedProfile.key,
+            'requested_bitrate_bps': s.requestedBitrateBps,
+            'observed_bitrate_bps': s.observedBitrateBps,
+            'input_route': s.inputRoute,
+            'end_reason': s.endReason?.key,
+          },
     ],
     'photos': [
       for (final ph in photos)

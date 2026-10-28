@@ -12,12 +12,16 @@ class ExportedFile {
     required this.relativePath,
     required this.bytes,
     required this.sha256,
+    this.durationMs,
   });
 
   /// Forward slashes, relative to the export folder.
   final String relativePath;
   final int bytes;
   final String sha256;
+
+  /// Audio length, for trimmed copies written by the export (P1-21).
+  final int? durationMs;
 
   Map<String, Object?> toJson() => {
     'path': relativePath,

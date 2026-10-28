@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -6,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../../data/filesystem/cuts_manifest.dart';
 import '../../data/filesystem/export_space.dart';
 import '../../data/filesystem/export_writer.dart';
+import '../../data/filesystem/folder_export.dart';
 import '../../data/filesystem/media_paths.dart';
 import '../../data/filesystem/safe_export_paths.dart';
 import '../../data/repositories/activity_repository.dart';
@@ -23,6 +25,7 @@ import 'activity_title.dart';
 import 'cut_range_math.dart';
 import 'export_documents.dart';
 import 'permanent_trim_service.dart';
+import 'private_notes.dart';
 import 'review_timeline.dart';
 
 /// Which activities an export covers (FR-EXP-01).
@@ -472,6 +475,7 @@ class ExportService {
       final segmentFiles = <String, String>{};
       final segmentNotes = <String, String>{};
       final photoFiles = <String, String>{};
+      final trimmedKeep = <String, List<TimeRange>>{};
 
       // Audio (FR-EXP-03). A file_path two rows share (ADR-036) goes in
       // once per activity.
@@ -533,6 +537,7 @@ class ExportService {
               'segment-$seq-trimmed$ext',
             );
             segmentFiles[s.id] = _inFolder(path, folder);
+            trimmedKeep[s.id] = trim.keep;
             final duration = trim.segmentDurationMs <= 0
                 ? 1
                 : trim.segmentDurationMs;
@@ -627,6 +632,8 @@ class ExportService {
         cuts: activeCuts,
         interruptions: interruptions,
         files: ActivityExportFiles(
+          folder: folder,
+          trimmedKeepRanges: trimmedKeep,
           segmentFiles: segmentFiles,
           segmentNotes: segmentNotes,
           photoFiles: photoFiles,
@@ -641,21 +648,21 @@ class ExportService {
           notes = kept;
           privateNotes += removed;
         }
+        // Written after the activity's audio, so trimmed copies are
+        // described by the files actually written (FR-EXP-06).
         activityEntries.add(
-          _text(
+          _activityJsonEntry(
             paths.file(folder, 'activity.json'),
-            buildActivityJson(
-              activity: a,
-              type: type,
-              timezone: tz,
-              audioMode: mode.key,
-              segments: segments,
-              photos: photos,
-              bookmarks: bookmarks,
-              cuts: activeCuts,
-              interruptions: interruptions,
-              files: item.files,
-            ),
+            activity: a,
+            type: type,
+            timezone: tz,
+            audioMode: mode.key,
+            segments: segments,
+            photos: photos,
+            bookmarks: bookmarks,
+            cuts: activeCuts,
+            interruptions: interruptions,
+            files: item.files,
           ),
         );
         if (notes.trim().isNotEmpty ||
@@ -855,6 +862,44 @@ class ExportService {
     final local = toConferenceTime(at, tz);
     return DateTime.utc(local.year, local.month, local.day);
   }
+}
+
+/// `activity.json` built while writing, from the files written before it.
+/// A top-level function so the closure captures only these plain values
+/// and can cross to the export isolate.
+ExportEntry _activityJsonEntry(
+  String path, {
+  required Activity activity,
+  required ActivityType type,
+  required String timezone,
+  required String audioMode,
+  required List<RecordingSegment> segments,
+  required List<Photo> photos,
+  required List<Bookmark> bookmarks,
+  required List<CutRange> cuts,
+  required List<Interruption> interruptions,
+  required ActivityExportFiles files,
+}) {
+  String build(Map<String, ExportedFile> written) => buildActivityJson(
+    activity: activity,
+    type: type,
+    timezone: timezone,
+    audioMode: audioMode,
+    segments: segments,
+    photos: photos,
+    bookmarks: bookmarks,
+    cuts: cuts,
+    interruptions: interruptions,
+    files: files,
+    written: written,
+  );
+  // Real sizes and hashes are a little longer than placeholders.
+  final estimate = utf8.encode(build(const {})).length + 160 * segments.length;
+  return ExportEntry(
+    relativePath: path,
+    source: GeneratedTextExportSource(build),
+    estimatedBytes: estimate,
+  );
 }
 
 ExportEntry _text(String path, String text) {
