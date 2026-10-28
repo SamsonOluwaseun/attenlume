@@ -13,6 +13,7 @@ import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/consent_check_dialog.dart';
 import '../capture/recording_screen.dart';
+import '../export/export_sheet.dart';
 import 'activity_detail_sheet.dart';
 import 'conference_delete_dialog.dart';
 import 'conference_wizard_screen.dart';
@@ -221,6 +222,12 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
       appBar: AppBar(
         title: Text(conf.name),
         actions: [
+          IconButton(
+            key: const Key('export-conference-button'),
+            icon: const Icon(Icons.ios_share_rounded),
+            tooltip: 'Export conference',
+            onPressed: () => ExportSheet.show(context, conferenceId: conf.id),
+          ),
           IconButton(
             key: const Key('edit-conference-button'),
             icon: const Icon(Icons.edit_outlined),

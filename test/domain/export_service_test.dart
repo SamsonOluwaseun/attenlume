@@ -734,7 +734,10 @@ void main() {
       final map = jsonDecode(
         utf8.decode((json.source as TextExportSource).bytes),
       ) as Map;
-      expect((map['segments'] as List).last['not_exported_reason'], 'damaged');
+      expect(
+        ((map['segments'] as List).last as Map)['not_exported_reason'],
+        'damaged',
+      );
     });
   });
 

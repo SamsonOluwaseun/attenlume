@@ -19,6 +19,7 @@ import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_profile_selector.dart';
 import '../capture/recording_providers.dart';
 import '../capture/recording_screen.dart';
+import '../export/export_sheet.dart';
 import '../photos/activity_photos_section.dart';
 import '../playback_review/review_screen.dart';
 
@@ -589,6 +590,22 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                       )
                       .then((_) => _refreshSummary());
                 },
+              ),
+
+              const SizedBox(height: TokenSpace.space3),
+
+              AttenlumeButton(
+                key: const Key('activity-detail-export-button'),
+                label: 'Export this activity',
+                variant: AttenlumeButtonVariant.secondary,
+                leading: const Icon(Icons.ios_share_rounded),
+                onPressed: _summary.hasActiveRecording
+                    ? null
+                    : () => ExportSheet.show(
+                        context,
+                        conferenceId: act.conferenceId,
+                        activityId: act.id,
+                      ),
               ),
 
               const SizedBox(height: TokenSpace.space3),

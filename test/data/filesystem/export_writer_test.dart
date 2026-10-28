@@ -134,7 +134,10 @@ void main() {
           writeExport(broken),
           throwsA(isA<FileSystemException>()),
         );
-        expect(dest.existsSync() ? dest.listSync() : const [], isEmpty);
+        expect(
+          dest.existsSync() ? dest.listSync() : const <FileSystemEntity>[],
+          isEmpty,
+        );
         expect(sha256.convert(photo.readAsBytesSync()).toString(), before);
       },
     );
