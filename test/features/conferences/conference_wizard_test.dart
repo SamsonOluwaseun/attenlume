@@ -64,7 +64,7 @@ void main() {
       // FR-CONF-02 details
       await tester.enterText(
         find.byKey(const Key('conference-name-input')),
-        'Data Architecture Summit 2026',
+        'Samlytics Conference 2026',
       );
       await tester.enterText(
         find.byKey(const Key('conference-venue-input')),
@@ -72,7 +72,7 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const Key('conference-description-input')),
-        'Annual enterprise data architecture summit',
+        'Annual Samlytics data and AI conference',
       );
 
       // FR-CONF-03 role
@@ -175,16 +175,16 @@ void main() {
 
       // Land on ConferenceHomeScreen
       expect(find.byType(ConferenceHomeScreen), findsOneWidget);
-      expect(find.text('Data Architecture Summit 2026'), findsWidgets);
+      expect(find.text('Samlytics Conference 2026'), findsWidgets);
 
       // Verify database
       final conferences = await repo.getRecent();
       expect(conferences.length, equals(1));
       final conf = conferences.first;
 
-      expect(conf.name, 'Data Architecture Summit 2026');
+      expect(conf.name, 'Samlytics Conference 2026');
       expect(conf.venue, 'ExCeL London');
-      expect(conf.description, 'Annual enterprise data architecture summit');
+      expect(conf.description, 'Annual Samlytics data and AI conference');
       expect(conf.roleType, RoleType.speaker);
       expect(conf.roleText, 'Senior enterprise data architect');
       expect(conf.defaultRecordingProfile, RecordingProfile.enhanced);

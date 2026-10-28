@@ -73,7 +73,7 @@ class TestData {
   /// [policyAcknowledged] skips the policy reminder before the first
   /// recording (FR-PRI-01) for tests about something else.
   Future<Conference> conference({
-    String name = 'Data Summit London',
+    String name = 'Samlytics Conference 2026',
     String timezone = 'Europe/London',
     bool policyAcknowledged = false,
   }) => conferences.create(
@@ -138,7 +138,7 @@ class SampleConference {
 
   static Future<SampleConference> build(TestData t) async {
     final conference = await t.conferences.create(
-      name: 'Data Summit London',
+      name: 'Samlytics Conference 2026',
       timezone: 'Europe/London',
       venue: 'ExCeL London',
       startDate: DateTime.utc(2026, 11, 4),

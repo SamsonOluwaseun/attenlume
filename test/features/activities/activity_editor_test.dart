@@ -86,7 +86,7 @@ void main() {
         // Enter Organisation and Room
         await tester.enterText(
           find.byKey(const Key('activity-organisation-field')),
-          'UK Health Security Agency',
+          'Samlytics Data Services',
         );
         await tester.enterText(
           find.byKey(const Key('activity-room-field')),
@@ -122,7 +122,7 @@ void main() {
         expect(savedActivity, isNotNull);
         expect(savedActivity!.title, 'Data Architecture Keynote');
         expect(savedActivity!.speakerNames, ['Dr Ada Example', 'Sam Sample']);
-        expect(savedActivity!.organisation, 'UK Health Security Agency');
+        expect(savedActivity!.organisation, 'Samlytics Data Services');
         expect(savedActivity!.room, 'Hall B');
         expect(
           savedActivity!.recordingProfileOverride,

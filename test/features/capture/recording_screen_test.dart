@@ -152,7 +152,7 @@ void main() {
     ) async {
       final conf = await t.conference(
         policyAcknowledged: true,
-        name: 'DevFest London',
+        name: 'Samlytics Conference 2026',
       );
       final act = await t.activity(conf.id, title: 'Building with Flutter');
       await t.activities.update(
@@ -169,7 +169,7 @@ void main() {
         find.byKey(const Key('recording-screen-subtitle')),
         findsOneWidget,
       );
-      expect(find.text('DevFest London · Room 101'), findsOneWidget);
+      expect(find.text('Samlytics Conference 2026 · Room 101'), findsOneWidget);
       expect(find.byKey(const Key('input-source-indicator')), findsOneWidget);
       expect(find.byKey(const Key('record-status-idle')), findsOneWidget);
       expect(find.byKey(const Key('record-button-start')), findsOneWidget);

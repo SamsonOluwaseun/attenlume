@@ -134,7 +134,7 @@ void main() {
         title: 'AI in public health',
         plannedStart: planned,
         speakerNames: ['Dr Ada Example', 'Sam Sample'],
-        organisation: 'UKHSA',
+        organisation: 'Samlytics Data Services',
         room: 'Hall B',
         tags: ['ai', 'health'],
         recordingPermissionStatus: RecordingPermissionStatus.permitted,

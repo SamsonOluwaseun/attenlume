@@ -324,7 +324,7 @@ ANY -> ERROR_RECOVERABLE                            (partial files preserved)
 **Export structure:**
 
 ```text
-2026-11-04_data-summit-london/
+2026-11-04_samlytics-conference-2026/
   README_START_HERE.md
   conference.json
   participant_goals.md
