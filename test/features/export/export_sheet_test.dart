@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:attenlume/app/theme/app_theme.dart';
@@ -35,6 +36,10 @@ class _RecordingExportService extends ExportService {
 
   final runs = <(ExportRequest, String)>[];
 
+  /// When set, [run] waits for it, so a test can act mid-export.
+  Completer<void>? gate;
+  Future<void>? lastCancel;
+
   @override
   Future<ExportOutcome> run(
     ExportRequest request, {
@@ -43,6 +48,7 @@ class _RecordingExportService extends ExportService {
     Future<void>? cancel,
   }) async {
     runs.add((request, destinationParent));
+    lastCancel = cancel;
     onProgress?.call(
       const ExportWriteProgress(
         filesDone: 1,
@@ -51,6 +57,7 @@ class _RecordingExportService extends ExportService {
         bytesTotal: 20,
       ),
     );
+    if (gate case final g?) await g.future;
     return ExportOutcome(
       jobId: 'job',
       outputPath: '$destinationParent/2026-11-04_data-summit-london',
@@ -74,6 +81,16 @@ class _FakeDestinations implements ExportDestinations {
 
   @override
   Future<String?> choose() async => picked;
+}
+
+/// Taps Export and accepts the FR-PRI-05 warning.
+Future<void> startExport(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(const Key('export-start')));
+  await tester.tap(find.byKey(const Key('export-start')));
+  await tester.pumpAndSettle();
+  expect(find.byKey(const Key('sensitive-export-warning')), findsOneWidget);
+  await tester.tap(find.byKey(const Key('sensitive-export-continue')));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -195,9 +212,7 @@ void main() {
       contains('3 activities'),
     );
 
-    await tester.ensureVisible(find.byKey(const Key('export-start')));
-    await tester.tap(find.byKey(const Key('export-start')));
-    await tester.pumpAndSettle();
+    await startExport(tester);
 
     final (request, destination) = service.runs.single;
     expect(destination, '/exports');
@@ -255,10 +270,95 @@ void main() {
     await tester.tap(find.byKey(const Key('export-choose-folder')));
     await tester.pumpAndSettle();
     expect(find.text(r'D:\Out'), findsOneWidget);
+    await startExport(tester);
+    expect(service.runs.single.$2, r'D:\Out');
+  });
+
+  testWidgets('FR-PRI-05 the sensitive-content warning comes before every '
+      'export; Cancel stops it', (tester) async {
+    final sample = await SampleConference.build(t);
+    await tester.pumpWidget(
+      subject(tester, ExportSheet(conferenceId: sample.conference.id)),
+    );
+    await tester.pumpAndSettle();
+
     await tester.ensureVisible(find.byKey(const Key('export-start')));
     await tester.tap(find.byKey(const Key('export-start')));
     await tester.pumpAndSettle();
-    expect(service.runs.single.$2, r'D:\Out');
+    expect(find.byKey(const Key('sensitive-export-warning')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('sensitive-export-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sensitive-export-warning')), findsNothing);
+    expect(service.runs, isEmpty);
+    expect(find.byKey(const Key('export-sheet')), findsOneWidget);
+
+    await startExport(tester);
+    expect(service.runs, hasLength(1));
+    expect(find.text('Export saved'), findsOneWidget);
+  });
+
+  testWidgets('FR-EXP-05 while exporting, Back and a tap outside do not '
+      'close the sheet', (tester) async {
+    final sample = await SampleConference.build(t);
+    service.gate = Completer<void>();
+    await tester.pumpWidget(
+      subject(
+        tester,
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () =>
+                ExportSheet.show(context, conferenceId: sample.conference.id),
+            child: const Text('Open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await startExport(tester);
+    expect(find.byKey(const Key('export-progress')), findsOneWidget);
+
+    // Back (system or app bar) asks the route to pop: refused.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('export-sheet')), findsOneWidget);
+    // A tap on the barrier above the sheet: refused.
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('export-sheet')), findsOneWidget);
+    // The close button is disabled while running.
+    final close = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.close_rounded),
+    );
+    expect(close.onPressed, isNull);
+
+    service.gate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Export saved'), findsOneWidget);
+    // Finished: Back closes it again.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('export-sheet')), findsNothing);
+  });
+
+  testWidgets('FR-EXP-05 Cancel during an export reaches the service', (
+    tester,
+  ) async {
+    final sample = await SampleConference.build(t);
+    service.gate = Completer<void>();
+    await tester.pumpWidget(
+      subject(tester, ExportSheet(conferenceId: sample.conference.id)),
+    );
+    await tester.pumpAndSettle();
+    await startExport(tester);
+    var cancelled = false;
+    unawaited(service.lastCancel!.then((_) => cancelled = true));
+    await tester.ensureVisible(find.byKey(const Key('export-cancel')));
+    await tester.tap(find.byKey(const Key('export-cancel')));
+    await tester.pump();
+    expect(cancelled, isTrue);
+    service.gate!.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('FR-EXP-01 conference home has an Export action', (tester) async {

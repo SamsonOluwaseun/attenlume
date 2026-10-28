@@ -13,6 +13,7 @@ import '../../domain/models/enums.dart';
 import '../../domain/services/export_service.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../privacy/sensitive_export_warning.dart';
 import 'export_providers.dart';
 
 enum _Scope { conference, day, activities }
@@ -37,6 +38,9 @@ class ExportSheet extends ConsumerStatefulWidget {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    // Dragging down pops the route directly, past PopScope, so it is off;
+    // the Close button and Back still work while no export runs.
+    enableDrag: false,
     builder: (_) =>
         ExportSheet(conferenceId: conferenceId, activityId: activityId),
   );
@@ -66,6 +70,15 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
   Completer<void>? _cancel;
   ExportOutcome? _outcome;
   String? _error;
+
+  @override
+  void dispose() {
+    // Safety net: if the sheet goes while an export runs, stop the export
+    // cleanly rather than leave it running unseen (FR-EXP-05).
+    final cancel = _cancel;
+    if (_running && cancel != null && !cancel.isCompleted) cancel.complete();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -156,7 +169,10 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
 
   Future<void> _export() async {
     final destination = _destination;
-    if (destination == null) return;
+    if (destination == null || _running) return;
+    // FR-PRI-05, ADR-041: warn before anything can leave the device.
+    final proceed = await SensitiveExportWarning.show(context);
+    if (!proceed || !mounted) return;
     final cancel = Completer<void>();
     setState(() {
       _running = true;
@@ -209,39 +225,44 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final media = MediaQuery.of(context);
-    return Padding(
-      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: media.size.height * 0.92),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(TokenSpace.space4),
-          child: Column(
-            key: const Key('export-sheet'),
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('Export', style: theme.textTheme.titleLarge),
-                  ),
-                  IconButton(
-                    tooltip: 'Close',
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: _running
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                  ),
+    // While an export runs, Back and a tap outside do nothing: the sheet
+    // holds the progress, Cancel and the result.
+    return PopScope(
+      canPop: !_running,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.92),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(TokenSpace.space4),
+            child: Column(
+              key: const Key('export-sheet'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Export', style: theme.textTheme.titleLarge),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: _running
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                if (_outcome != null)
+                  ..._result(theme, _outcome!)
+                else ...[
+                  ..._options(theme),
+                  const SizedBox(height: TokenSpace.space4),
+                  ..._footer(theme),
                 ],
-              ),
-              if (_outcome != null)
-                ..._result(theme, _outcome!)
-              else ...[
-                ..._options(theme),
-                const SizedBox(height: TokenSpace.space4),
-                ..._footer(theme),
               ],
-            ],
+            ),
           ),
         ),
       ),

@@ -775,7 +775,40 @@ class ExportService {
   /// short, [ExportCancelledException] when [cancel] completes first, and
   /// [ExportException] when there is nothing to export. On any failure
   /// the partial export is removed and sources are untouched (FR-EXP-05).
+  ///
+  /// One export at a time: while one runs, another call throws
+  /// [ExportException] before doing anything (ADR-040).
   Future<ExportOutcome> run(
+    ExportRequest request, {
+    required String destinationParent,
+    void Function(ExportWriteProgress progress)? onProgress,
+    Future<void>? cancel,
+  }) async {
+    if (_busy) {
+      throw const ExportException(
+        'An export is already running. Wait for it to finish, then try '
+        'again.',
+      );
+    }
+    _busy = true;
+    try {
+      return await _run(
+        request,
+        destinationParent: destinationParent,
+        onProgress: onProgress,
+        cancel: cancel,
+      );
+    } finally {
+      _busy = false;
+    }
+  }
+
+  var _busy = false;
+
+  /// Whether an export is being written now.
+  bool get isRunning => _busy;
+
+  Future<ExportOutcome> _run(
     ExportRequest request, {
     required String destinationParent,
     void Function(ExportWriteProgress progress)? onProgress,

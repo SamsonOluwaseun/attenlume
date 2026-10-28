@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -779,6 +780,56 @@ void main() {
       expect(dest.listSync(), isEmpty);
       final job = (await t.exports.forConference(id)).single;
       expect(job.state, ExportJobState.cancelled);
+    });
+  });
+
+  group('ADR-040 one export at a time', () {
+    test('FR-EXP-05 a second export while one runs is refused and writes '
+        'nothing', () async {
+      final (id, _, _, _) = await conference();
+      final gate = Completer<void>();
+      final started = Completer<void>();
+      final slow = ExportService(
+        conferences: t.conferences,
+        activities: t.activities,
+        media: t.media,
+        cuts: t.cuts,
+        jobs: t.exports,
+        mediaRoot: () async => mediaRoot,
+        tempRoot: () async => Directory(p.join(temp.path, 'cache')),
+        reserveBytes: 0,
+        writer: (plan, {onProgress, cancel}) async {
+          if (!started.isCompleted) started.complete();
+          await gate.future;
+          return inlineWriter(plan, onProgress: onProgress, cancel: cancel);
+        },
+        clock: t.clock.call,
+      );
+      final first = slow.run(
+        ExportRequest(conferenceId: id),
+        destinationParent: dest.path,
+      );
+      await started.future;
+      expect(slow.isRunning, isTrue);
+      await expectLater(
+        slow.run(
+          ExportRequest(conferenceId: id),
+          destinationParent: p.join(temp.path, 'other'),
+        ),
+        throwsA(isA<ExportException>()),
+      );
+      expect(Directory(p.join(temp.path, 'other')).existsSync(), isFalse);
+      expect(await t.exports.forConference(id), hasLength(1));
+
+      gate.complete();
+      final out = await first;
+      expect(slow.isRunning, isFalse);
+      expect(Directory(out.outputPath).existsSync(), isTrue);
+      // Free again once the first has finished.
+      await slow.run(
+        ExportRequest(conferenceId: id),
+        destinationParent: p.join(temp.path, 'other'),
+      );
     });
   });
 
