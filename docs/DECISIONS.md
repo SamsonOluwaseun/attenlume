@@ -650,3 +650,15 @@ Format: context, decision, alternatives, consequences.
 - **Alternatives:** native passthrough per platform (three implementations, iOS cannot be built or tested here, and Media Foundation needs a new plugin); one joined file per segment (shorter timeline, so every photo, bookmark and later segment offset would need remapping); FFmpeg (rejected in ADR-003); deleting originals straight away (against FR-REV-06 and NFR-07).
 - **Consequences:** Only MP4/M4A AAC works; a WAV option (ADR-023) would need its own trimmer. If the app is killed between writing files and the transaction, the new files sit unlinked in `audio/` and crash recovery lists them; nothing is lost. Kept originals in `audio/originals/` are not in any row: P1-20 (Storage Manager) should list and remove them, and P1-21 (export) should leave them out unless asked. Undo is not offered after a permanent trim (the originals are the undo while kept). Tested with synthetic MP4 files shaped like Android and Windows recordings (moov at the end, two-row `stsc`, edit list, `co64`); real recordings from each platform and playback of the results in other players are unverified (MT-26).
 
+
+## ADR-039: Platform app icons from the supplied artwork (owner request)
+
+- **Date:** 28 October 2026. **Decided by:** Claude Code (Opus 5.5), owner present. (ADR-038 is taken on the unmerged P1-20 branch.)
+- **Context:** The Android, iOS and Windows builds still showed the Flutter icon. The design guide asks for icons generated from `attenlume-app-icon-primary.png` with `flutter_launcher_icons`, without altering the artwork: iOS full-bleed with no transparency, Android adaptive on navy, Windows `.ico`. The supplied PNG has a see-through patch inside the navy tile, near the top left (alpha down to 8 %), which shows white on light backgrounds.
+- **Decision:**
+  1. `flutter_launcher_icons` 0.14.4 (MIT, Flutter Community) as a dev dependency, configured in `flutter_launcher_icons.yaml`.
+  2. Two derived images in `assets/brand/icons/`, neither redrawn: `attenlume-app-icon-filled.png` (pixels inside the tile composited over the tile's own navy #012331, outside left transparent) for Windows and Android legacy icons, and `attenlume-app-icon-fullbleed.png` (the tile cropped square on navy, 1024 px, no alpha) for iOS and the Android adaptive foreground.
+  3. Android adaptive icon: navy background, foreground inset 23 % so the whole mark sits inside the circular safe zone.
+  4. The tool's edits to `AndroidManifest.xml` (it replaced the Quick Settings tile icon, which must stay monochrome) and to `project.pbxproj` are reverted; the YAML notes this.
+- **Alternatives:** using the PNG as is (white patch on light taskbars); hand-making icon sets (more error-prone, against the design guide).
+- **Consequences:** No Android monochrome (themed) icon yet: that needs a single-colour mark from the owner. A clean re-export of the primary icon without the see-through patch would let the filled copy go. iOS icons are generated but unverified until a Mac build.

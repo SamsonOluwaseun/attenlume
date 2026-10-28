@@ -1,0 +1,29 @@
+# Platform app icons from the supplied Attenlume artwork (DESIGN_GUIDE, Logo).
+# Regenerate with:  dart run flutter_launcher_icons
+# Then revert the tool's edits to AndroidManifest.xml (it replaces the
+# Quick Settings tile icon) and ios/Runner.xcodeproj/project.pbxproj.
+#
+# Both source images are the supplied primary icon, not redrawn:
+# - attenlume-app-icon-filled.png: the see-through patch inside the navy
+#   tile (alpha down to 8 %) composited over the tile's own navy, so it does
+#   not show white on light backgrounds. Outside the tile stays transparent.
+# - attenlume-app-icon-fullbleed.png: the tile cropped square on its own
+#   navy (#012331). iOS needs no transparency and applies its own corners;
+#   Android adaptive icons apply their own mask.
+flutter_launcher_icons:
+  image_path: "assets/brand/icons/attenlume-app-icon-fullbleed.png"
+
+  android: true
+  image_path_android: "assets/brand/icons/attenlume-app-icon-filled.png"
+  adaptive_icon_background: "#012331"
+  adaptive_icon_foreground: "assets/brand/icons/attenlume-app-icon-fullbleed.png"
+  # Keeps the whole mark inside the launcher's circular safe zone.
+  adaptive_icon_foreground_inset: 23
+
+  ios: true
+  remove_alpha_ios: true
+
+  windows:
+    generate: true
+    image_path: "assets/brand/icons/attenlume-app-icon-filled.png"
+    icon_size: 256
