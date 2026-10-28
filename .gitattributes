@@ -1,3 +1,5 @@
 # Dart sources (including generated code) keep LF so CI codegen and format checks compare cleanly.
 *.dart text eol=lf
 *.yaml text eol=lf
+# Windows batch files need CRLF to run reliably.
+*.cmd text eol=crlf
