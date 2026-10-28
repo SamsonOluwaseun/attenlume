@@ -12,7 +12,9 @@ import 'package:attenlume/domain/models/activity.dart';
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/media.dart';
 import 'package:attenlume/domain/services/export_service.dart';
+import 'package:attenlume/domain/services/permanent_trim_service.dart';
 import 'package:attenlume/domain/services/private_notes.dart';
+import 'package:attenlume/platform/audio_trimmer/mp4_sample_trimmer.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -521,6 +523,77 @@ void main() {
       expect(seg['trimmed'], isFalse);
       expect(seg['sha256'], await hashFileSha256(audio));
       expect(seg.containsKey('source_sha256'), isFalse);
+    });
+
+    test('FR-EXP-03 every file cuts.json names is in the export, after a '
+        'permanent trim and a split', () async {
+      final c = await t.conference();
+      t.clock.set(DateTime.utc(2026, 11, 4, 9));
+
+      // Permanent trim: the stored files become segment-001-trim-1.m4a
+      // and segment-001-trim-2.m4a, exported as segment-001/-002.m4a.
+      final trimmedActivity = await t.activity(c.id, title: 'Trimmed');
+      await segment(trimmedActivity, DateTime.utc(2026, 11, 4, 9), mp4: true);
+      await t.cuts.add(
+        trimmedActivity.id,
+        startOffsetMs: 3000,
+        endOffsetMs: 6000,
+      );
+      await PermanentTrimService(
+        activities: t.activities,
+        media: t.media,
+        cuts: t.cuts,
+        trimmer: const Mp4SampleTrimmer(),
+        mediaRoot: () async => mediaRoot,
+        newId: t.ids.call,
+      ).apply(trimmedActivity.id);
+      final stored = await t.media.segmentsFor(trimmedActivity.id);
+      expect(stored.map((s) => p.posix.basename(s.filePath)), [
+        'segment-001-trim-1.m4a',
+        'segment-001-trim-2.m4a',
+      ]);
+
+      // Split inside the second segment: part 2's only row names the
+      // first part's segment-002.m4a, exported there as segment-001.m4a.
+      t.clock.set(DateTime.utc(2026, 11, 4, 10));
+      final splitActivity = await t.activity(c.id, title: 'Two talks');
+      await segment(splitActivity, DateTime.utc(2026, 11, 4, 10));
+      await segment(splitActivity, DateTime.utc(2026, 11, 4, 10, 0, 20));
+      await t.activities.split(splitActivity.id, splitOffsetMs: 25000);
+
+      final out = await service.run(
+        ExportRequest(
+          conferenceId: c.id,
+          audioMode: ExportAudioMode.originalWithCuts,
+        ),
+        destinationParent: dest.path,
+      );
+      final manifests = Directory(out.outputPath)
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => p.basename(f.path) == 'cuts.json')
+          .toList();
+      expect(manifests, hasLength(3));
+      final named = <String>[];
+      for (final manifest in manifests) {
+        final json = jsonDecode(manifest.readAsStringSync()) as Map;
+        for (final s
+            in (json['segments'] as List).cast<Map<String, Object?>>()) {
+          final name = s['file_name'] as String;
+          named.add(name);
+          expect(
+            File(p.joinAll([manifest.parent.path, ...p.posix.split(name)]))
+                .existsSync(),
+            isTrue,
+            reason: '${manifest.path} names $name',
+          );
+        }
+      }
+      expect(
+        named,
+        everyElement(matches(RegExp(r'^audio/segment-\d{3}\.m4a$'))),
+      );
+      expect(named.where((n) => n.contains('trim')), isEmpty);
     });
 
     test('FR-EXP-03 originals plus cuts.json', () async {

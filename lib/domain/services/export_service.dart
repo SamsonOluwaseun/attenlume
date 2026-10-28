@@ -559,11 +559,18 @@ class ExportService {
           }
         }
         if (mode == ExportAudioMode.originalWithCuts && activeCuts.isNotEmpty) {
+          // Name each file as it is in the export (relative to the
+          // activity folder, where cuts.json sits), not as stored: the
+          // export renumbers files by sequence and resolves clashes.
           final manifest = CutsManifest.fromDomain(
+            fileNames: segmentFiles,
             activityId: a.id,
             totalDurationMs: timeline.endMs,
             cutRanges: activeCuts,
-            segments: playable,
+            segments: [
+              for (final s in playable)
+                if (segmentFiles.containsKey(s.id)) s,
+            ],
             firstSegmentStartUtc: timeline.segments.isEmpty
                 ? null
                 : timeline.segments.first.segment.startUtc,
