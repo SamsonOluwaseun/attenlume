@@ -3,3 +3,6 @@
 *.yaml text eol=lf
 # Windows batch files need CRLF to run reliably.
 *.cmd text eol=crlf
+# Flutter regenerates these with LF on every build.
+windows/flutter/generated_plugin_registrant.* text eol=lf
+windows/flutter/generated_plugins.cmake text eol=lf
