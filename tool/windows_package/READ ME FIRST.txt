@@ -1,0 +1,37 @@
+Attenlume for Windows: test build
+=================================
+
+This is a work-in-progress build for testing. The exact version is in
+VERSION.txt.
+
+Install or update
+-----------------
+1. Close Attenlume if it is open.
+2. Double-click "Install Attenlume.cmd".
+3. If Windows shows "Windows protected your PC", click "More info", then
+   "Run anyway". Test builds are not signed yet, so Windows does not
+   recognise them.
+4. Attenlume opens. A shortcut "Attenlume (test)" is added to the desktop
+   and the Start menu.
+
+To update, run "Install Attenlume.cmd" again from a newer copy of this
+folder. Your recordings, photos and notes are kept.
+
+Microphone and camera
+---------------------
+The first time you record or take a photo, Windows may ask for access.
+If recording does not start, open Settings > Privacy & security >
+Microphone and turn on "Let desktop apps access your microphone". Do the
+same under Camera for photos.
+
+Where things are
+----------------
+App:                            %LOCALAPPDATA%\Programs\Attenlume
+Recordings, photos and notes:   %LOCALAPPDATA%\Samlytics\Attenlume
+
+Remove
+------
+Double-click "Uninstall Attenlume.cmd". It asks before deleting any
+recordings.
+
+Needs Windows 10 or 11, 64-bit.
