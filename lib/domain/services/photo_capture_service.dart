@@ -45,6 +45,13 @@ class PhotoCaptureService {
 
   PhotoCamera get camera => _camera;
 
+  /// The camera chosen with [switchCamera], reopened by [open] for the
+  /// rest of the app run. Null means the platform default (back camera).
+  CameraLens? _preferred;
+
+  /// Cameras the device reports, for showing a switch button.
+  Future<List<CameraLens>> cameras() => _camera.listCameras();
+
   Future<T> _cameraUse<T>(Future<T> Function() action) {
     final interruptions = _interruptions;
     return interruptions == null
@@ -55,7 +62,29 @@ class PhotoCaptureService {
   /// Opens the camera if it is not open yet.
   Future<void> open() async {
     if (_camera.isOpen) return;
-    await _cameraUse(_camera.open);
+    await _cameraUse(() => _camera.open(lens: _preferred));
+  }
+
+  /// Opens the next camera: back to front and on through any external
+  /// cameras, then round again. Returns the camera now open.
+  ///
+  /// Call only when no shot is in progress. If the next camera will not
+  /// open, the previous one is reopened and the error is rethrown.
+  Future<CameraLens?> switchCamera() async {
+    final lenses = await _camera.listCameras();
+    final current = _camera.lens;
+    if (lenses.length < 2) return current;
+    final at = lenses.indexWhere((l) => l.id == current?.id);
+    final next = lenses[(at + 1) % lenses.length];
+    await _camera.close();
+    try {
+      await _cameraUse(() => _camera.open(lens: next));
+    } on Object {
+      await _cameraUse(() => _camera.open(lens: current));
+      rethrow;
+    }
+    _preferred = _camera.lens;
+    return _preferred;
   }
 
   /// Takes one photo for [activityId], compresses it, writes its thumbnail

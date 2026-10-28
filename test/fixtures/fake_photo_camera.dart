@@ -26,23 +26,47 @@ class FakePhotoCamera implements PhotoCamera {
   /// instead of [photoBytes] filler bytes.
   List<int>? photoData;
 
+  /// When it returns an error for a lens, opening that lens throws it.
+  Object? Function(CameraLens lens) lensError = (_) => null;
+
+  /// When set, [open] waits for it before the camera is open.
+  Future<void>? openGate;
+
   final List<String> paths = [];
+
+  /// Every lens opened, in order.
+  final List<CameraLens> opened = [];
   int shots = 0;
   bool closed = false;
   bool _open = false;
+  CameraLens? _lens;
 
   @override
   bool get isOpen => _open;
 
   @override
+  CameraLens? get lens => _open ? _lens : null;
+
+  @override
   Future<List<CameraLens>> listCameras() async => lenses;
 
+  /// Chooses like the plugin: the asked-for lens, else the first back
+  /// camera, else the first camera.
   @override
   Future<void> open({CameraLens? lens}) async {
     if (openError != null) throw openError!;
     if (lenses.isEmpty) {
       throw const CameraUnavailableException('No camera found.');
     }
+    final chosen =
+        lenses.where((l) => l.id == lens?.id).firstOrNull ??
+        lenses.where((l) => l.facing == CameraFacing.back).firstOrNull ??
+        lenses.first;
+    final error = lensError(chosen);
+    if (error != null) throw error;
+    await openGate;
+    opened.add(chosen);
+    _lens = chosen;
     _open = true;
   }
 
@@ -69,6 +93,7 @@ class FakePhotoCamera implements PhotoCamera {
   @override
   Future<void> close() async {
     _open = false;
+    _lens = null;
     closed = true;
   }
 }

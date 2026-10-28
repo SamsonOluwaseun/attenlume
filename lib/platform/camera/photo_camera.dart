@@ -19,6 +19,9 @@ abstract interface class PhotoCamera {
 
   bool get isOpen;
 
+  /// The camera that is open, or null when none is.
+  CameraLens? get lens;
+
   /// The live viewfinder for the open camera [P1-14]. An empty box when
   /// the camera is not open.
   Widget buildPreview();
