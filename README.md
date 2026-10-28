@@ -4,13 +4,15 @@ Be present. Bring ideas to light.
 
 Attenlume (a-TEN-loom) by Samlytics Data Services is an offline-first conference capture app for Android, iOS and Windows. It records sessions, links your slide photos to the moment they were shown and bookmarks key points, so you can listen instead of typing notes. No account, network or AI model is needed for the core app.
 
-**Status:** early development (Phase 0). Nothing here has been tested on a real phone or Surface yet. See `docs/PROGRESS.md`.
+**Status:** early test builds for Android and Windows. Recording, photos, bookmarks, review, trimming and export work; tested on an Android tablet, Android emulators and Windows. See `docs/PROGRESS.md`.
+
+**New to Attenlume?** Read the quick guide: [PDF](docs/user-guide/Attenlume-Quick-Guide.pdf) or [PowerPoint](docs/user-guide/Attenlume-Quick-Guide.pptx). The same guide is in the app: tap **New here? Read the quick guide** on the first screen.
 
 ## Try it on Android
 
 **[Download Attenlume for Android (APK)](https://github.com/SamsonOluwaseun/attenlume/releases/latest/download/attenlume-android.apk)**
 
-This is an early preview. It has not been tested on a real phone or tablet yet, so expect rough edges and keep copies of anything important.
+This is an early test build, so expect rough edges and export anything important.
 
 1. Open the link above on your Android phone or tablet. Chrome downloads the file.
 2. Tap the download when it finishes. If Android says installs from this source are not allowed, tap **Settings**, turn on **Allow from this source**, then go back.
@@ -18,6 +20,19 @@ This is an early preview. It has not been tested on a real phone or tablet yet, 
 4. Open Attenlume and allow the microphone when it asks.
 
 To update, download the latest APK and install it over the old one. Your conferences and recordings are kept. Every release, with its SHA-256 checksum, is on the [Releases page](https://github.com/SamsonOluwaseun/attenlume/releases).
+
+## Try it on Windows
+
+**[Download Attenlume for Windows (installer)](https://github.com/SamsonOluwaseun/attenlume/releases/latest/download/attenlume-windows-setup.exe)**
+
+For Windows 10 (version 1809 or later) and Windows 11, 64-bit. No administrator rights are needed.
+
+1. Open the link above. Your browser downloads `attenlume-windows-setup.exe`. If the browser warns that the file is not commonly downloaded, choose **Keep**.
+2. Run the file. Test builds are not signed yet, so Windows may show **Windows protected your PC**. Click **More info**, then **Run anyway**.
+3. Follow the installer. It adds Attenlume to the Start menu, and to the desktop if you tick the box.
+4. Open Attenlume. The first time you record or take a photo, Windows may ask for microphone or camera access. If recording does not start, open **Settings > Privacy & security > Microphone** and turn on **Let desktop apps access your microphone**.
+
+To update, run the newest installer; it replaces the old version and keeps your recordings. To remove Attenlume, use **Settings > Apps > Installed apps**. Your recordings, photos and notes stay in `%LOCALAPPDATA%\Samlytics\Attenlume` until you delete that folder.
 
 ## Develop
 
@@ -41,17 +56,17 @@ Database schema: after changing tables and bumping `schemaVersion`, run `dart ru
 
 ## Export format
 
-Planned, not built yet (task P1-21). A conference exports as a structured folder or ZIP with `README_START_HERE.md`, `conference.json`, `timeline.csv`, `analysis_prompt.md`, one folder per activity (audio segments, photos, notes, bookmarks, cut ranges) and `checksums.sha256`. The full layout is in `docs/BUILD_GUIDE.md` section 5.10.
+A conference, a day or chosen activities export as a folder or ZIP with `conference.json`, one folder per activity (audio, photos, `activity.json`, `notes.md`, `bookmarks.csv`, cut ranges) and `checksums.sha256` (P1-21, ADR-040). On Android and iOS a ZIP can be shared straight from the app. The README, `timeline.csv` and `analysis_prompt.md` for AI tools come with P1-22. The full layout is in `docs/BUILD_GUIDE.md` section 5.10.
 
 ## Caveats
 
-- No platform has been tested on a real device yet. See the device matrix in `docs/TEST_PLAN.md`.
+- Most device checks are still to do. See the device matrix in `docs/TEST_PLAN.md`.
 - iOS cannot be built or signed without a Mac (`docs/RELEASE_PLAN.md`).
 - On Windows the system AAC encoder's minimum is 96 kbps, so all quality profiles record at about 43 MB per hour there (ADR-002).
 
-## Windows downloads
+## Building the Windows installer
 
-None yet. Releases will be published on GitHub Releases with an installer, a portable ZIP and SHA-256 checksums once the release pipeline (P1-28) exists. Unsigned builds will trigger a SmartScreen warning.
+`powershell -File tool\build_windows_installer.ps1` builds the release app and compiles `tool\windows_installer\attenlume.iss` with Inno Setup 6 (`winget install JRSoftware.InnoSetup`) into `attenlume-windows-setup.exe`. The installer is per user and unsigned until a code-signing certificate is in place; an automated release pipeline is task P1-28.
 
 ## Docs
 
