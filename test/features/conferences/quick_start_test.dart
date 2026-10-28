@@ -1,4 +1,5 @@
 import 'package:attenlume/app/theme/app_theme.dart';
+import 'package:attenlume/app/theme/tokens.dart';
 import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
 import 'package:attenlume/data/repositories/conference_repository.dart';
@@ -29,7 +30,7 @@ void main() {
     await db.close();
   });
 
-  Widget createSubject() {
+  Widget createSubject({ThemeData? theme}) {
     return ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
@@ -37,9 +38,30 @@ void main() {
           const _FakeDeviceTimezoneService(),
         ),
       ],
-      child: MaterialApp(theme: AppTheme.light(), home: const WelcomeScreen()),
+      child: MaterialApp(
+        theme: theme ?? AppTheme.light(),
+        home: const WelcomeScreen(),
+      ),
     );
   }
+
+  Color? logoPanelColour(WidgetTester tester) {
+    final panel = tester.widget<DecoratedBox>(
+      find.byKey(const Key('welcome-logo-panel')),
+    );
+    return (panel.decoration as BoxDecoration).color;
+  }
+
+  testWidgets('NFR-09 the logo sits on a cream panel only in the dark theme, '
+      'so its navy wordmark stays readable', (tester) async {
+    await tester.pumpWidget(createSubject(theme: AppTheme.dark()));
+    await tester.pumpAndSettle();
+    expect(logoPanelColour(tester), TokenColors.light.surface);
+
+    await tester.pumpWidget(createSubject());
+    await tester.pumpAndSettle();
+    expect(logoPanelColour(tester), Colors.transparent);
+  });
 
   testWidgets(
     'FR-CONF-01 quick start creates conference with one text field and one button [FR-CONF-01, FR-CONF-06]',

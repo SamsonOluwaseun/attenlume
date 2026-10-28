@@ -113,13 +113,34 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Supplied artwork, used as is. Decoded at display size.
+                  // Its navy wordmark disappears on the dark theme, so there
+                  // it sits on a cream panel, as the design guide allows
+                  // (lockups on cream or white, never recoloured).
                   Center(
-                    child: Image.asset(
-                      'assets/brand/logos/attenlume-logo-stacked.png',
-                      width: logoSize,
-                      height: logoSize,
-                      cacheWidth: (logoSize * pixelRatio).round(),
-                      semanticLabel: 'Attenlume by Samlytics Data Services',
+                    child: DecoratedBox(
+                      key: const Key('welcome-logo-panel'),
+                      decoration: BoxDecoration(
+                        color: theme.brightness == Brightness.dark
+                            ? TokenColors.light.surface
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(
+                          TokenRadius.radiusLg,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(
+                          theme.brightness == Brightness.dark
+                              ? TokenSpace.space3
+                              : 0,
+                        ),
+                        child: Image.asset(
+                          'assets/brand/logos/attenlume-logo-stacked.png',
+                          width: logoSize,
+                          height: logoSize,
+                          cacheWidth: (logoSize * pixelRatio).round(),
+                          semanticLabel: 'Attenlume by Samlytics Data Services',
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: TokenSpace.space4),
