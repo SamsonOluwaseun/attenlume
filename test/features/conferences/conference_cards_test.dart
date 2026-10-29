@@ -11,6 +11,7 @@ import 'package:attenlume/features/conferences/conference_card.dart';
 import 'package:attenlume/features/conferences/conference_list_screen.dart';
 import 'package:attenlume/shared/utilities/date_formatters.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -247,7 +248,7 @@ void main() {
     });
 
     testWidgets('FR-UI-10 a card reads as one button with everything it '
-        'shows (NFR-09)', (tester) async {
+        'shows and can be activated (NFR-09)', (tester) async {
       final handle = tester.ensureSemantics();
       final (london, _) = await twoConferences(tester);
       await tester.pumpWidget(subject());
@@ -257,6 +258,10 @@ void main() {
       expect(label, contains('Samlytics Conference 2026'));
       expect(label, contains('ExCeL London'));
       expect(label, contains('2 activities · 1 photo'));
+      // The card can be activated by a screen reader, not only announced.
+      final data = tester.getSemantics(card(london)).getSemanticsData();
+      expect(data.hasAction(SemanticsAction.tap), isTrue);
+      expect(data.flagsCollection.isButton, isTrue);
       handle.dispose();
     });
   });

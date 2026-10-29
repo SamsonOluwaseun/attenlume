@@ -90,6 +90,9 @@ class ConferenceCard extends StatelessWidget {
         dates,
         counts,
       ].join(', '),
+      // The InkWell's own tap action is excluded with its text, so the card
+      // node carries it for TalkBack, VoiceOver and Narrator.
+      onTap: onTap,
       excludeSemantics: true,
       child: Card(
         margin: const EdgeInsets.only(bottom: TokenSpace.space3),
