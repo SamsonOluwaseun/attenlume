@@ -33,6 +33,8 @@ class QuickGuideScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(TokenSpace.space4),
               children: [
+                const _CompanyLogo(),
+                const SizedBox(height: TokenSpace.space4),
                 Text(guide.intro, style: text.bodyLarge),
                 const SizedBox(height: TokenSpace.space4),
                 _Overview(items: guide.overview),
@@ -71,6 +73,44 @@ class QuickGuideScreen extends StatelessWidget {
                 const SizedBox(height: TokenSpace.space6),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The Samlytics Data Services logo (supplied artwork, used as is). Its
+/// navy lettering sits on a cream panel in the dark theme so it stays
+/// readable, as the Attenlume logo does on the welcome screen.
+class _CompanyLogo extends StatelessWidget {
+  const _CompanyLogo();
+
+  static const asset = 'assets/brand/samlytics/samlytics-logo.png';
+  static const width = 200.0;
+  // 1200 x 255 artwork; a fixed height keeps the layout still while it loads.
+  static const height = width * 255 / 1200;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        key: const Key('quick-guide-company-logo'),
+        decoration: BoxDecoration(
+          color: dark ? TokenColors.light.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(TokenRadius.radiusSm),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(dark ? TokenSpace.space2 : 0),
+          child: Image.asset(
+            asset,
+            width: width,
+            height: height,
+            cacheWidth: (width * dpr).round(),
+            semanticLabel: 'Samlytics Data Services',
           ),
         ),
       ),

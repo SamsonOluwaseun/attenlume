@@ -6,6 +6,10 @@ const G = require('./content');
 const REPO = require('path').resolve(__dirname, '..', '..').replace(/\\/g, '/');
 const IMG = `${REPO}/assets/guide`;
 const ICON = `${REPO}/assets/brand/icons/attenlume-app-icon-filled.png`;
+// Samlytics Data Services logo, 1200 x 255 (ratio 4.7), transparent; navy
+// lettering, so on dark slides it sits on a cream plate.
+const COMPANY_LOGO = `${REPO}/assets/brand/samlytics/samlytics-logo.png`;
+const LOGO_RATIO = 1200 / 255;
 const OUT = process.argv[2] || 'Attenlume-Quick-Guide.pptx';
 
 const C = { blue: '4392F1', navy: '00212B', cream: 'FEFFF8', lime: 'DCFF38', limeDk: 'C2E812', tint: 'EAF2FD' };
@@ -23,6 +27,7 @@ pres.defineSlideMaster({
   background: { color: C.cream },
   objects: [
     { text: { text: 'Attenlume quick guide', options: { x: 0.5, y: 5.2, w: 4, h: 0.3, fontFace: FONT, fontSize: 9, color: '5B6B70', margin: 0 } } },
+    { image: { path: COMPANY_LOGO, x: 7.65, y: 5.19, w: 0.26 * LOGO_RATIO, h: 0.26, altText: 'Samlytics Data Services' } },
   ],
   slideNumber: { x: 9.1, y: 5.2, w: 0.4, h: 0.3, fontFace: FONT, fontSize: 9, color: '5B6B70', align: 'right' },
 });
@@ -32,6 +37,14 @@ function pills(slide, onBlue) {
   slide.addShape(pres.ShapeType.roundRect, { x: 8.6, y: -0.35, w: 2.8, h: 0.7, rectRadius: 0.35, fill: { color: main }, line: { color: main }, rotate: 30 });
   slide.addShape(pres.ShapeType.roundRect, { x: 9.0, y: 0.55, w: 1.6, h: 0.45, rectRadius: 0.22, fill: { color: C.lime }, line: { color: C.lime }, rotate: 30 });
   slide.addShape(pres.ShapeType.roundRect, { x: -0.7, y: 5.05, w: 2.2, h: 0.55, rectRadius: 0.27, fill: { color: C.lime }, line: { color: C.lime }, rotate: 30 });
+}
+
+// The company logo on a cream plate, for dark and blue slides.
+function logoPlate(slide, x, y, logoW) {
+  const logoH = logoW / LOGO_RATIO;
+  const pad = 0.1;
+  slide.addShape(pres.ShapeType.roundRect, { x, y, w: logoW + 2 * pad, h: logoH + 2 * pad, rectRadius: 0.08, fill: { color: C.cream }, line: { color: C.cream } });
+  slide.addImage({ path: COMPANY_LOGO, x: x + pad, y: y + pad, w: logoW, h: logoH, altText: 'Samlytics Data Services' });
 }
 
 // A screenshot in a navy phone frame. Images are 540 x 1200 (0.45 ratio).
@@ -81,7 +94,7 @@ function stepSlide(section, step) {
   const s = pres.addSlide({ sectionTitle: 'Welcome' });
   s.background = { color: C.blue };
   pills(s, true);
-  s.addText('Samlytics Data Services', { x: 0.5, y: 0.35, w: 5, h: 0.3, fontFace: FONT, fontSize: 11, color: C.cream, margin: 0, isTextBox: true });
+  logoPlate(s, 0.5, 0.3, 1.9);
   s.addImage({ path: ICON, x: 4.35, y: 0.95, w: 1.3, h: 1.3, altText: 'Attenlume app icon' });
   s.addText(G.title, { x: 0.75, y: 2.45, w: 8.5, h: 0.9, fontFace: FONT, fontSize: 42, bold: true, color: C.cream, align: 'center', margin: 0, isTextBox: true });
   s.addText(G.subtitle, { x: 1.25, y: 3.4, w: 7.5, h: 0.75, fontFace: FONT, fontSize: 17, color: C.lime, align: 'center', margin: 0, isTextBox: true });
@@ -111,6 +124,7 @@ for (const section of G.sections) {
   d.background = { color: C.navy };
   d.addShape(pres.ShapeType.roundRect, { x: -0.6, y: 4.9, w: 2.4, h: 0.55, rectRadius: 0.27, fill: { color: C.lime }, line: { color: C.lime }, rotate: 30 });
   d.addShape(pres.ShapeType.roundRect, { x: 8.7, y: -0.3, w: 2.4, h: 0.6, rectRadius: 0.3, fill: { color: C.blue }, line: { color: C.blue }, rotate: 30 });
+  logoPlate(d, 0.75, 0.45, 1.5);
   d.addText(section.n, { x: 0.75, y: 1.35, w: 1.5, h: 1.1, fontFace: FONT, fontSize: 66, bold: true, color: C.lime, margin: 0, isTextBox: true });
   d.addText(section.title, { x: 0.75, y: 2.45, w: 6.2, h: 0.8, fontFace: FONT, fontSize: section.title.length > 16 ? 32 : 40, bold: true, color: C.cream, margin: 0, isTextBox: true });
   d.addText(section.blurb, { x: 0.75, y: 3.3, w: 5.2, h: 0.6, fontFace: FONT, fontSize: 16, color: C.blue, margin: 0, isTextBox: true });
@@ -157,7 +171,7 @@ for (const section of G.sections) {
     { text: 'Download for Android or Windows', options: { breakLine: true } },
     { text: G.download, options: { bold: true } },
   ], { x: 1.5, y: 3.4, w: 7, h: 0.8, fontFace: FONT, fontSize: 15, color: C.lime, align: 'center', margin: 0, isTextBox: true });
-  s.addText('Samlytics Data Services', { x: 1.5, y: 4.55, w: 7, h: 0.3, fontFace: FONT, fontSize: 11, color: C.cream, align: 'center', margin: 0, isTextBox: true });
+  logoPlate(s, (10 - (2.2 + 0.2)) / 2, 4.4, 2.2);
 }
 
 pres.writeFile({ fileName: OUT }).then((f) => console.log('wrote ' + path.resolve(f)));
