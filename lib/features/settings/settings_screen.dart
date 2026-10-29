@@ -68,8 +68,10 @@ class SettingsScreen extends ConsumerWidget {
         header: true,
         child: Text(
           text,
+          // ink: brand blue is 3.15:1 on cream, below 4.5:1 for 14px
+          // text (NFR-09, DESIGN_GUIDE colour rules).
           style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.primary,
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),

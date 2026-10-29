@@ -690,8 +690,11 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                                             style: theme.textTheme.labelSmall
                                                 ?.copyWith(
                                                   fontWeight: FontWeight.bold,
-                                                  color:
-                                                      theme.colorScheme.primary,
+                                                  // ink on brand-tint: brand
+                                                  // text fails here (NFR-09).
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onPrimaryContainer,
                                                 ),
                                           ),
                                         )

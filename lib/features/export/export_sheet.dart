@@ -418,14 +418,15 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
         onChanged: _running ? null : (v) => _change(() => _includePrivate = v),
       ),
       _label(theme, 'Save to'),
-      Row(
+      // Wraps at large text instead of overflowing (NFR-09).
+      Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Expanded(
-            child: Text(
-              _destination ?? 'Choose a folder for the export.',
-              key: const Key('export-destination'),
-              style: theme.textTheme.bodyMedium,
-            ),
+          Text(
+            _destination ?? 'Choose a folder for the export.',
+            key: const Key('export-destination'),
+            style: theme.textTheme.bodyMedium,
           ),
           if (ref.read(exportDestinationsProvider).canChoose)
             TextButton.icon(

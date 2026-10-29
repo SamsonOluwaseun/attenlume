@@ -62,9 +62,10 @@ class QuickGuideScreen extends StatelessWidget {
                 Text(
                   guide.closing,
                   textAlign: TextAlign.center,
+                  // ink: brand is only for display text of 24px or more.
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: TokenSpace.space6),
@@ -252,9 +253,10 @@ class _Tip extends StatelessWidget {
             children: [
               Text(
                 tip.title,
+                // ink: brand is only for display text of 24px or more.
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: TokenSpace.space1),

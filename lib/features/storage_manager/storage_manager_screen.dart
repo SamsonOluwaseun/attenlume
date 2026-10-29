@@ -369,13 +369,16 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  // Wraps at large text instead of overflowing (NFR-09).
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: TokenSpace.space2,
+                    runSpacing: TokenSpace.space1,
                     children: [
-                      Expanded(
-                        child: Text(
-                          c.conferenceName,
-                          style: theme.textTheme.titleMedium,
-                        ),
+                      Text(
+                        c.conferenceName,
+                        style: theme.textTheme.titleMedium,
                       ),
                       _StatusBadge(status: c.exportStatus),
                     ],
@@ -615,7 +618,12 @@ class _StatusBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: fg),
           const SizedBox(width: TokenSpace.space1),
-          Text(status.label, style: TextStyle(fontSize: 12, color: fg)),
+          Flexible(
+            child: Text(
+              status.label,
+              style: TextStyle(fontSize: 12, color: fg),
+            ),
+          ),
         ],
       ),
     );
