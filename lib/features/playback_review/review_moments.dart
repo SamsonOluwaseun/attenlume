@@ -216,6 +216,9 @@ class ReviewHighlights extends StatelessWidget {
               button: canPlay,
               label: '${m.kindName} at $time: ${m.label}',
               hint: canPlay ? 'Moves the playhead here' : null,
+              // Keeps the tap for screen readers: excludeSemantics drops
+              // the InkWell's own action.
+              onTap: canPlay ? () => onSeek(m.offsetMs) : null,
               excludeSemantics: true,
               child: InkWell(
                 onTap: canPlay ? () => onSeek(m.offsetMs) : null,
@@ -415,6 +418,7 @@ class _PhotoTile extends StatelessWidget {
           button: true,
           label: caption == null ? name : '$name: $caption',
           hint: 'Opens the photo',
+          onTap: onOpen,
           excludeSemantics: true,
           child: InkWell(
             onTap: onOpen,

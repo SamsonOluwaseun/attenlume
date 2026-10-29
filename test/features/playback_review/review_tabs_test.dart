@@ -14,6 +14,7 @@ import 'package:attenlume/features/playback_review/review_moments.dart';
 import 'package:attenlume/features/playback_review/review_screen.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -252,6 +253,17 @@ void main() {
       tester,
     ) async {
       await open(tester);
+      // Screen readers can activate the row too (NFR-09).
+      final handle = tester.ensureSemantics();
+      await tester.pump();
+      expect(
+        tester
+            .getSemantics(find.bySemanticsLabel('Bookmark at 15:00: Key slide'))
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+      handle.dispose();
       await tester.tap(find.text('Photo'));
       await settle(tester);
       // The photo at 14:00 is 1 minute into the second segment.
@@ -277,7 +289,14 @@ void main() {
 
       final handle = tester.ensureSemantics();
       await tester.pump();
-      expect(find.bySemanticsLabel('Photo at 14:00'), findsOneWidget);
+      // Screen readers can open the photo (NFR-09).
+      expect(
+        tester
+            .getSemantics(find.bySemanticsLabel('Photo at 14:00'))
+            .getSemanticsData()
+            .hasAction(SemanticsAction.tap),
+        isTrue,
+      );
       handle.dispose();
       await tester.tap(
         find
