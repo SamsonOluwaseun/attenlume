@@ -202,4 +202,83 @@ void main() {
     expect(prompts, hasLength(1));
     expect(service.recordedTime, const Duration(minutes: 5));
   });
+
+  group('FR-REC-06 thresholds changed in Settings mid-recording (ADR-048)', () {
+    const oneHour = SafetyThresholds(longRecording: Duration(hours: 1));
+    const twoHours = SafetyThresholds();
+
+    Future<void> startRecording() async {
+      await recorder.start(activity.id);
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    test('FR-REC-06 1 hour to 2 hours after the first reminder: the next is '
+        'at 2 hours, then every 2 hours', () async {
+      service.thresholds = oneHour;
+      await startRecording();
+      await tick(const Duration(hours: 1, minutes: 1));
+      expect(prompts, hasLength(1));
+
+      service.thresholds = twoHours;
+      await tick(const Duration(minutes: 57)); // 1:58
+      expect(prompts, hasLength(1));
+      await tick(const Duration(minutes: 3)); // 2:01
+      expect(prompts, hasLength(2), reason: 'at 2 hours, not 4');
+      await tick(const Duration(hours: 1, minutes: 58)); // 3:59
+      expect(prompts, hasLength(2));
+      await tick(const Duration(minutes: 2)); // 4:01
+      expect(prompts, hasLength(3));
+    });
+
+    test('FR-REC-06 2 hours to 1 hour after the 2-hour reminder: no repeat '
+        'straight away, the next is at 3 hours', () async {
+      await startRecording();
+      await tick(const Duration(hours: 2, minutes: 1));
+      expect(prompts, hasLength(1));
+
+      service.thresholds = oneHour;
+      await tick(const Duration(minutes: 1)); // 2:02
+      expect(prompts, hasLength(1), reason: 'already reminded at 2 hours');
+      await tick(const Duration(minutes: 57)); // 2:59
+      expect(prompts, hasLength(1));
+      await tick(const Duration(minutes: 2)); // 3:01
+      expect(prompts, hasLength(2));
+    });
+
+    test('FR-REC-06 2 hours to 1 hour at 1.5 hours with no reminder yet: '
+        'reminds at the next check', () async {
+      await startRecording();
+      await tick(const Duration(hours: 1, minutes: 30));
+      expect(prompts, isEmpty);
+
+      service.thresholds = oneHour;
+      await tick();
+      expect(prompts, hasLength(1));
+      await tick(const Duration(minutes: 25)); // 1:55
+      expect(prompts, hasLength(1), reason: 'next at 2 hours');
+      await tick(const Duration(minutes: 6)); // 2:01
+      expect(prompts, hasLength(2));
+    });
+
+    test('FR-REC-06 a shorter silence threshold counts from the last sound; '
+        'a silence reminder already given is not repeated', () async {
+      await startRecording();
+      level = -70;
+      await tick(const Duration(minutes: 7));
+      expect(prompts, isEmpty);
+
+      service.thresholds = const SafetyThresholds(
+        silence: Duration(minutes: 5),
+      );
+      await tick();
+      expect(prompts.map((p) => p.kind), [SafetyPromptKind.silence]);
+
+      service.thresholds = const SafetyThresholds(
+        silence: Duration(minutes: 5),
+        lowBatteryPercent: 30,
+      );
+      await tick();
+      expect(prompts, hasLength(1));
+    });
+  });
 }
