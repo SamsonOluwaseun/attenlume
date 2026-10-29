@@ -121,6 +121,11 @@ void main() {
   }
 
   Future<void> openConfirm(WidgetTester tester) async {
+    // Trim controls live on the Timeline tab (ADR-053) [P1-39].
+    final tab = find.byKey(const Key('review-tab-timeline-button'));
+    await tester.ensureVisible(tab);
+    await tester.tap(tab);
+    await settle(tester);
     final button = find.byKey(const Key('trim-apply-permanently'));
     await tester.ensureVisible(button);
     await tester.tap(button);

@@ -91,8 +91,8 @@ module.exports = {
           title: 'Play, trim and split',
           images: ['11-play-and-review'],
           points: [
-            'Tap Play and review. Bookmarks and photos appear on the timeline and under Key moments.',
-            'Use Trim start, Trim end or Start cut to hide parts you do not need. Undo is always there.',
+            'Tap Play and review. Highlights lists your bookmarks and photos as Key moments: tap one to play from there. Photos and Notes have their own tabs.',
+            'On the Timeline tab, use Trim start, Trim end or Start cut to hide parts you do not need. Undo is always there.',
             'Your original recording is never changed unless you choose to apply trims permanently.',
           ],
         },
