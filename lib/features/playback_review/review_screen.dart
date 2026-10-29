@@ -187,6 +187,14 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
     if (mounted) setState(() => _photos = photos);
   }
 
+  /// Moves the playhead and starts playback, for "Play from here".
+  Future<void> _playFrom(int offsetMs) async {
+    final player = _player;
+    if (player == null || !player.canPlay) return;
+    await player.seekTo(offsetMs);
+    if (!player.isPlaying) await player.play();
+  }
+
   void _showOnTimeline(int offsetMs) {
     _player?.seekTo(offsetMs);
     _tabs.animateTo(ReviewTab.timeline.index);
@@ -450,6 +458,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
         root: _root,
         canPlay: player.canPlay,
         onSeek: player.seekTo,
+        onPlayFrom: _playFrom,
         onShowOnTimeline: _showOnTimeline,
         onOpenPhoto: _openPhoto,
       ),
@@ -499,7 +508,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
         },
         root: _root,
         canPlay: player.canPlay,
-        onSeek: player.seekTo,
+        onPlayFrom: _playFrom,
         onOpenPhoto: _openPhoto,
       ),
       ReviewTab.notes => ActivityNotesSection(

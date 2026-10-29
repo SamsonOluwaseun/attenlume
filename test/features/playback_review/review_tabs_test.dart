@@ -193,12 +193,34 @@ void main() {
       expect(moments[2].thumbnail?.id, 'p1');
       expect(moments[2].label, 'Bookmark');
     });
+
+    test('FR-PHO-06 a cleared caption is not brought back from the '
+        'timeline', () {
+      final old = photo('p1', 40, PhotoSource.inApp);
+      final captioned = Photo(
+        id: old.id,
+        activityId: old.activityId,
+        filePath: old.filePath,
+        takenUtc: old.takenUtc,
+        offsetMs: old.offsetMs,
+        caption: 'Old caption',
+        source: old.source,
+        originalKept: true,
+        createdAt: old.createdAt,
+        updatedAt: old.updatedAt,
+      );
+      final timeline = ReviewTimeline.build(
+        segments: const [],
+        photos: [captioned],
+      );
+      // The timeline was built with the caption; the photo row now has none.
+      expect(keyMoments(timeline, [old]).single.label, 'Photo');
+    });
   });
 
   group('P1-39 Highlights tab', () {
-    testWidgets('FR-REV-01 the moment menu shows a bookmark on the timeline', (
-      tester,
-    ) async {
+    testWidgets('FR-REV-01 the moment menu plays from a bookmark and shows '
+        'it on the timeline', (tester) async {
       final sample = await open(tester);
       final bookmark = (await tester.runAsync(
         () => t.media.bookmarksFor(sample.keynote.id),
@@ -206,8 +228,14 @@ void main() {
 
       await tester.tap(find.byKey(Key('review-moment-menu-${bookmark.id}')));
       await tester.pumpAndSettle();
-      expect(find.text('Play from here'), findsOneWidget);
       expect(find.text('View photo'), findsNothing);
+      await tester.tap(find.text('Play from here'));
+      await settle(tester);
+      expect(engine.seekedTo, const Duration(minutes: 2));
+      expect(engine.playing, isTrue, reason: 'Play from here starts it');
+
+      await tester.tap(find.byKey(Key('review-moment-menu-${bookmark.id}')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Show on timeline'));
       await settle(tester);
       await tester.pump(const Duration(seconds: 1));
@@ -220,7 +248,9 @@ void main() {
       );
     });
 
-    testWidgets('FR-REV-01 tapping a moment plays from it', (tester) async {
+    testWidgets('FR-REV-01 tapping a moment moves the playhead to it', (
+      tester,
+    ) async {
       await open(tester);
       await tester.tap(find.text('Photo'));
       await settle(tester);
@@ -243,6 +273,7 @@ void main() {
       await tester.tap(find.byKey(Key('review-photo-play-${p.id}')));
       await settle(tester);
       expect(engine.seekedTo, const Duration(minutes: 1));
+      expect(engine.playing, isTrue, reason: 'play from a photo starts it');
 
       final handle = tester.ensureSemantics();
       await tester.pump();

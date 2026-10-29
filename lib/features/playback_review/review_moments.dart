@@ -62,7 +62,9 @@ List<KeyMoment> keyMoments(ReviewTimeline timeline, List<Photo> photos) {
       case TimelineMarkerKind.photo:
         final photo = byId[m.id];
         if (photo != null) lastPhoto = photo;
-        final text = photo?.caption ?? photo?.label ?? m.label;
+        // The current photo row wins over the marker, so a cleared caption
+        // stays cleared without rebuilding the timeline.
+        final text = photo == null ? m.label : photo.caption ?? photo.label;
         moments.add(
           KeyMoment(
             id: m.id,
@@ -152,6 +154,7 @@ class ReviewHighlights extends StatelessWidget {
     required this.root,
     required this.canPlay,
     required this.onSeek,
+    required this.onPlayFrom,
     required this.onShowOnTimeline,
     required this.onOpenPhoto,
   });
@@ -159,7 +162,12 @@ class ReviewHighlights extends StatelessWidget {
   final List<KeyMoment> moments;
   final Directory? root;
   final bool canPlay;
+
+  /// Moves the playhead (a row tap).
   final ValueChanged<int> onSeek;
+
+  /// Moves the playhead and starts playback ("Play from here").
+  final ValueChanged<int> onPlayFrom;
   final ValueChanged<int> onShowOnTimeline;
   final ValueChanged<Photo> onOpenPhoto;
 
@@ -207,7 +215,7 @@ class ReviewHighlights extends StatelessWidget {
               container: true,
               button: canPlay,
               label: '${m.kindName} at $time: ${m.label}',
-              hint: canPlay ? 'Plays from here' : null,
+              hint: canPlay ? 'Moves the playhead here' : null,
               excludeSemantics: true,
               child: InkWell(
                 onTap: canPlay ? () => onSeek(m.offsetMs) : null,
@@ -256,7 +264,7 @@ class ReviewHighlights extends StatelessWidget {
             tooltip: 'More for ${m.label}',
             icon: const Icon(Icons.more_vert_rounded),
             onSelected: (action) => switch (action) {
-              _MomentAction.play => onSeek(m.offsetMs),
+              _MomentAction.play => onPlayFrom(m.offsetMs),
               _MomentAction.timeline => onShowOnTimeline(m.offsetMs),
               _MomentAction.photo => onOpenPhoto(photo!),
             },
@@ -293,7 +301,7 @@ class ReviewPhotos extends StatelessWidget {
     required this.offsets,
     required this.root,
     required this.canPlay,
-    required this.onSeek,
+    required this.onPlayFrom,
     required this.onOpenPhoto,
   });
 
@@ -303,7 +311,7 @@ class ReviewPhotos extends StatelessWidget {
   final Map<String, int> offsets;
   final Directory? root;
   final bool canPlay;
-  final ValueChanged<int> onSeek;
+  final ValueChanged<int> onPlayFrom;
   final ValueChanged<Photo> onOpenPhoto;
 
   @override
@@ -359,7 +367,7 @@ class ReviewPhotos extends StatelessWidget {
                       root: root,
                       width: tile,
                       canPlay: canPlay,
-                      onSeek: onSeek,
+                      onPlayFrom: onPlayFrom,
                       onOpen: () => onOpenPhoto(p),
                     ),
                   ),
@@ -380,7 +388,7 @@ class _PhotoTile extends StatelessWidget {
     required this.root,
     required this.width,
     required this.canPlay,
-    required this.onSeek,
+    required this.onPlayFrom,
     required this.onOpen,
   });
 
@@ -389,7 +397,7 @@ class _PhotoTile extends StatelessWidget {
   final Directory? root;
   final double width;
   final bool canPlay;
-  final ValueChanged<int> onSeek;
+  final ValueChanged<int> onPlayFrom;
   final VoidCallback onOpen;
 
   @override
@@ -432,7 +440,7 @@ class _PhotoTile extends StatelessWidget {
               IconButton(
                 key: Key('review-photo-play-${photo.id}'),
                 tooltip: 'Play from $time',
-                onPressed: canPlay ? () => onSeek(offset) : null,
+                onPressed: canPlay ? () => onPlayFrom(offset) : null,
                 icon: const Icon(Icons.play_arrow_rounded),
               ),
           ],
