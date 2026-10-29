@@ -226,13 +226,20 @@ class _ImportExportScreenState extends ConsumerState<ImportExportScreen> {
         onPressed: () => _pick(zip: true),
       ),
       const SizedBox(height: TokenSpace.space3),
-      AttenlumeButton(
-        key: const Key('import-pick-folder'),
-        label: 'Choose an export folder',
-        variant: AttenlumeButtonVariant.secondary,
-        leading: const Icon(Icons.folder_open_outlined),
-        onPressed: () => _pick(zip: false),
-      ),
+      if (!ref.read(importPickerProvider).canPickFolder)
+        Text(
+          'On a phone or tablet, import the ZIP.',
+          key: const Key('import-zip-only'),
+          style: theme.textTheme.bodyMedium,
+        )
+      else
+        AttenlumeButton(
+          key: const Key('import-pick-folder'),
+          label: 'Choose an export folder',
+          variant: AttenlumeButtonVariant.secondary,
+          leading: const Icon(Icons.folder_open_outlined),
+          onPressed: () => _pick(zip: false),
+        ),
     ];
   }
 

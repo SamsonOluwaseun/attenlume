@@ -84,6 +84,10 @@ final exportImportServiceProvider = Provider<ExportImportService>(
 
 /// How the user picks an export to import. Tests override it.
 abstract interface class ImportPicker {
+  /// Whether a folder can be picked. `file_selector` has no folder picker
+  /// on Android and iOS, so phones and tablets import the ZIP.
+  bool get canPickFolder;
+
   /// A `.zip` file, or null when cancelled.
   Future<String?> pickZip();
 
@@ -95,6 +99,10 @@ abstract interface class ImportPicker {
 /// for the export folder).
 class FileSelectorImportPicker implements ImportPicker {
   const FileSelectorImportPicker();
+
+  @override
+  bool get canPickFolder =>
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
   @override
   Future<String?> pickZip() async {

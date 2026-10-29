@@ -781,6 +781,179 @@ void main() {
     });
   });
 
+  group('FR-EXP-11 crafted exports', () {
+    test('FR-EXP-11 IDs that are not UUIDs are replaced and nothing is '
+        'written outside the media root', () async {
+      final (id, _, _) = await sample();
+      final out = await export(id);
+      final c = readJson(out, 'conference.json')..['id'] = '../../escape';
+      final acts = c['activities']! as List;
+      final folder = (acts.first as Map)['folder'] as String;
+      (acts.first as Map)['id'] = '../escape-activity';
+      await rewrite(out, 'conference.json', jsonEncode(c));
+      final a = readJson(out, '$folder/activity.json');
+      a['id'] = r'..\..\escape';
+      ((a['segments']! as List).first as Map)['id'] = r'C:\escape';
+      ((a['photos']! as List).first as Map)['id'] = '/tmp/escape-photo';
+      ((a['bookmarks']! as List).first as Map)['id'] = 'D:escape';
+      await rewrite(out, '$folder/activity.json', jsonEncode(a));
+
+      final service = importer(u, newMediaRoot);
+      final prepared = await service.prepare(out);
+      expect(prepared.preview.alreadyExists, isTrue);
+      expect(prepared.preview.warnings.join(), contains('not in the form'));
+      final summary = await service.commit(prepared);
+      expect(summary.asCopy, isTrue);
+      expect(isImportableId(summary.conferenceId), isTrue);
+      final imported = await u.activities.listForConference(
+        summary.conferenceId,
+      );
+      expect(imported, hasLength(2));
+      for (final act in imported) {
+        expect(isImportableId(act.id), isTrue);
+        for (final s in await u.media.segmentsFor(act.id)) {
+          expect(isImportableId(s.id), isTrue);
+          expect(
+            s.filePath,
+            startsWith('conferences/${summary.conferenceId}/'),
+          );
+        }
+        for (final ph in await u.media.photosFor(act.id)) {
+          expect(isImportableId(ph.id), isTrue);
+        }
+        for (final b in await u.media.bookmarksFor(act.id)) {
+          expect(isImportableId(b.id), isTrue);
+        }
+      }
+      // Every file the import wrote is inside the new media root.
+      final newRoot = Directory(p.join(temp.path, 'new'));
+      for (final f in newRoot.listSync(recursive: true).whereType<File>()) {
+        expect(p.isWithin(newMediaRoot.path, f.path), isTrue, reason: f.path);
+      }
+      for (final e in temp.listSync()) {
+        expect(
+          ['old', 'new', 'dest', 'cache'],
+          contains(p.basename(e.path)),
+          reason: 'nothing written beside the test folders',
+        );
+      }
+    });
+
+    test(
+      'FR-EXP-11 file names with .. or absolute paths are ignored',
+      () async {
+        final (id, keynote, _) = await sample();
+        final out = await export(id);
+        final c = readJson(out, 'conference.json');
+        final folder =
+            ((c['activities']! as List).first as Map)['folder'] as String;
+        final a = readJson(out, '$folder/activity.json');
+        ((a['segments']! as List).first as Map)['file'] =
+            '../../conference.json';
+        ((a['photos']! as List).first as Map)['file'] = '/etc/passwd';
+        await rewrite(out, '$folder/activity.json', jsonEncode(a));
+        final service = importer(u, newMediaRoot);
+        final summary = await service.commit(await service.prepare(out));
+        expect(await u.media.segmentsFor(keynote.id), hasLength(1));
+        expect(await u.media.photosFor(keynote.id), isEmpty);
+        expect(summary.segments, 2);
+      },
+    );
+
+    test('FR-EXP-11 repeated IDs in one export import as a copy', () async {
+      final (id, _, _) = await sample();
+      final out = await export(id);
+      final c = readJson(out, 'conference.json');
+      final folder =
+          ((c['activities']! as List).first as Map)['folder'] as String;
+      final a = readJson(out, '$folder/activity.json');
+      final bookmarks = a['bookmarks']! as List;
+      (bookmarks[1] as Map)['id'] = (bookmarks[0] as Map)['id'];
+      await rewrite(out, '$folder/activity.json', jsonEncode(a));
+      final service = importer(u, newMediaRoot);
+      final summary = await service.commit(await service.prepare(out));
+      expect(summary.asCopy, isTrue);
+      expect(summary.bookmarks, 2);
+    });
+
+    test('FR-EXP-11 destinations outside the media root are refused', () {
+      final root = Directory(p.join(temp.path, 'media'));
+      final inside = File(p.join(root.path, 'conferences', 'a', 'x.m4a'));
+      expect(ensureInsideMediaRoot(root, inside), inside);
+      for (final bad in [
+        File(p.join(root.path, '..', 'x.m4a')),
+        File(p.join(root.path, 'conferences', '..', '..', 'x.m4a')),
+        File(p.join(temp.path, 'elsewhere', 'x.m4a')),
+        File(root.path),
+      ]) {
+        expect(
+          () => ensureInsideMediaRoot(root, bad),
+          throwsA(isA<ExportImportException>()),
+          reason: bad.path,
+        );
+      }
+      expect(isImportableId('aaaaaaaa-0000-4000-8000-000000000001'), isTrue);
+      for (final bad in [
+        '../x',
+        r'..\x',
+        '/abs',
+        r'C:\x',
+        'C:x',
+        '',
+        'aaaaaaaa-0000-4000-8000-00000000000g',
+        null,
+      ]) {
+        expect(isImportableId(bad), isFalse, reason: '$bad');
+      }
+    });
+
+    test('FR-EXP-11 a failed import leaves no new activity type, rows or '
+        'files', () async {
+      final c = await t.conferences.create(
+        name: 'Samlytics Conference 2026',
+        timezone: 'Europe/London',
+      );
+      final type = await t.activities.createCustomType('Samlytics stand');
+      final a = await t.activities.create(
+        conferenceId: c.id,
+        typeId: type.id,
+        title: 'Stand visit',
+      );
+      await segment(a, day1);
+      await t.media.addBookmark(
+        activityId: a.id,
+        source: BookmarkSource.ui,
+        atUtc: day1.add(const Duration(seconds: 3)),
+        label: 'Ask about pricing',
+      );
+      final out = await export(c.id);
+      final typesBefore = (await u.activities.types()).length;
+      await u.db.customStatement(
+        'CREATE TRIGGER fail_bookmarks BEFORE INSERT ON bookmarks '
+        'BEGIN SELECT RAISE(ABORT, "test failure"); END',
+      );
+      final service = importer(u, newMediaRoot);
+      final prepared = await service.prepare(out);
+      await expectLater(service.commit(prepared), throwsA(anything));
+      expect(await u.activities.types(), hasLength(typesBefore));
+      expect(await u.conferences.getAll(includeArchived: true), isEmpty);
+      final conferences = Directory(p.join(newMediaRoot.path, 'conferences'));
+      expect(
+        conferences.existsSync()
+            ? conferences.listSync(recursive: true).whereType<File>()
+            : const <File>[],
+        isEmpty,
+      );
+      // Once the problem is gone, the same import works and adds the type.
+      await u.db.customStatement('DROP TRIGGER fail_bookmarks');
+      await service.commit(await service.prepare(out));
+      expect(
+        (await u.activities.types()).where((x) => x.label == 'Samlytics stand'),
+        hasLength(1),
+      );
+    });
+  });
+
   group('FR-EXP-11 trimmed copies', () {
     test('FR-EXP-11 a trimmed-copy export imports the trimmed files as the '
         'recordings and no cuts', () async {

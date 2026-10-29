@@ -28,9 +28,11 @@ class _FakeDeviceTimezoneService extends DeviceTimezoneService {
 }
 
 class _FakePicker implements ImportPicker {
-  _FakePicker(this.path);
+  _FakePicker(this.path, {this.canPickFolder = true});
 
   final String path;
+  @override
+  final bool canPickFolder;
   var folderPicks = 0;
 
   @override
@@ -232,5 +234,28 @@ void main() {
       () => app.conferences.getAll(includeArchived: true),
     );
     expect(all, isEmpty);
+  });
+
+  testWidgets('FR-EXP-11 without a folder picker (phones and tablets) only '
+      'the ZIP is offered', (tester) async {
+    await tester.pumpWidget(
+      subject(_FakePicker(exportPath, canPickFolder: false)),
+    );
+    await pumpUntil(tester, find.textContaining('No active conferences'));
+    await openImport(tester);
+    expect(find.byKey(const Key('import-pick-zip')), findsOneWidget);
+    expect(find.byKey(const Key('import-pick-folder')), findsNothing);
+    expect(find.text('On a phone or tablet, import the ZIP.'), findsOneWidget);
+  });
+
+  testWidgets('FR-EXP-11 on a desktop both choices are offered', (
+    tester,
+  ) async {
+    await tester.pumpWidget(subject(_FakePicker(exportPath)));
+    await pumpUntil(tester, find.textContaining('No active conferences'));
+    await openImport(tester);
+    expect(find.byKey(const Key('import-pick-zip')), findsOneWidget);
+    expect(find.byKey(const Key('import-pick-folder')), findsOneWidget);
+    expect(find.byKey(const Key('import-zip-only')), findsNothing);
   });
 }

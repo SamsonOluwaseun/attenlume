@@ -245,7 +245,13 @@ class ExportImportService {
             onProgress?.call(ImportProgress(ImportPhase.checking, done, total)),
       );
       final conf = await _Reader(staged, _clock()).read();
-      final exists = await _anyIdExists(conf);
+      if (!_idsUsable(conf)) {
+        conf.warnings.add(
+          'Some IDs in this export are not in the form Attenlume writes, so '
+          'it will be imported as a copy with new IDs.',
+        );
+      }
+      final exists = await _needsCopy(conf);
       final preview = ImportPreview(
         sourcePath: path,
         isZip: source.isZip,
@@ -330,7 +336,7 @@ class ExportImportService {
     try {
       final conf = prepared._conference;
       final staged = prepared._staged;
-      final copy = asCopy || await _anyIdExists(conf);
+      final copy = asCopy || await _needsCopy(conf);
       String idFor(String? old) => (copy || old == null) ? _newId() : old;
 
       final root = await mediaRoot();
@@ -340,19 +346,16 @@ class ExportImportService {
       final profile = await SettingsRepository(db)
           .globalDefaultRecordingProfile();
 
-      // Types first: a custom type the app does not have is added.
-      final typeIds = <_Act, String>{};
-      for (final a in conf.activities) {
-        typeIds[a] = await _typeFor(a);
-      }
-
       // Work out every row and file before touching anything.
       final moves = <(File, File)>[];
       final taken = <String>{};
       File free(String rel, String Function(int attempt) nameFor) {
         for (var attempt = 0; ; attempt++) {
           final candidate = attempt == 0 ? rel : nameFor(attempt);
-          final file = MediaPaths.resolve(root, candidate);
+          final file = ensureInsideMediaRoot(
+            root,
+            MediaPaths.resolve(root, candidate),
+          );
           if (!file.existsSync() && taken.add(candidate)) return file;
         }
       }
@@ -386,7 +389,8 @@ class ExportImportService {
           ActivitiesCompanion.insert(
             id: activityId,
             conferenceId: conferenceId,
-            typeId: typeIds[a]!,
+            // Set inside the transaction (a custom type may be added).
+            typeId: '',
             title: a.title,
             speakerNames: a.speakers,
             organisation: Value(a.organisation),
@@ -408,7 +412,7 @@ class ExportImportService {
         for (var n = 0; n < segments.length; n++) {
           final s = segments[n];
           final sequence = n + 1;
-          final ext = p.posix.extension(s.file).toLowerCase();
+          final ext = _safeExtension(s.file, '.m4a');
           String pathFor(int attempt) {
             final rel = MediaPaths.segment(
               conferenceId,
@@ -416,9 +420,7 @@ class ExportImportService {
               sequence,
               attempt: attempt,
             );
-            return ext == '.m4a' || ext.isEmpty
-                ? rel
-                : '${p.posix.withoutExtension(rel)}$ext';
+            return ext == '.m4a' ? rel : '${p.posix.withoutExtension(rel)}$ext';
           }
 
           final target = free(pathFor(0), pathFor);
@@ -454,12 +456,12 @@ class ExportImportService {
 
         for (final ph in a.photos) {
           final photoId = idFor(ph.id);
-          final ext = p.posix.extension(ph.file).toLowerCase();
+          final ext = _safeExtension(ph.file, '.jpg');
           String pathFor(int attempt) {
             final rel = MediaPaths.photo(conferenceId, activityId, photoId);
             final stem = p.posix.withoutExtension(rel);
             return '$stem${attempt == 0 ? '' : '-${attempt + 1}'}'
-                '${ext.isEmpty ? '.jpg' : ext}';
+                '$ext';
           }
 
           final target = free(pathFor(0), pathFor);
@@ -600,8 +602,13 @@ class ExportImportService {
                   ),
                 );
           }
-          for (final r in activityRows) {
-            await db.into(db.activities).insert(r);
+          // Types inside the transaction, so a failed import leaves no
+          // new custom type behind.
+          for (var i = 0; i < activityRows.length; i++) {
+            final typeId = await _typeFor(conf.activities[i]);
+            await db
+                .into(db.activities)
+                .insert(activityRows[i].copyWith(typeId: Value(typeId)));
           }
           for (final r in segmentRows) {
             await db.into(db.recordingSegments).insert(r);
@@ -687,6 +694,30 @@ class ExportImportService {
     return (await activities.createCustomType(label)).id;
   }
 
+  /// True when every ID the export gives is a UUID (so it is safe in a
+  /// file path) and no ID repeats within its kind.
+  bool _idsUsable(_Conf conf) {
+    bool ok(Iterable<String?> ids) {
+      final seen = <String>{};
+      for (final id in ids) {
+        if (id == null) continue;
+        if (!isImportableId(id) || !seen.add(id.toLowerCase())) return false;
+      }
+      return true;
+    }
+
+    return isImportableId(conf.id) &&
+        ok(conf.activities.map((a) => a.id)) &&
+        ok([for (final a in conf.activities) ...a.segments.map((s) => s.id)]) &&
+        ok([for (final a in conf.activities) ...a.photos.map((ph) => ph.id)]) &&
+        ok([for (final a in conf.activities) ...a.bookmarks.map((b) => b.id)]);
+  }
+
+  /// New IDs are needed when the export's IDs are unusable or already in
+  /// the app.
+  Future<bool> _needsCopy(_Conf conf) async =>
+      !_idsUsable(conf) || await _anyIdExists(conf);
+
   Future<bool> _anyIdExists(_Conf conf) async {
     Future<bool> any(String table, Iterable<String?> ids) async {
       final list = ids.whereType<String>().toList();
@@ -720,6 +751,36 @@ class ExportImportService {
           for (final a in conf.activities) ...a.bookmarks.map((b) => b.id),
         ]);
   }
+}
+
+final _uuidPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+/// True for an ID in the UUID form the app writes (BUILD_GUIDE 9.4). Only
+/// such IDs are kept, because conference, activity and photo IDs become
+/// folder and file names in the media layout.
+bool isImportableId(String? id) => id != null && _uuidPattern.hasMatch(id);
+
+/// Returns [file] when it lies inside [mediaRoot]; otherwise throws, so
+/// nothing is ever written outside the media folder.
+File ensureInsideMediaRoot(Directory mediaRoot, File file) {
+  final root = p.normalize(p.absolute(mediaRoot.path));
+  final target = p.normalize(p.absolute(file.path));
+  if (!p.isWithin(root, target)) {
+    throw const ExportImportException(
+      'This export names a file outside the app media folder, so it '
+      'cannot be imported.',
+    );
+  }
+  return file;
+}
+
+/// The file's extension when it is short and plain (`.m4a`, `.jpg`),
+/// else [fallback].
+String _safeExtension(String file, String fallback) {
+  final ext = p.posix.extension(file).toLowerCase();
+  return RegExp(r'^\.[a-z0-9]{1,8}$').hasMatch(ext) ? ext : fallback;
 }
 
 String _mb(int bytes) => '${(bytes / (1024 * 1024)).ceil()} MB';
@@ -1007,7 +1068,7 @@ class _Reader {
       if (start == null) continue;
       if (origin == null || start.isBefore(origin)) origin = start;
       final file = _str(s['file']);
-      if (file == null) continue;
+      if (file == null || !isSafeRelativePath(file)) continue;
       final rel = '$folder/$file';
       if (!has(rel)) continue;
       final state = _enum(SegmentState.values, s['state']);
@@ -1044,7 +1105,12 @@ class _Reader {
       if (ph is! Map) continue;
       final file = _str(ph['file']);
       final taken = _time(ph['taken_utc']);
-      if (file == null || taken == null || !has('$folder/$file')) continue;
+      if (file == null ||
+          !isSafeRelativePath(file) ||
+          taken == null ||
+          !has('$folder/$file')) {
+        continue;
+      }
       a.photos.add(
         _Pho()
           ..id = _str(ph['id'])
@@ -1146,7 +1212,9 @@ class _Reader {
       switch (r['kind']) {
         case 'segment':
           if (origin == null || at.isBefore(origin)) origin = at;
-          if (file.isEmpty || !has(file) || !file.startsWith('$folder/')) {
+          if (!isSafeRelativePath(file) ||
+              !has(file) ||
+              !file.startsWith('$folder/')) {
             continue;
           }
           final seg = _Seg()
@@ -1161,7 +1229,9 @@ class _Reader {
           await _inspect(seg, trimmed: r['note'] == 'trimmed copy');
           a.segments.add(seg);
         case 'photo':
-          if (file.isEmpty || !has(file) || !file.startsWith('$folder/')) {
+          if (!isSafeRelativePath(file) ||
+              !has(file) ||
+              !file.startsWith('$folder/')) {
             continue;
           }
           a.photos.add(
