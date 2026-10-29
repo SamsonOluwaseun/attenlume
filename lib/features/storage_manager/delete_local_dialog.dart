@@ -52,7 +52,7 @@ class DeleteLocalDialog extends StatelessWidget {
             const SizedBox(height: TokenSpace.space1),
             row('Audio recordings', p.audioFiles, p.audioBytes),
             row('Photos and thumbnails', p.photoFiles, p.photoBytes),
-            row('Kept originals and waveforms', p.otherFiles, p.otherBytes),
+            row('Waveforms', p.otherFiles, p.otherBytes),
             const Divider(),
             row('Total', p.totalFiles, p.totalBytes),
             if (p.sharedFilesKept > 0) ...[
@@ -63,6 +63,17 @@ class DeleteLocalDialog extends StatelessWidget {
                 'because another activity still uses '
                 '${p.sharedFilesKept == 1 ? 'it' : 'them'}.',
                 key: const Key('delete-local-shared-note'),
+              ),
+            ],
+            if (p.keptOriginalsKept > 0) ...[
+              const SizedBox(height: TokenSpace.space2),
+              Text(
+                '${p.keptOriginalsKept} '
+                '${p.keptOriginalsKept == 1 ? 'original' : 'originals'} '
+                'kept after trimming '
+                '${p.keptOriginalsKept == 1 ? 'stays' : 'stay'}: exports '
+                'leave them out. Use "Remove originals" to delete them.',
+                key: const Key('delete-local-originals-note'),
               ),
             ],
             if (p.recoveryFilesKept > 0) ...[

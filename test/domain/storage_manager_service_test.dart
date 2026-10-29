@@ -135,6 +135,8 @@ void main() {
     Map<String, Object?>? scope,
     VerificationLevel level = VerificationLevel.checksum,
   }) async {
+    // The export reads its data after the last change.
+    t.clock.advance(const Duration(seconds: 1));
     final job = await t.exports.create(
       conferenceId: confId,
       scope: scope ?? fullScope(),
@@ -462,7 +464,8 @@ void main() {
     );
 
     test('FR-STO-06 FR-STO-07 deleting a conference removes its files and '
-        'rows ("delete means delete") but keeps partial recordings', () async {
+        'rows ("delete means delete") but keeps partial recordings and kept '
+        'originals', () async {
       final conf = await t.conference();
       final act = await t.activity(conf.id, title: 'Opening keynote');
       final segRel = MediaPaths.segment(conf.id, act.id, 1);
@@ -489,23 +492,170 @@ void main() {
       );
       expect(preview.audioFiles, 1);
       expect(preview.photoFiles, 2);
-      expect(preview.otherFiles, 2);
+      expect(preview.otherFiles, 1);
       expect(preview.bookmarkCount, 1);
       expect(preview.recoveryFilesKept, 1);
-      expect(preview.totalBytes, 6000 + 5000 + 800 + 100 + 900);
+      expect(preview.keptOriginalsKept, 1);
+      expect(preview.totalBytes, 6000 + 5000 + 800 + 100);
 
       final res = await service.deleteLocalCopies(conferenceId: conf.id);
-      expect(res.filesDeleted, 5);
+      expect(res.filesDeleted, 4);
       expect(res.bytesFreed, preview.totalBytes);
       expect(res.failedFiles, 0);
 
       expect(MediaPaths.resolve(root, segRel).existsSync(), isFalse);
       expect(wave.existsSync(), isFalse);
+      // Kept originals are not in a normal export: they stay for
+      // "Remove originals", which still finds them.
+      expect(original.existsSync(), isTrue);
+      expect(partial.existsSync(), isTrue);
+      final after = await service.analyse();
+      expect(after.keptOriginals.single.conferenceName, 'Deleted conference');
+      expect(after.keptOriginals.single.activityTitle, isNull);
+      await service.removeKeptOriginals(after.keptOriginals);
       expect(original.existsSync(), isFalse);
       expect(partial.existsSync(), isTrue);
       expect(await t.activities.get(act.id), isNull);
       expect(await t.conferences.get(conf.id), isNull);
       expect(await t.media.bookmarksFor(act.id), isEmpty);
+    });
+
+    test('FR-STO-06 private reflections in public notes need an export with '
+        'private items', () async {
+      final conf = await t.conference();
+      final act = await t.activities.create(
+        conferenceId: conf.id,
+        typeId: builtinTypeId('session'),
+        title: 'Talk',
+        notesMd:
+            'Public summary.\n\n'
+            '${formatQuickThought('Ask Samlytics Data Services about pricing', isPrivate: true)}',
+      );
+      expect(act.isPrivate, isFalse);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+
+      await exported(conf.id);
+      var reason = (await service.analyse())
+          .conferences
+          .single
+          .activities
+          .single
+          .deleteBlockedReason;
+      expect(reason, contains('private items'));
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+
+      await exported(conf.id, scope: fullScope(includePrivate: true));
+      reason = (await service.analyse())
+          .conferences
+          .single
+          .activities
+          .single
+          .deleteBlockedReason;
+      expect(reason, isNull);
+    });
+
+    test('FR-STO-06 kept originals are never in Delete local copies', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Workshop');
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      final original = write(
+        p.posix.join(MediaPaths.originalsFolder(conf.id, act.id), 'a.m4a'),
+        900,
+      );
+      await exported(conf.id);
+
+      final preview = await service.previewDeleteLocalCopies(
+        conferenceId: conf.id,
+        activityId: act.id,
+      );
+      expect(preview.keptOriginalsKept, 1);
+      expect(preview.totalBytes, 1000);
+      await service.deleteLocalCopies(
+        conferenceId: conf.id,
+        activityId: act.id,
+      );
+      expect(original.existsSync(), isTrue);
+    });
+
+    test('FR-STO-06 a damaged segment refuses Delete local copies', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      final rel = MediaPaths.segment(conf.id, act.id, 1);
+      final segId = await segment(act.id, rel, 1000);
+      await t.media.setSegmentState(segId, SegmentState.damaged);
+      await exported(conf.id);
+
+      final c = (await service.analyse()).conferences.single;
+      expect(c.activities.single.deleteBlockedReason, contains('damaged'));
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+      expect(MediaPaths.resolve(root, rel).existsSync(), isTrue);
+    });
+
+    test('FR-STO-06 a segment whose file is missing refuses Delete local '
+        'copies', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      final kept = MediaPaths.segment(conf.id, act.id, 1);
+      final gone = MediaPaths.segment(conf.id, act.id, 2);
+      await segment(act.id, kept, 1000);
+      await segment(act.id, gone, 1000);
+      MediaPaths.resolve(root, gone).deleteSync();
+      await exported(conf.id);
+
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        contains('missing'),
+      );
+      await expectLater(
+        service.previewDeleteLocalCopies(conferenceId: conf.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+      expect(MediaPaths.resolve(root, kept).existsSync(), isTrue);
+    });
+
+    test('FR-STO-06 an edit made while the export ran is not covered by '
+        'it', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+
+      t.clock.advance(const Duration(seconds: 1));
+      final job = await t.exports.create(
+        conferenceId: conf.id,
+        scope: fullScope(),
+        format: ExportFormat.folder,
+        audioMode: ExportAudioMode.original,
+      );
+      t.clock.advance(const Duration(seconds: 1));
+      await t.exports.markRunning(job.id);
+      t.clock.advance(const Duration(minutes: 2));
+      await t.media.addBookmark(
+        activityId: act.id,
+        source: BookmarkSource.ui,
+        label: 'Added during the export',
+      );
+      t.clock.advance(const Duration(minutes: 2));
+      await t.exports.complete(job.id, VerificationLevel.checksum);
+
+      expect(
+        (await service.analyse())
+            .conferences
+            .single
+            .activities
+            .single
+            .deleteBlockedReason,
+        contains('changed after'),
+      );
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
+        throwsA(isA<StorageManagerException>()),
+      );
     });
   });
 }

@@ -16,6 +16,7 @@ import '../models/storage_breakdown.dart';
 import 'export_documents.dart' show isPrivateThought;
 import 'export_service.dart' show ExportContent;
 import 'permanent_trim_service.dart' show KeptOriginal;
+import 'private_notes.dart' show stripPrivateReflections;
 
 /// Storage Manager (FR-STO-05, FR-STO-06, ADR-038, ADR-047) [P1-20].
 ///
@@ -199,6 +200,35 @@ class StorageManagerService {
       );
     }
 
+    // Folders of deleted conferences can still hold kept originals and
+    // recovery files (Delete local copies leaves them): list them too.
+    final known = {for (final c in confs) c.conferenceId};
+    var leftOriginals = 0, leftOther = 0;
+    for (final MapEntry(key: rel, value: bytes) in _listFiles(
+      root,
+      'conferences',
+    ).entries) {
+      final parts = p.posix.split(rel);
+      if (parts.length < 3 || known.contains(parts[1])) continue;
+      if (MediaPaths.isKeptOriginal(rel) && !segmentPaths.contains(rel)) {
+        leftOriginals += bytes;
+        kept.add(
+          KeptOriginalFile(
+            relativePath: rel,
+            bytes: bytes,
+            conferenceName: 'Deleted conference',
+            activityTitle: null,
+          ),
+        );
+      } else {
+        leftOther += bytes;
+      }
+    }
+    total += StorageKindSizes(
+      keptOriginalBytes: leftOriginals,
+      recoveryBytes: leftOther,
+    );
+
     final temp = await tempRoot();
     final tempExports = _listFiles(
       temp,
@@ -374,6 +404,7 @@ class StorageManagerService {
     final shared = <String>{};
     var audioFiles = 0, audioBytes = 0, photoFiles = 0, photoBytes = 0;
     var otherFiles = 0, otherBytes = 0, recoveryKept = 0, bookmarks = 0;
+    var keptOriginals = 0;
 
     int add(String rel, String owner) {
       if (elsewhere.contains(rel)) {
@@ -409,15 +440,18 @@ class StorageManagerService {
           }
         }
       }
-      // Kept originals and waveform summaries in the activity folder.
-      // Partial and unlinked recordings stay for crash recovery.
+      // Waveform summaries in the activity folder go too. Kept originals
+      // are not in a normal export (ADR-040), so they stay for their own
+      // "Remove originals" action. Partial and unlinked recordings stay
+      // for crash recovery.
       final folder = MediaPaths.activityFolder(conferenceId, a.id);
       for (final rel in _listFiles(root, folder).keys) {
         if (files.containsKey(rel) || elsewhere.contains(rel)) continue;
         final parts = p.posix.split(rel);
         final isWave = parts.length == 6 && parts[4] == 'waveforms';
-        if (!MediaPaths.isPartial(rel) &&
-            (MediaPaths.isKeptOriginal(rel) || isWave)) {
+        if (MediaPaths.isKeptOriginal(rel)) {
+          keptOriginals++;
+        } else if (!MediaPaths.isPartial(rel) && isWave) {
           final b = add(rel, a.id);
           if (b >= 0) {
             otherFiles++;
@@ -445,6 +479,7 @@ class StorageManagerService {
         otherBytes: otherBytes,
         sharedFilesKept: shared.length,
         recoveryFilesKept: recoveryKept,
+        keptOriginalsKept: keptOriginals,
         bookmarkCount: bookmarks,
       ),
     );
@@ -495,8 +530,10 @@ class StorageManagerService {
   ///
   /// Needs a completed export verified by checksum that covers the
   /// activity, holds everything (all content, full-length audio, private
-  /// items when the activity has any) and finished after the activity's
-  /// media last changed. Never while a segment is being written.
+  /// items when the activity, its bookmarks or its notes have any) and
+  /// read its data after the activity last changed. Never while a segment
+  /// is being written, and never when a segment is damaged or missing
+  /// (the export could not hold it).
   static String? _blockedReason(
     Activity a,
     _ActivityRows rows,
@@ -504,6 +541,10 @@ class StorageManagerService {
   ) {
     if (rows.segments.any((s) => s.state == SegmentState.writing)) {
       return 'This activity is still recording.';
+    }
+    if (rows.unexportable > 0) {
+      return 'A recording in this activity is damaged or missing, so no '
+          'export holds it. Its local copies are kept.';
     }
     final verified =
         jobs
@@ -513,16 +554,16 @@ class StorageManagerService {
                   j.verificationLevel == VerificationLevel.checksum,
             )
             .toList()
-          ..sort(
-            (x, y) => (y.completedAt ?? y.updatedAt).compareTo(
-              x.completedAt ?? x.updatedAt,
-            ),
-          );
+          ..sort((x, y) => _snapshot(y).compareTo(_snapshot(x)));
     if (verified.isEmpty) {
       return 'Needs a verified export first. Export as a folder: folder '
           'exports are checked file by file.';
     }
-    final needsPrivate = a.isPrivate || rows.bookmarks.any(isPrivateThought);
+    final notes = a.notesMd;
+    final needsPrivate =
+        a.isPrivate ||
+        rows.bookmarks.any(isPrivateThought) ||
+        (notes != null && stripPrivateReflections(notes).$2 > 0);
     final changed = rows.lastChange(a);
     String? reason;
     for (final j in verified) {
@@ -542,7 +583,7 @@ class StorageManagerService {
         why =
             'The verified export left out private items. Export again '
             'with "Include private items".';
-      } else if ((j.completedAt ?? j.updatedAt).isBefore(changed)) {
+      } else if (!changed.isBefore(_snapshot(j))) {
         why =
             'This activity changed after the last verified export. '
             'Export it again first.';
@@ -554,14 +595,33 @@ class StorageManagerService {
     return reason;
   }
 
+  /// When the export read its data. `ExportService` plans (reads every
+  /// row) and then creates the job, so `created_at` is just after the
+  /// snapshot; a change at or after it, including while the export ran,
+  /// is not in the export.
+  static DateTime _snapshot(ExportJob j) => j.createdAt;
+
   // ---------------------------------------------------------------------
   // Helpers.
 
-  Future<_ActivityRows> _rows(Activity a) async => _ActivityRows(
-    segments: await media.segmentsFor(a.id),
-    photos: await media.photosFor(a.id),
-    bookmarks: await media.bookmarksFor(a.id),
-  );
+  Future<_ActivityRows> _rows(Activity a) async {
+    final root = await mediaRoot();
+    final segments = await media.segmentsFor(a.id);
+    return _ActivityRows(
+      segments: segments,
+      photos: await media.photosFor(a.id),
+      bookmarks: await media.bookmarksFor(a.id),
+      // What ExportService.plan leaves out (ADR-040): damaged segments
+      // and files that are missing.
+      unexportable: segments
+          .where(
+            (s) =>
+                s.state == SegmentState.damaged ||
+                !MediaPaths.resolve(root, s.filePath).existsSync(),
+          )
+          .length,
+    );
+  }
 
   Future<FreeSpace?> _space(String path) async {
     try {
@@ -620,11 +680,16 @@ class _ActivityRows {
     required this.segments,
     required this.photos,
     required this.bookmarks,
+    required this.unexportable,
   });
 
   final List<RecordingSegment> segments;
   final List<Photo> photos;
   final List<Bookmark> bookmarks;
+
+  /// Damaged segments or segments whose file is missing: no export can
+  /// hold them.
+  final int unexportable;
 
   DateTime lastChange(Activity a) {
     var last = a.updatedAt;

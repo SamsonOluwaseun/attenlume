@@ -212,6 +212,7 @@ class DeleteLocalPreview {
     required this.otherBytes,
     required this.sharedFilesKept,
     required this.recoveryFilesKept,
+    required this.keptOriginalsKept,
     required this.bookmarkCount,
   });
 
@@ -228,7 +229,7 @@ class DeleteLocalPreview {
   final int photoFiles;
   final int photoBytes;
 
-  /// Kept originals and waveform summaries.
+  /// Waveform summaries.
   final int otherFiles;
   final int otherBytes;
 
@@ -237,6 +238,10 @@ class DeleteLocalPreview {
 
   /// `.partial` and unlinked recordings left for crash recovery (ADR-038).
   final int recoveryFilesKept;
+
+  /// Recordings kept after trimming (ADR-037). A normal export leaves
+  /// them out, so they stay for "Remove originals".
+  final int keptOriginalsKept;
 
   /// Bookmarks and notes removed with the activities.
   final int bookmarkCount;

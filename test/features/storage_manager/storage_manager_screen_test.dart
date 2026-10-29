@@ -80,6 +80,7 @@ void main() {
   }
 
   Future<void> verifiedExport(String conferenceId) async {
+    t.clock.advance(const Duration(seconds: 1));
     final job = await t.exports.create(
       conferenceId: conferenceId,
       scope: const {
