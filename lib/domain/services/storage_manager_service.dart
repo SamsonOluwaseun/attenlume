@@ -187,7 +187,7 @@ class StorageManagerService {
             activityId: a.id,
             activityTitle: a.title,
             activityTypeLabel: types[a.typeId] ?? 'Activity',
-            exportStatus: _status(jobs, a.id),
+            exportStatus: _activityStatus(a, rows, jobs),
             sizes:
                 StorageKindSizes(
                   audioBytes: sizeOf(rows.segments.map((s) => s.filePath)),
@@ -679,42 +679,74 @@ class StorageManagerService {
       return 'Needs a verified export first. Export as a folder: folder '
           'exports are checked file by file.';
     }
+    String? reason;
+    for (final j in verified) {
+      final why = _missing(a, rows, j);
+      if (why == null) return null;
+      reason ??= why;
+    }
+    return reason;
+  }
+
+  /// What [j], an export that covers [a], does not hold, or null when it
+  /// holds all of it as it is now. One rule for both the export status and
+  /// the delete gate, so they cannot disagree (ADR-047).
+  static String? _missing(Activity a, _ActivityRows rows, ExportJob j) {
+    final scope = j.scope;
+    final audioMode = scope['audio_mode'];
     final notes = a.notesMd;
     final needsPrivate =
         a.isPrivate ||
         rows.bookmarks.any(isPrivateThought) ||
         (notes != null && stripPrivateReflections(notes).$2 > 0);
-    final changed = rows.lastChange(a);
-    String? reason;
-    for (final j in verified) {
-      final scope = j.scope;
-      final audioMode = scope['audio_mode'];
-      final String? why;
-      if (scope['content'] != ExportContent.everything.key) {
-        why =
-            'The verified export does not hold everything. Export again '
-            'with "Everything".';
-      } else if (audioMode != ExportAudioMode.original.key &&
-          audioMode != ExportAudioMode.originalWithCuts.key) {
-        why =
-            'The verified export has trimmed audio only. Export again '
-            'with the original recordings.';
-      } else if (needsPrivate && scope['include_private'] != true) {
-        why =
-            'The verified export left out private items. Export again '
-            'with "Include private items".';
-      } else if (_snapshot(j) == null) {
-        why = _noSnapshot;
-      } else if (!changed.isBefore(_snapshot(j)!)) {
-        why =
-            'This activity changed after the last verified export. '
-            'Export it again first.';
-      } else {
-        return null;
-      }
-      reason ??= why;
+    if (needsPrivate && scope['include_private'] != true) {
+      return 'The export left out private items. Export again with '
+          '"Include private items".';
     }
-    return reason;
+    if (scope['content'] != ExportContent.everything.key) {
+      return 'The export does not hold everything. Export again with '
+          '"Everything".';
+    }
+    if (audioMode != ExportAudioMode.original.key &&
+        audioMode != ExportAudioMode.originalWithCuts.key) {
+      return 'The export has trimmed audio only. Export again with the '
+          'original recordings.';
+    }
+    final snapshot = _snapshot(j);
+    if (snapshot == null) return _noSnapshot;
+    if (!rows.lastChange(a).isBefore(snapshot)) {
+      return 'This activity changed after the last verified export. '
+          'Export it again first.';
+    }
+    return null;
+  }
+
+  /// Export status of [a] from the same rules as the delete gate: an
+  /// export that left the activity out (a private activity without
+  /// private items) does not count; one that holds only part of it, or an
+  /// older version, is "Partly exported"; "Verified" needs checksum
+  /// verification as well (ADR-047).
+  static ExportStatus _activityStatus(
+    Activity a,
+    _ActivityRows rows,
+    List<ExportJob> jobs,
+  ) {
+    var best = ExportStatus.notExported;
+    for (final j in jobs.where((j) => _covers(j, a.id))) {
+      if (a.isPrivate && j.scope['include_private'] != true) continue;
+      final ExportStatus s;
+      if (_missing(a, rows, j) != null) {
+        s = ExportStatus.partlyExported;
+      } else if (j.verificationLevel == VerificationLevel.checksum) {
+        s = ExportStatus.verified;
+      } else if (j.destination == ExportDestination.local) {
+        s = ExportStatus.exportedLocally;
+      } else {
+        s = ExportStatus.uploaded;
+      }
+      if (s.index > best.index) best = s;
+    }
+    return best;
   }
 
   /// When the export started reading its data: `snapshot_at` in the

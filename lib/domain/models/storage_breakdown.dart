@@ -56,6 +56,11 @@ class StorageKindSizes {
 /// (FR-STO-05) [P1-20]. Ordered from least to most.
 enum ExportStatus implements KeyedEnum {
   notExported('not_exported', 'Not exported'),
+
+  /// An export holds it, but not all of it or an older version: some
+  /// content, trimmed audio only, private items left out, or changed
+  /// since.
+  partlyExported('partly_exported', 'Partly exported'),
   exportedLocally('exported_locally', 'Exported locally'),
   uploaded('uploaded', 'Uploaded'),
   verified('verified', 'Verified');

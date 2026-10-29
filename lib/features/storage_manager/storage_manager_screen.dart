@@ -589,6 +589,11 @@ class _StatusBadge extends StatelessWidget {
         theme.colorScheme.onSurface,
         Icons.folder_outlined,
       ),
+      ExportStatus.partlyExported => (
+        theme.colorScheme.surfaceContainerHighest,
+        theme.colorScheme.onSurface,
+        Icons.rule_folder_outlined,
+      ),
       ExportStatus.notExported => (
         theme.colorScheme.surfaceContainer,
         theme.colorScheme.onSurfaceVariant,

@@ -299,6 +299,65 @@ void main() {
     );
   });
 
+  test('FR-STO-05 a private activity left out of an export is not shown as '
+      'exported; with private items both are Verified', () async {
+    final conf = await t.conference();
+    final public = await t.activity(conf.id, title: 'Keynote');
+    final private = await t.activity(
+      conf.id,
+      typeKey: 'personal_reflection',
+      title: 'My reflection',
+    );
+    expect(private.isPrivate, isTrue);
+    await segment(public.id, MediaPaths.segment(conf.id, public.id, 1), 1000);
+    await segment(private.id, MediaPaths.segment(conf.id, private.id, 1), 1000);
+
+    Future<Map<String, ActivityStorageBreakdown>> byId() async => {
+      for (final a in (await service.analyse()).conferences.single.activities)
+        a.activityId: a,
+    };
+
+    await exported(conf.id); // include_private false, as by default
+    var acts = await byId();
+    expect(acts[public.id]!.exportStatus, ExportStatus.verified);
+    expect(acts[public.id]!.canDeleteLocalCopies, isTrue);
+    expect(acts[private.id]!.exportStatus, ExportStatus.notExported);
+    expect(acts[private.id]!.canDeleteLocalCopies, isFalse);
+    expect(
+      (await service.analyse()).conferences.single.exportStatus,
+      ExportStatus.notExported,
+    );
+
+    await exported(conf.id, scope: fullScope(includePrivate: true));
+    acts = await byId();
+    expect(acts[public.id]!.exportStatus, ExportStatus.verified);
+    expect(acts[private.id]!.exportStatus, ExportStatus.verified);
+    expect(acts[private.id]!.canDeleteLocalCopies, isTrue);
+  });
+
+  test('FR-STO-05 a content-limited, trimmed or older export shows Partly '
+      'exported, never Verified', () async {
+    final conf = await t.conference();
+    final act = await t.activity(conf.id);
+    await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+    Future<ExportStatus> status() async => (await service.analyse())
+        .conferences
+        .single
+        .activities
+        .single
+        .exportStatus;
+
+    await exported(conf.id, scope: fullScope(content: 'audio_only'));
+    expect(await status(), ExportStatus.partlyExported);
+    await exported(conf.id, scope: fullScope(audioMode: 'trimmed'));
+    expect(await status(), ExportStatus.partlyExported);
+    await exported(conf.id);
+    expect(await status(), ExportStatus.verified);
+    t.clock.advance(const Duration(minutes: 1));
+    await t.media.addBookmark(activityId: act.id, source: BookmarkSource.ui);
+    expect(await status(), ExportStatus.partlyExported);
+  });
+
   group('FR-STO-06 Clear safe temporary files', () {
     test('FR-STO-06 FR-REC-08 ADR-038 partial recordings are never cleared; '
         'only export staging and orphaned waveforms go', () async {
@@ -444,10 +503,16 @@ void main() {
           .deleteBlockedReason;
 
       t.clock.advance(const Duration(seconds: 1));
-      await exported(conf.id, scope: fullScope(audioMode: 'trimmed'));
+      await exported(
+        conf.id,
+        scope: fullScope(audioMode: 'trimmed', includePrivate: true),
+      );
       expect(await reason(), contains('trimmed audio'));
       t.clock.advance(const Duration(seconds: 1));
-      await exported(conf.id, scope: fullScope(content: 'audio_only'));
+      await exported(
+        conf.id,
+        scope: fullScope(content: 'audio_only', includePrivate: true),
+      );
       expect(await reason(), contains('Everything'));
       t.clock.advance(const Duration(seconds: 1));
       await exported(conf.id, scope: fullScope());
