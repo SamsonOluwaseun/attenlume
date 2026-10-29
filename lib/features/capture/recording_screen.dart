@@ -79,10 +79,13 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         .hardStopNoticeStream
         .listen((notice) {
           if (!mounted) return;
+          final scheme = Theme.of(context).colorScheme;
           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
-              content: Text(notice),
-              backgroundColor: const Color(0xFFC42B36),
+              // danger with on-danger text: navy snack bar text on the
+              // light danger fill failed contrast (NFR-09).
+              content: Text(notice, style: TextStyle(color: scheme.onError)),
+              backgroundColor: scheme.error,
               duration: const Duration(seconds: 4),
             ),
           );
@@ -443,6 +446,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
               elevation: 0,
               leading: IconButton(
                 key: const Key('recording-screen-back'),
+                tooltip: 'Back',
                 icon: Icon(Icons.arrow_back_rounded, color: onLiveSurface),
                 onPressed:
                     widget.onBack ??
@@ -528,50 +532,65 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
                             status.state == RecordingState.userResumeRequired ||
                             status.state ==
                                 RecordingState.errorRecoverable)) ...[
-                      Container(
-                        key: const Key('recording-interruption-banner'),
-                        padding: const EdgeInsets.all(TokenSpace.space3),
-                        decoration: BoxDecoration(
-                          color: warningFill.withValues(alpha: 0.15),
-                          borderRadius: const BorderRadius.all(
-                            Radius.circular(TokenRadius.radiusMd),
-                          ),
-                          border: Border.all(color: warningFill),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.phone_disabled_rounded,
-                              color: warningFill,
-                              size: 24,
+                      Semantics(
+                        container: true,
+                        liveRegion: true,
+                        child: Container(
+                          key: const Key('recording-interruption-banner'),
+                          padding: const EdgeInsets.all(TokenSpace.space3),
+                          decoration: BoxDecoration(
+                            color: warningFill.withValues(alpha: 0.15),
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(TokenRadius.radiusMd),
                             ),
-                            const SizedBox(width: TokenSpace.space3),
-                            Expanded(
-                              child: Text(
-                                status.errorMessage ?? 'Recording paused for a call or another app.',
-                                style: TextStyle(
-                                  fontFamily: TokenType.fontFamily,
-                                  fontSize: 14,
-                                  color: onLiveSurface,
+                            border: Border.all(color: warningFill),
+                          ),
+                          // The button sits below the message so both fit
+                          // at 200% text on a phone (NFR-09).
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.phone_disabled_rounded,
+                                    color: onLiveSurface,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: TokenSpace.space3),
+                                  Expanded(
+                                    child: Text(
+                                      status.errorMessage ?? 'Recording paused for a call or another app.',
+                                      style: TextStyle(
+                                        fontFamily: TokenType.fontFamily,
+                                        fontSize: 14,
+                                        color: onLiveSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: TokenSpace.space2),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: FilledButton(
+                                  key: const Key(
+                                    'recording-resume-banner-button',
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor:
+                                        attenlume?.surfaceBrand ??
+                                        const Color(0xFF4392F1),
+                                    foregroundColor:
+                                        attenlume?.onBrandLarge ??
+                                        const Color(0xFFFEFFF8),
+                                  ),
+                                  onPressed: _handleResume,
+                                  child: const Text('Resume'),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: TokenSpace.space2),
-                            FilledButton(
-                              key: const Key('recording-resume-banner-button'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    attenlume?.surfaceBrand ??
-                                    const Color(0xFF4392F1),
-                                foregroundColor:
-                                    attenlume?.onBrandLarge ??
-                                    const Color(0xFFFEFFF8),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              onPressed: _handleResume,
-                              child: const Text('Resume'),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: TokenSpace.space3),
@@ -744,14 +763,18 @@ class _SafetyPromptBanner extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, color: warningFill, size: 24),
+                // on-live-surface: warning-fill fails as an icon on navy.
+                Icon(icon, color: onLiveSurface, size: 24),
                 const SizedBox(width: TokenSpace.space3),
                 Expanded(child: Text(message, style: textStyle)),
               ],
             ),
             const SizedBox(height: TokenSpace.space2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            // Wrap, so both buttons fit at 200% text on a phone (NFR-09).
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: TokenSpace.space2,
+              runSpacing: TokenSpace.space2,
               children: [
                 if (prompt.kind != SafetyPromptKind.lowBattery)
                   TextButton(
@@ -760,13 +783,9 @@ class _SafetyPromptBanner extends StatelessWidget {
                     style: TextButton.styleFrom(foregroundColor: onLiveSurface),
                     child: const Text('Stop and save'),
                   ),
-                const SizedBox(width: TokenSpace.space2),
                 FilledButton(
                   key: const Key('safety-prompt-keep'),
                   onPressed: onKeep,
-                  style: FilledButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                  ),
                   child: Text(
                     prompt.kind == SafetyPromptKind.lowBattery
                         ? 'OK'

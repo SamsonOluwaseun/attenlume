@@ -157,13 +157,20 @@ class _RecordButtonState extends State<RecordButton>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Top status pill (LIVE / Paused / Interrupted / Idle)
-        _buildStatusHeader(
-          attenlume,
-          isRecording: isRecording,
-          isPaused: isPaused,
-          isInterrupted: isInterrupted,
-          reduceMotion: reduceMotion,
+        // Top status pill (LIVE / Paused / Interrupted / Idle). A live
+        // region, so screen readers announce each change of state once
+        // (NFR-09); the timer below is not, so it never chatters.
+        Semantics(
+          key: const Key('record-status'),
+          container: true,
+          liveRegion: true,
+          child: _buildStatusHeader(
+            attenlume,
+            isRecording: isRecording,
+            isPaused: isPaused,
+            isInterrupted: isInterrupted,
+            reduceMotion: reduceMotion,
+          ),
         ),
 
         const SizedBox(height: TokenSpace.space3),
@@ -289,10 +296,12 @@ class _RecordButtonState extends State<RecordButton>
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // on-live-surface, not warning-fill: the live theme's warning-fill
+          // is a dark fill that fails contrast on navy (NFR-09, ADR-050).
           Icon(
             Icons.phone_disabled_rounded,
             size: 16,
-            color: attenlume?.warningFill ?? const Color(0xFFFFF4C2),
+            color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
           ),
           const SizedBox(width: TokenSpace.space1),
           Text(
@@ -302,7 +311,7 @@ class _RecordButtonState extends State<RecordButton>
               fontFamily: TokenType.fontFamily,
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: attenlume?.warningFill ?? const Color(0xFFFFF4C2),
+              color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
             ),
           ),
         ],
@@ -355,13 +364,15 @@ class _RecordButtonState extends State<RecordButton>
           ),
         ),
         const SizedBox(height: TokenSpace.space2),
-        Text(
-          'Record',
-          style: TextStyle(
-            fontFamily: TokenType.fontFamily,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+        ExcludeSemantics(
+          child: Text(
+            'Record',
+            style: TextStyle(
+              fontFamily: TokenType.fontFamily,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+            ),
           ),
         ),
       ],
@@ -417,13 +428,15 @@ class _RecordButtonState extends State<RecordButton>
               ),
             ),
             const SizedBox(height: TokenSpace.space2),
-            Text(
-              pauseOrResumeLabel,
-              style: TextStyle(
-                fontFamily: TokenType.fontFamily,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+            ExcludeSemantics(
+              child: Text(
+                pauseOrResumeLabel,
+                style: TextStyle(
+                  fontFamily: TokenType.fontFamily,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+                ),
               ),
             ),
           ],
@@ -473,13 +486,15 @@ class _RecordButtonState extends State<RecordButton>
               ),
             ),
             const SizedBox(height: TokenSpace.space2),
-            Text(
-              'Stop',
-              style: TextStyle(
-                fontFamily: TokenType.fontFamily,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+            ExcludeSemantics(
+              child: Text(
+                'Stop',
+                style: TextStyle(
+                  fontFamily: TokenType.fontFamily,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+                ),
               ),
             ),
           ],
@@ -502,16 +517,19 @@ class _RecordButtonState extends State<RecordButton>
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        // Each action takes an equal share, so the captions wrap rather
+        // than overflow at 200% text (NFR-09).
         children: [
           // Photo
-          _buildSecondaryButton(
-            key: const Key('record-action-photo'),
-            icon: Icons.camera_alt_rounded,
-            label: 'Photo',
-            semanticLabel: 'Take photo',
-            onTap: widget.onPhoto,
-            attenlume: attenlume,
+          Expanded(
+            child: _buildSecondaryButton(
+              key: const Key('record-action-photo'),
+              icon: Icons.camera_alt_rounded,
+              label: 'Photo',
+              semanticLabel: 'Take photo',
+              onTap: widget.onPhoto,
+              attenlume: attenlume,
+            ),
           ),
 
           Container(
@@ -522,13 +540,15 @@ class _RecordButtonState extends State<RecordButton>
           ),
 
           // Bookmark
-          _buildSecondaryButton(
-            key: const Key('record-action-bookmark'),
-            icon: Icons.bookmark_rounded,
-            label: 'Bookmark',
-            semanticLabel: 'Add bookmark',
-            onTap: widget.onBookmark,
-            attenlume: attenlume,
+          Expanded(
+            child: _buildSecondaryButton(
+              key: const Key('record-action-bookmark'),
+              icon: Icons.bookmark_rounded,
+              label: 'Bookmark',
+              semanticLabel: 'Add bookmark',
+              onTap: widget.onBookmark,
+              attenlume: attenlume,
+            ),
           ),
 
           Container(
@@ -539,13 +559,15 @@ class _RecordButtonState extends State<RecordButton>
           ),
 
           // Note
-          _buildSecondaryButton(
-            key: const Key('record-action-note'),
-            icon: Icons.edit_note_rounded,
-            label: 'Note',
-            semanticLabel: 'Add quick note',
-            onTap: widget.onNote,
-            attenlume: attenlume,
+          Expanded(
+            child: _buildSecondaryButton(
+              key: const Key('record-action-note'),
+              icon: Icons.edit_note_rounded,
+              label: 'Note',
+              semanticLabel: 'Add quick note',
+              onTap: widget.onNote,
+              attenlume: attenlume,
+            ),
           ),
         ],
       ),
@@ -573,28 +595,32 @@ class _RecordButtonState extends State<RecordButton>
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: TokenSpace.space3,
+              horizontal: TokenSpace.space1,
               vertical: TokenSpace.space2,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 24,
-                  color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: TokenType.fontFamily,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+            child: ExcludeSemantics(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 24,
                     color: attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: TokenType.fontFamily,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color:
+                          attenlume?.onLiveSurface ?? const Color(0xFFFEFFF8),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
