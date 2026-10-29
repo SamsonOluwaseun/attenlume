@@ -609,6 +609,10 @@ class StorageManagerService {
     if (rows.segments.any((s) => s.state == SegmentState.writing)) {
       return 'This activity is still recording.';
     }
+    if (rows.missingPhotos > 0) {
+      return 'A photo in this activity is missing its full-size file, so no '
+          'export holds it. Its thumbnail and details are kept.';
+    }
     if (rows.unexportable > 0) {
       return 'A recording in this activity is damaged or missing, so no '
           'export holds it. Its local copies are kept.';
@@ -722,10 +726,11 @@ class StorageManagerService {
   Future<_ActivityRows> _rows(Activity a) async {
     final root = await mediaRoot();
     final segments = await media.segmentsFor(a.id);
+    final photos = await media.photosFor(a.id);
     return _ActivityRows(
       cutChange: await cuts.lastChangeFor(a.id),
       segments: segments,
-      photos: await media.photosFor(a.id),
+      photos: photos,
       bookmarks: await media.bookmarksFor(a.id),
       // What ExportService.plan leaves out (ADR-040): damaged segments
       // and files that are missing.
@@ -735,6 +740,11 @@ class StorageManagerService {
                 s.state == SegmentState.damaged ||
                 !MediaPaths.resolve(root, s.filePath).existsSync(),
           )
+          .length,
+      // ExportService.plan also skips a photo whose full-size file is
+      // missing; its thumbnail may be the only image left.
+      missingPhotos: photos
+          .where((ph) => !MediaPaths.resolve(root, ph.filePath).existsSync())
           .length,
     );
   }
@@ -798,6 +808,7 @@ class _ActivityRows {
     required this.photos,
     required this.bookmarks,
     required this.unexportable,
+    required this.missingPhotos,
   });
 
   final List<RecordingSegment> segments;
@@ -807,6 +818,9 @@ class _ActivityRows {
   /// Damaged segments or segments whose file is missing: no export can
   /// hold them.
   final int unexportable;
+
+  /// Photos whose full-size file is missing: the export leaves them out.
+  final int missingPhotos;
 
   /// Latest add, change, removal or restore of a cut range.
   final DateTime? cutChange;

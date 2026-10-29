@@ -911,5 +911,32 @@ void main() {
       );
       expect(await t.activities.get(act.id), isNotNull);
     });
+
+    test('FR-STO-06 a photo whose full-size file is missing refuses Delete '
+        'local copies and keeps its thumbnail', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      await photo(conf.id, act.id, 'photo1');
+      MediaPaths.resolve(
+        root,
+        MediaPaths.photo(conf.id, act.id, 'photo1'),
+      ).deleteSync();
+      final thumb = MediaPaths.resolve(
+        root,
+        MediaPaths.thumbnail(conf.id, act.id, 'photo1'),
+      );
+      await exported(conf.id);
+
+      final c = (await service.analyse()).conferences.single;
+      expect(c.activities.single.deleteBlockedReason, contains('photo'));
+      expect(c.deleteBlockedReason, contains('photo'));
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+      expect(thumb.existsSync(), isTrue);
+      expect(await t.media.photosFor(act.id), hasLength(1));
+    });
   });
 }
