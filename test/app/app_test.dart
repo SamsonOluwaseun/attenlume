@@ -1,6 +1,7 @@
 import 'package:attenlume/app/app.dart';
 import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
+import 'package:attenlume/data/repositories/settings_repository.dart';
 import 'package:attenlume/domain/services/crash_recovery_service.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/onboarding/welcome_screen.dart';
@@ -63,5 +64,20 @@ void main() {
     expect(app.themeMode, ThemeMode.system);
     expect(app.theme!.textTheme.bodyLarge!.fontFamily, 'Montserrat');
     expect(app.darkTheme!.brightness, Brightness.dark);
+  });
+
+  testWidgets('5.11 app uses the theme chosen in Settings', (tester) async {
+    await tester.runAsync(
+      () => db.writeSetting(SettingsRepository.themeModeKey, 'dark'),
+    );
+    await tester.pumpWidget(createSubject());
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
   });
 }

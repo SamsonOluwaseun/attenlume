@@ -5,7 +5,7 @@ import 'recording_service.dart';
 import 'recording_state.dart';
 
 /// Thresholds for the safety prompts (FR-REC-06) [P1-13]. Defaults from
-/// the build guide; the Settings screen (P1-25) will make them editable.
+/// the build guide; Settings changes them (5.11, P1-25, ADR-048).
 class SafetyThresholds {
   const SafetyThresholds({
     this.longRecording = const Duration(hours: 2),
@@ -73,7 +73,10 @@ class SafetyPromptService {
 
   final RecordingService recorder;
   final BatteryProbe battery;
-  final SafetyThresholds thresholds;
+
+  /// Read on every check, so a change in Settings applies to the
+  /// recording already running (5.11, ADR-048).
+  SafetyThresholds thresholds;
   final Duration tickInterval;
 
   /// Read the battery once every this many ticks (once a minute).
