@@ -183,13 +183,16 @@ class SettingsScreen extends ConsumerWidget {
                   'Space used, clear temporary files, delete copies you exported',
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => unawaited(
-                  Navigator.of(context).push(
+                onTap: () async {
+                  await Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const StorageManagerScreen(),
                     ),
-                  ),
-                ),
+                  );
+                  // A conference may have been deleted: My conferences
+                  // must not show it when the user goes back.
+                  ref.invalidate(allConferencesFutureProvider);
+                },
               ),
               heading('Privacy and security'),
               ListTile(
