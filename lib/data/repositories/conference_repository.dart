@@ -307,32 +307,32 @@ class ConferenceRepository {
   /// The cover is the first photo taken, so it does not change with every
   /// new shot. Photos in private activities are never used as a cover
   /// (FR-PRI-01); they still count.
-  Future<Map<String, ConferenceCardInfo>> cardInfo() async {
-    final rows = await _db
-        .customSelect(
-          'SELECT c.id AS id, '
-          '(SELECT COUNT(*) FROM activities a WHERE a.conference_id = c.id) '
-          '  AS activity_count, '
-          '(SELECT COUNT(*) FROM photos p '
-          '  JOIN activities a ON a.id = p.activity_id '
-          '  WHERE a.conference_id = c.id) AS photo_count, '
-          '(SELECT COALESCE(p.thumbnail_path, p.file_path) FROM photos p '
-          '  JOIN activities a ON a.id = p.activity_id '
-          '  WHERE a.conference_id = c.id AND a.is_private = 0 '
-          '  ORDER BY p.taken_utc ASC, p.id ASC LIMIT 1) AS cover_path '
-          'FROM conferences c',
-          readsFrom: {_db.conferences, _db.activities, _db.photos},
-        )
-        .get();
-    return {
-      for (final row in rows)
-        row.read<String>('id'): ConferenceCardInfo(
-          activityCount: row.read<int>('activity_count'),
-          photoCount: row.read<int>('photo_count'),
-          coverPhotoPath: row.readNullable<String>('cover_path'),
-        ),
-    };
-  }
+  Future<Map<String, ConferenceCardInfo>> cardInfo() async =>
+      _cardInfoRows(await _cardInfoQuery().get());
+
+  Selectable<QueryRow> _cardInfoQuery() => _db.customSelect(
+    'SELECT c.id AS id, '
+    '(SELECT COUNT(*) FROM activities a WHERE a.conference_id = c.id) '
+    '  AS activity_count, '
+    '(SELECT COUNT(*) FROM photos p '
+    '  JOIN activities a ON a.id = p.activity_id '
+    '  WHERE a.conference_id = c.id) AS photo_count, '
+    '(SELECT COALESCE(p.thumbnail_path, p.file_path) FROM photos p '
+    '  JOIN activities a ON a.id = p.activity_id '
+    '  WHERE a.conference_id = c.id AND a.is_private = 0 '
+    '  ORDER BY p.taken_utc ASC, p.id ASC LIMIT 1) AS cover_path '
+    'FROM conferences c',
+    readsFrom: {_db.conferences, _db.activities, _db.photos},
+  );
+
+  Map<String, ConferenceCardInfo> _cardInfoRows(List<QueryRow> rows) => {
+    for (final row in rows)
+      row.read<String>('id'): ConferenceCardInfo(
+        activityCount: row.read<int>('activity_count'),
+        photoCount: row.read<int>('photo_count'),
+        coverPhotoPath: row.readNullable<String>('cover_path'),
+      ),
+  };
 
   /// Deletes the conference and, by cascade, its goals, activities, media
   /// rows and export jobs. Files on disk are not touched here.

@@ -264,6 +264,48 @@ void main() {
       expect(data.flagsCollection.isButton, isTrue);
       handle.dispose();
     });
+
+    testWidgets('FR-UI-10 a photo taken on a screen opened over the list '
+        '(as from the recording banner) shows when it closes', (tester) async {
+      final (_, manchester) = await twoConferences(tester);
+      await tester.pumpWidget(subject());
+      await settle(tester);
+      expect(find.text('0 activities · 0 photos'), findsOneWidget);
+
+      // A screen pushed over the list without going through its own
+      // navigation, as the recording banner's Open does.
+      final nav = tester.state<NavigatorState>(find.byType(Navigator));
+      nav.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Recorder')),
+        ),
+      );
+      await settle(tester);
+      await settle(tester);
+      // A photo taken there.
+      await tester.runAsync(() async {
+        final talk = await t.activity(manchester.id);
+        await t.media.addPhoto(
+          activityId: talk.id,
+          filePath: 'photos/slide-02.jpg',
+          takenUtc: DateTime.utc(2026, 11, 4, 12),
+          source: PhotoSource.inApp,
+        );
+      });
+      nav.pop();
+      await settle(tester);
+      await settle(tester);
+
+      expect(find.text('0 activities · 0 photos'), findsNothing);
+      expect(find.text('1 activity · 1 photo'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: card(manchester),
+          matching: find.byKey(const Key('conference-cover-photo')),
+        ),
+        findsOneWidget,
+      );
+    });
   });
 
   test('FR-UI-10 search ignores case and surrounding spaces', () {

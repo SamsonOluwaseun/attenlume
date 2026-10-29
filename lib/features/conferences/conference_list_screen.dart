@@ -46,8 +46,29 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     _tabController = TabController(length: 2, vsync: this);
   }
 
+  /// The route this list is shown in (its own, or the shell's).
+  ModalRoute<Object?>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    _route?.secondaryAnimation?.removeStatusListener(_onCoveringRoute);
+    _route = route;
+    route?.secondaryAnimation?.addStatusListener(_onCoveringRoute);
+  }
+
+  /// Any screen opened over the list, including the recorder opened from
+  /// the recording banner, may have added photos or activities or removed
+  /// a conference. When it has closed, the list and card counts reload.
+  void _onCoveringRoute(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed && mounted) _reload();
+  }
+
   @override
   void dispose() {
+    _route?.secondaryAnimation?.removeStatusListener(_onCoveringRoute);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();

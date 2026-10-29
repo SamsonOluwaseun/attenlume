@@ -11,7 +11,8 @@ import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_providers.dart';
 
 /// Counts and cover photo for every conference card, keyed by conference ID
-/// (FR-UI-10, ADR-052) [P1-39]. Invalidated with the conference list.
+/// (FR-UI-10, ADR-052) [P1-39]. Reloaded with the conference list, which
+/// happens whenever a screen opened over the list closes.
 final conferenceCardInfoProvider =
     FutureProvider<Map<String, ConferenceCardInfo>>(
       (ref) => ref.watch(conferenceRepositoryProvider).cardInfo(),
