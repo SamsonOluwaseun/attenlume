@@ -24,6 +24,7 @@ Future<ExportWriteResult> _inlineWriter(
 }) => writeExport(plan, onProgress: onProgress, isCancelled: () => false);
 
 const _keynoteFolder = 'activities/001_0930_keynote_data-mesh-in-practice';
+const _gapsFolder = 'activities/001_0930_keynote_gaps';
 
 void main() {
   late TestData t;
@@ -423,6 +424,127 @@ void main() {
           reason: r[3],
         );
       }
+    });
+  });
+
+  group('BUILD_GUIDE 5.10 timeline.csv audio positions', () {
+    /// Two 10 s segments with a 10 s gap, a cut at 22 s to 25 s, and
+    /// bookmarks at 27 s (in part 2), 23 s (in the cut) and 15 s (in the
+    /// gap). Offsets count from the first segment, gaps included.
+    Future<String> activityWithGap() async {
+      final c = await t.conference();
+      final start = DateTime.utc(2026, 11, 4, 9, 30);
+      t.clock.set(start);
+      final a = await t.activity(c.id, typeKey: 'keynote', title: 'Gaps');
+      await segment(a, start, const Duration(seconds: 10));
+      await segment(
+        a,
+        start.add(const Duration(seconds: 20)),
+        const Duration(seconds: 10),
+      );
+      await t.cuts.add(a.id, startOffsetMs: 22000, endOffsetMs: 25000);
+      for (final (s, label) in [
+        (27, 'In part two'),
+        (23, 'In removed part'),
+        (15, 'In the gap'),
+      ]) {
+        await t.media.addBookmark(
+          activityId: a.id,
+          source: BookmarkSource.ui,
+          atUtc: start.add(Duration(seconds: s)),
+          label: label,
+        );
+      }
+      return c.id;
+    }
+
+    Future<(Map<String, List<String>>, String)> timelineFor(
+      String id,
+      ExportAudioMode mode,
+    ) async {
+      final plan = await service.plan(
+        ExportRequest(conferenceId: id, audioMode: mode),
+      );
+      String text(String path) => utf8.decode(
+        (plan.entries.firstWhere((e) => e.relativePath == path).source
+                as TextExportSource)
+            .bytes,
+      );
+      final lines = text(timelineFileName).split('\r\n')..removeLast();
+      expect(lines.first.split(',').skip(13), [
+        'audio_file',
+        'audio_position_seconds',
+      ]);
+      final rows = {
+        for (final l in lines.skip(1))
+          if (l.split(',') case final r when r[2] == 'bookmark') r[7]: r,
+      };
+      return (rows, text('$_gapsFolder/activity.md'));
+    }
+
+    test('BUILD_GUIDE 5.10 originals: audio_file and audio_position_seconds '
+        'point inside the second file, and are empty in a gap', () async {
+      final id = await activityWithGap();
+      final (rows, md) = await timelineFor(id, ExportAudioMode.original);
+      final two = rows['In part two']!;
+      expect(two[6], '27.0');
+      expect(two[13], '$_gapsFolder/audio/segment-002.m4a');
+      expect(two[14], '7.0');
+      // Cut audio is still in an original file.
+      final removed = rows['In removed part']!;
+      expect(removed[13], '$_gapsFolder/audio/segment-002.m4a');
+      expect(removed[14], '3.0');
+      final gap = rows['In the gap']!;
+      expect(gap[6], '15.0');
+      expect(gap[13], isEmpty);
+      expect(gap[14], isEmpty);
+      expect(
+        md,
+        contains('In part two [audio: `audio/segment-002.m4a` at 00:07]'),
+      );
+      expect(md, contains('In the gap\n'));
+    });
+
+    test('BUILD_GUIDE 5.10 trimmed copies: positions map through the kept '
+        'ranges, and a moment in removed audio has no position', () async {
+      final id = await activityWithGap();
+      final (rows, md) = await timelineFor(id, ExportAudioMode.trimmed);
+      final two = rows['In part two']!;
+      expect(two[6], '27.0');
+      expect(two[13], '$_gapsFolder/audio/segment-002-trimmed.m4a');
+      // 2 s kept before the cut, then 2 s after it.
+      expect(two[14], '4.0');
+      final removed = rows['In removed part']!;
+      expect(removed[6], '23.0');
+      expect(removed[13], isEmpty);
+      expect(removed[14], isEmpty);
+      expect(rows['In the gap']![13], isEmpty);
+      expect(
+        md,
+        contains(
+          'In part two [audio: `audio/segment-002-trimmed.m4a` at 00:04]',
+        ),
+      );
+      expect(md, contains('In removed part\n'));
+    });
+
+    test('BUILD_GUIDE 5.10 README and prompts say how to find a moment in '
+        'the audio', () async {
+      final id = await activityWithGap();
+      final plan = await service.plan(ExportRequest(conferenceId: id));
+      final readme = utf8.decode(
+        (plan.entries.first.source as TextExportSource).bytes,
+      );
+      expect(
+        readme,
+        contains(
+          'To hear a moment, open its `audio_file` and go to '
+          '`audio_position_seconds`',
+        ),
+      );
+      expect(readme, contains('so it is not a position in any one file'));
+      expect(plan.analysisPrompt, contains('`audio_position_seconds`'));
+      expect(plan.analysisPrompt, contains('not positions inside a file'));
     });
   });
 

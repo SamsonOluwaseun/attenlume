@@ -41,7 +41,36 @@ const promptTemplateFileNames = [
 const timelineCsvHeader =
     'activity_id,activity_title,kind,file,utc_time,local_time,'
     'offset_seconds,label,profile,observed_bitrate_bps,'
-    'end_utc_time,end_local_time,note';
+    'end_utc_time,end_local_time,note,audio_file,audio_position_seconds';
+
+/// Where a moment at [offsetMs] (9.4 rule) can be heard in the exported
+/// audio: the file's path from the export root and the position inside
+/// it in milliseconds. Null when the moment is before, between or after
+/// the recordings, in a segment that was not exported, or in audio a
+/// trimmed copy removed. Positions in a trimmed copy are mapped through
+/// its kept ranges (ADR-046).
+(String, int)? exportedAudioPosition(ExportedActivity a, int? offsetMs) {
+  if (offsetMs == null) return null;
+  final timeline = ReviewTimeline.build(segments: a.segments);
+  for (final ts in timeline.segments) {
+    if (offsetMs < ts.startMs || offsetMs >= ts.endMs) continue;
+    final rel = a.files.segmentFiles[ts.segment.id];
+    if (rel == null) continue;
+    final inSegment = offsetMs - ts.startMs;
+    final keep = a.files.trimmedKeepRanges[ts.segment.id];
+    if (keep == null) return (_join(a.folder, rel), inSegment);
+    final ranges = [...keep]..sort((x, y) => x.startMs.compareTo(y.startMs));
+    var before = 0;
+    for (final r in ranges) {
+      if (inSegment >= r.startMs && inSegment < r.endMs) {
+        return (_join(a.folder, rel), before + inSegment - r.startMs);
+      }
+      before += r.durationMs;
+    }
+    return null;
+  }
+  return null;
+}
 
 /// Writes the full export package (ADR-046): `README_START_HERE.md`, the
 /// full `conference.json`, `participant_goals.md`, `timeline.csv`,
@@ -346,9 +375,12 @@ String buildReadme(ExportContext context) {
     ..writeln(
       '${content.text ? "Open each activity's `activity.md` for an overview, then " : 'Open '}'
       '`$timelineFileName` in a spreadsheet to find your bookmarked '
-      'moments. The `offset_seconds` column is how far into the activity\'s '
-      'recording each moment is, so you can jump straight to it in any '
-      'audio player.',
+      'moments. To hear a moment, open its `audio_file` and go to '
+      '`audio_position_seconds` in any audio player. `offset_seconds` is '
+      'the time since the activity\'s first recording started, counting '
+      'pauses and gaps, so it is not a position in any one file. Both audio '
+      'columns are empty when nothing was recorded at that moment or that '
+      'part was trimmed out.',
     )
     ..writeln()
     ..writeln('## Checking the files')
@@ -564,6 +596,7 @@ String buildTimelineCsv(ExportContext context) {
       DateTime? end,
       String? note,
     }) {
+      final audio = exportedAudioPosition(a, offsetMs);
       rows.add(
         _Row(
           order: i,
@@ -583,6 +616,8 @@ String buildTimelineCsv(ExportContext context) {
             _utcIso(end),
             _localIso(end, tz),
             csvField(note),
+            csvField(audio?.$1),
+            offset(audio?.$2),
           ],
         ),
       );
@@ -676,11 +711,15 @@ String _groundRules(ExportContext context) {
         'you. If something is not in the material, say "not in the '
         'material" rather than guessing.',
     '- Cite the file and timestamp for every key point, for example '
-        '`activities/001_0930_.../audio/segment-001.m4a at 12:34`, or the '
+        '`activities/001_0930_.../audio/segment-002.m4a at 03:15`, or the '
         'matching row of `$timelineFileName`.',
-    '- Offsets (`mm:ss` in `activity.md`, `offset_seconds` in '
-        '`$timelineFileName`) count from the start of each activity\'s first '
-        'recording. Wall-clock times are in the conference timezone, $tz.',
+    '- To find a moment in the audio, use `audio_file` and '
+        '`audio_position_seconds` in `$timelineFileName` (in `activity.md`, '
+        'the `[audio: ...]` note after each photo and bookmark). Offsets (`mm:ss` in '
+        '`activity.md`, `offset_seconds` in `$timelineFileName`) are the '
+        'time since the activity\'s first recording started, counting pauses '
+        'and gaps, so they are not positions inside a file. Wall-clock times '
+        'are in the conference timezone, $tz.',
     '- If you cannot open or transcribe a file, name it and ask for an '
         'accessible version, such as the notes or a transcript.',
     '- Do not invent quotations, speakers, outcomes or statistics.',
@@ -860,6 +899,16 @@ String buildActivityMarkdown(ExportContext context, ExportedActivity item) {
   int? offsetOf(DateTime t) =>
       timelineOffsetMs(eventUtc: t, firstSegmentStartUtc: first);
   String at(int? ms) => ms == null ? '--:--' : formatOffsetMmSs(ms);
+  // Where the moment is in the exported audio, relative to this folder.
+  String heard(int? ms) {
+    final pos = exportedAudioPosition(item, ms);
+    if (pos == null) return '';
+    final (path, inFile) = pos;
+    final rel = item.folder.isEmpty
+        ? path
+        : path.substring(item.folder.length + 1);
+    return ' [audio: `$rel` at ${formatOffsetMmSs(inFile)}]';
+  }
 
   final out = StringBuffer()
     ..writeln('# ${a.title}')
@@ -892,7 +941,10 @@ String buildActivityMarkdown(ExportContext context, ExportedActivity item) {
   out
     ..writeln()
     ..writeln(
-      'Offsets (`mm:ss`) count from the start of the first recording. '
+      'Offsets (`mm:ss`) are the time since the first recording started, '
+      'counting pauses and gaps, so they are not positions in a file. To '
+      'hear a photo or bookmark, use the file and position in its '
+      '`[audio: ...]` note. '
       'Times are in $tz.',
     );
 
@@ -946,11 +998,12 @@ String buildActivityMarkdown(ExportContext context, ExportedActivity item) {
         if (ph.label?.trim().isNotEmpty ?? false) ph.label!.trim(),
         if (ph.caption?.trim().isNotEmpty ?? false) ph.caption!.trim(),
       ].join(': ');
+      final offset = ph.offsetMs ?? offsetOf(ph.takenUtc);
       out.writeln(
-        '- ${at(ph.offsetMs ?? offsetOf(ph.takenUtc))} '
+        '- ${at(offset)} '
         '(${_localShort(ph.takenUtc, tz)}): '
         '${file == null ? 'not in this export' : '`$file`'}'
-        '${words.isEmpty ? '' : ', $words'}',
+        '${words.isEmpty ? '' : ', $words'}${heard(offset)}',
       );
     }
   }
@@ -965,10 +1018,11 @@ String buildActivityMarkdown(ExportContext context, ExportedActivity item) {
         if (b.label?.trim().isNotEmpty ?? false) b.label!.trim(),
         if (b.note?.trim().isNotEmpty ?? false) b.note!.trim(),
       ].join(': ');
+      final offset = b.offsetMs ?? offsetOf(b.atUtc);
       out.writeln(
-        '- ${at(b.offsetMs ?? offsetOf(b.atUtc))} '
+        '- ${at(offset)} '
         '(${_localShort(b.atUtc, tz)})'
-        '${words.isEmpty ? '' : ': $words'}',
+        '${words.isEmpty ? '' : ': $words'}${heard(offset)}',
       );
     }
   }
