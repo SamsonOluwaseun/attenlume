@@ -145,7 +145,7 @@ const quickGuide = QuickGuide(
     'Your conferences, recordings, photos and notes stay on this device unless you export or share them.',
     'No account, no analytics, no adverts and no trackers.',
     'Recording is always shown on screen. There is no hidden recording mode.',
-    'Turn on App lock under My conferences, menu, Privacy, to ask for your fingerprint, face or PIN.',
+    'Turn on App lock under My conferences, menu, Settings, Privacy and app lock, to ask for your fingerprint, face or PIN.',
   ],
   tips: [
     GuideTip(
@@ -154,7 +154,7 @@ const quickGuide = QuickGuide(
     ),
     GuideTip(
       title: 'Long sessions',
-      text: 'Attenlume checks in after two hours, after ten minutes of silence and when the battery is low.',
+      text: 'Attenlume checks in after two hours, after ten minutes of silence and when the battery is low. Change these in Settings.',
     ),
     GuideTip(
       title: 'Updating',

@@ -24,8 +24,7 @@ class PermissionExplanation {
 /// Privacy: where data lives, what is asked for and why, and the optional
 /// app lock (FR-PRI-03, FR-PRI-04, FR-PRI-06, ADR-041).
 ///
-/// Opened from the conference list menu until Settings (P1-25) exists, which
-/// should link here rather than repeat it.
+/// Opened from Settings (P1-25), which links here rather than repeating it.
 class PrivacyScreen extends ConsumerWidget {
   const PrivacyScreen({super.key});
 

@@ -6,7 +6,7 @@ import 'guide_content.dart';
 import 'guide_model.dart';
 
 /// The quick guide: how to set up, capture, review and export, with
-/// screenshots. Opened from the welcome screen and the My conferences menu.
+/// screenshots. Opened from the welcome screen and Settings.
 /// Works offline; everything is bundled with the app.
 class QuickGuideScreen extends StatelessWidget {
   const QuickGuideScreen({super.key, this.guide = quickGuide});

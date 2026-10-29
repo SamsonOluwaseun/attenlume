@@ -5,7 +5,7 @@ import 'recording_service.dart';
 import 'recording_state.dart';
 
 /// Thresholds for the safety prompts (FR-REC-06) [P1-13]. Defaults from
-/// the build guide; the Settings screen (P1-25) will make them editable.
+/// the build guide; Settings changes them (5.11, P1-25, ADR-048).
 class SafetyThresholds {
   const SafetyThresholds({
     this.longRecording = const Duration(hours: 2),
@@ -63,7 +63,7 @@ class SafetyPromptService {
     required this.recorder,
     required this._level,
     required this.battery,
-    this.thresholds = const SafetyThresholds(),
+    this._thresholds = const SafetyThresholds(),
     this.tickInterval = const Duration(seconds: 5),
     this.batteryEvery = 12,
     Timer Function(Duration, void Function(Timer))? createTimer,
@@ -73,7 +73,30 @@ class SafetyPromptService {
 
   final RecordingService recorder;
   final BatteryProbe battery;
-  final SafetyThresholds thresholds;
+
+  SafetyThresholds _thresholds;
+
+  /// Read on every check, so a change in Settings applies to the
+  /// recording already running (5.11, ADR-048).
+  SafetyThresholds get thresholds => _thresholds;
+
+  /// Changing the long-recording interval mid-recording reschedules the
+  /// next reminder at the next multiple of the new interval after the last
+  /// reminder given (or after the start when none was given), so a period
+  /// already reminded about is never repeated straight away and the old
+  /// interval no longer counts (ADR-048). Silence is measured from the last
+  /// sound with the new threshold; a silence or battery reminder already
+  /// given stays given.
+  set thresholds(SafetyThresholds value) {
+    final old = _thresholds;
+    _thresholds = value;
+    if (value.longRecording != old.longRecording) {
+      _longPrompts =
+          _lastLongPromptAt.inMicroseconds ~/
+          value.longRecording.inMicroseconds;
+    }
+  }
+
   final Duration tickInterval;
 
   /// Read the battery once every this many ticks (once a minute).
@@ -95,6 +118,9 @@ class SafetyPromptService {
   bool _silencePrompted = false;
   bool _batteryPrompted = false;
   int _longPrompts = 0;
+
+  /// Recorded time when the last long-recording reminder was given.
+  Duration _lastLongPromptAt = Duration.zero;
 
   Stream<SafetyPrompt> get prompts => _prompts.stream;
 
@@ -131,6 +157,7 @@ class SafetyPromptService {
     _silencePrompted = false;
     _batteryPrompted = false;
     _longPrompts = 0;
+    _lastLongPromptAt = Duration.zero;
     _ticks = 0;
   }
 
@@ -164,6 +191,7 @@ class SafetyPromptService {
       if (elapsed >= due) {
         _longPrompts =
             elapsed.inMicroseconds ~/ thresholds.longRecording.inMicroseconds;
+        _lastLongPromptAt = elapsed;
         _emit(
           SafetyPrompt(
             kind: SafetyPromptKind.longRecording,

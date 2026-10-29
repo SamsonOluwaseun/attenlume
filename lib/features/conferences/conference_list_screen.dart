@@ -9,8 +9,7 @@ import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_banner.dart';
-import '../guide/quick_guide_screen.dart';
-import '../privacy/privacy_screen.dart';
+import '../settings/settings_screen.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
 
@@ -63,25 +62,19 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
       appBar: AppBar(
         title: const Text('My conferences'),
         actions: [
-          // Settings (P1-25) will take this over; Privacy lives here until
-          // then (FR-PRI-03, FR-PRI-06).
+          // Settings holds Privacy, app lock and the quick guide (5.11,
+          // ADR-048) [P1-25].
           PopupMenuButton<String>(
             key: const Key('conference-list-menu'),
             tooltip: 'More',
             onSelected: (value) {
-              if (value == 'privacy') unawaited(PrivacyScreen.open(context));
-              if (value == 'guide') unawaited(QuickGuideScreen.open(context));
+              if (value == 'settings') unawaited(SettingsScreen.open(context));
             },
             itemBuilder: (context) => const [
               PopupMenuItem(
-                key: Key('menu-quick-guide'),
-                value: 'guide',
-                child: Text('Quick guide'),
-              ),
-              PopupMenuItem(
-                key: Key('menu-privacy'),
-                value: 'privacy',
-                child: Text('Privacy'),
+                key: Key('menu-settings'),
+                value: 'settings',
+                child: Text('Settings'),
               ),
             ],
           ),

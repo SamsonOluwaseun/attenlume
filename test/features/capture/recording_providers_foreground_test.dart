@@ -29,6 +29,8 @@ void main() {
 
     container = ProviderContainer(
       overrides: [
+        // The safety prompt thresholds come from Settings (P1-25).
+        settingsRepositoryProvider.overrideWithValue(t.settings),
         activityRepositoryProvider.overrideWithValue(t.activities),
         mediaAssetRepositoryProvider.overrideWithValue(t.media),
         audioCaptureEngineProvider.overrideWithValue(fakeEngine),
