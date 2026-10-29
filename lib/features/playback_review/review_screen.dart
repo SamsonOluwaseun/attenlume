@@ -394,14 +394,16 @@ class _PositionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium
         ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
-    final row = Row(
+    // Wraps at large text instead of overflowing (NFR-09).
+    final row = Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      spacing: TokenSpace.space2,
       children: [
         Text(
           formatOffset(player.positionMs),
           key: const Key('review-position'),
           style: style,
         ),
-        const Spacer(),
         Text(
           '${formatDuration(Duration(milliseconds: timeline.audioDurationMs))}'
           ' recorded',

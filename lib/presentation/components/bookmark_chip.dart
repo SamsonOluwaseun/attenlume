@@ -113,8 +113,10 @@ class _BookmarkChipState extends State<BookmarkChip> {
           child: InkWell(
             customBorder: shape,
             onTap: widget.onPress == null ? null : _handleTap,
+            // A minimum, not a fixed height, so the label can grow with
+            // the text size (NFR-09).
             child: Container(
-              height: TokenSize.tapMin,
+              constraints: const BoxConstraints(minHeight: TokenSize.tapMin),
               padding: const EdgeInsets.symmetric(
                 horizontal: TokenSpace.space3,
                 vertical: TokenSpace.space2,
@@ -126,13 +128,16 @@ class _BookmarkChipState extends State<BookmarkChip> {
                 border: border,
               ),
               alignment: Alignment.center,
-              child: Text(
-                widget.label,
-                style: TextStyle(
-                  fontFamily: TokenType.fontFamily,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: textColor,
+              // The Semantics label above already says it.
+              child: ExcludeSemantics(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontFamily: TokenType.fontFamily,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
                 ),
               ),
             ),

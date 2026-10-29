@@ -416,15 +416,20 @@ class _ActivityEditorScreenState extends ConsumerState<ActivityEditorScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Section 1: Type Selection (FR-ACT-06)
-                    Row(
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(
-                          'Activity type',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            'Activity type',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                        const Spacer(),
+
                         TextButton.icon(
                           key: const Key('activity-add-custom-type-button'),
                           icon: const Icon(Icons.add, size: 18),
@@ -607,10 +612,16 @@ class _ActivityEditorScreenState extends ConsumerState<ActivityEditorScreen> {
                               children: [
                                 const Icon(Icons.badge_outlined, size: 20),
                                 const SizedBox(width: TokenSpace.space2),
-                                Text(
-                                  'Contact details & follow-up',
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
+                                Expanded(
+                                  child: Semantics(
+                                    header: true,
+                                    child: Text(
+                                      'Contact details & follow-up',
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -757,6 +768,7 @@ class _ActivityEditorScreenState extends ConsumerState<ActivityEditorScreen> {
                     // Profile Override Dropdown
                     DropdownButtonFormField<RecordingProfile?>(
                       key: const Key('activity-profile-override-dropdown'),
+                      isExpanded: true,
                       initialValue: _profileOverride,
                       decoration: const InputDecoration(
                         labelText: 'Recording profile override',
@@ -785,6 +797,7 @@ class _ActivityEditorScreenState extends ConsumerState<ActivityEditorScreen> {
                     // Permission Status Dropdown (for non-conversation or manual control)
                     if (!_isConversationOrNetworking) ...[
                       DropdownButtonFormField<RecordingPermissionStatus>(
+                        isExpanded: true,
                         key: const Key('activity-permission-status-dropdown'),
                         initialValue: _permissionStatus,
                         decoration: const InputDecoration(

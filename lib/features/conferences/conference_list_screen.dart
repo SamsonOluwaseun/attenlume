@@ -240,7 +240,12 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
                         children: [
                           const Icon(Icons.calendar_today, size: 14),
                           const SizedBox(width: TokenSpace.space2),
-                          Text(dateText, style: theme.textTheme.bodySmall),
+                          Flexible(
+                            child: Text(
+                              dateText,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
                           if (conf.venue != null && conf.venue!.isNotEmpty) ...[
                             const SizedBox(width: TokenSpace.space3),
                             const Icon(Icons.location_on_outlined, size: 14),

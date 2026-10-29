@@ -351,10 +351,13 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              conf.name,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                conf.name,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             const SizedBox(height: TokenSpace.space2),
@@ -362,9 +365,11 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                               children: [
                                 const Icon(Icons.calendar_today, size: 16),
                                 const SizedBox(width: TokenSpace.space2),
-                                Text(
-                                  dateText,
-                                  style: theme.textTheme.bodyMedium,
+                                Expanded(
+                                  child: Text(
+                                    dateText,
+                                    style: theme.textTheme.bodyMedium,
+                                  ),
                                 ),
                               ],
                             ),
@@ -392,10 +397,12 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                               children: [
                                 const Icon(Icons.access_time, size: 16),
                                 const SizedBox(width: TokenSpace.space2),
-                                Text(
-                                  conf.timezone,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
+                                Expanded(
+                                  child: Text(
+                                    conf.timezone,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -577,10 +584,15 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                     ] else ...[
                       Row(
                         children: [
-                          Text(
-                            'Activities',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
+                          Flexible(
+                            child: Semantics(
+                              header: true,
+                              child: Text(
+                                'Activities',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: TokenSpace.space2),
@@ -678,8 +690,11 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                                             style: theme.textTheme.labelSmall
                                                 ?.copyWith(
                                                   fontWeight: FontWeight.bold,
-                                                  color:
-                                                      theme.colorScheme.primary,
+                                                  // ink on brand-tint: brand
+                                                  // text fails here (NFR-09).
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onPrimaryContainer,
                                                 ),
                                           ),
                                         )

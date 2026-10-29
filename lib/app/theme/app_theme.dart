@@ -218,6 +218,9 @@ abstract final class AppTheme {
           shape: mdShape,
           minimumSize: minSize,
           side: BorderSide(color: c.lineStrong),
+          // ink, not Material's default brand blue, which is 3.15:1 on
+          // cream and fails for 15px labels (NFR-09).
+          foregroundColor: c.ink,
           textStyle: _style(TokenType.label),
         ),
       ),

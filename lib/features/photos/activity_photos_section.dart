@@ -154,15 +154,20 @@ class _ActivityPhotosSectionState extends ConsumerState<ActivityPhotosSection> {
       key: const Key('activity-photos-section'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(
-              _photos.isEmpty ? 'Photos' : 'Photos (${_photos.length})',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
+            Semantics(
+              header: true,
+              child: Text(
+                _photos.isEmpty ? 'Photos' : 'Photos (${_photos.length})',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            const Spacer(),
+
             TextButton.icon(
               key: const Key('activity-photos-import-button'),
               onPressed: _importing ? null : _import,

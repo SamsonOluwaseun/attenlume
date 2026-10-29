@@ -140,138 +140,151 @@ class _QuickThoughtSheetState extends ConsumerState<QuickThoughtSheet> {
                 top: Radius.circular(TokenRadius.radiusLg),
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.edit_note_rounded,
-                      size: 24,
-                      color: onLiveSurface,
-                    ),
-                    const SizedBox(width: TokenSpace.space2),
-                    Text(
-                      'Quick Thought',
-                      style: TextStyle(
-                        fontFamily: TokenType.fontFamily,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+            // Scrolls at large text sizes (NFR-09).
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.edit_note_rounded,
+                        size: 24,
                         color: onLiveSurface,
                       ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: onLiveSurfaceMuted,
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: TokenSpace.space3),
-
-                TextField(
-                  key: const Key('quick-thought-input'),
-                  controller: _controller,
-                  autofocus: true,
-                  maxLines: 3,
-                  style: TextStyle(
-                    fontFamily: TokenType.fontFamily,
-                    color: onLiveSurface,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Type your observation or takeaway...',
-                    hintStyle: TextStyle(
-                      fontFamily: TokenType.fontFamily,
-                      color: onLiveSurfaceMuted,
-                    ),
-                    filled: true,
-                    fillColor: liveRaised,
-                    border: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(TokenRadius.radiusMd),
-                      ),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: TokenSpace.space2),
-
-                // Private reflection toggle
-                Row(
-                  children: [
-                    Checkbox(
-                      key: const Key('quick-thought-private-checkbox'),
-                      value: _isPrivate,
-                      onChanged: (val) {
-                        setState(() => _isPrivate = val ?? false);
-                      },
-                      activeColor:
-                          attenlume?.surfaceBrand ?? const Color(0xFF4392F1),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _isPrivate = !_isPrivate),
-                        child: Text(
-                          'Mark as private reflection (excluded from export)',
-                          style: TextStyle(
-                            fontFamily: TokenType.fontFamily,
-                            fontSize: 13,
-                            color: onLiveSurfaceMuted,
+                      const SizedBox(width: TokenSpace.space2),
+                      Expanded(
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            'Quick Thought',
+                            style: TextStyle(
+                              fontFamily: TokenType.fontFamily,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: onLiveSurface,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: TokenSpace.space3),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: onLiveSurface,
-                          side: BorderSide(color: onLiveSurfaceMuted),
+                      IconButton(
+                        tooltip: 'Close',
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: onLiveSurfaceMuted,
                         ),
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: TokenSpace.space3),
+
+                  TextField(
+                    key: const Key('quick-thought-input'),
+                    controller: _controller,
+                    autofocus: true,
+                    maxLines: 3,
+                    style: TextStyle(
+                      fontFamily: TokenType.fontFamily,
+                      color: onLiveSurface,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Type your observation or takeaway...',
+                      hintStyle: TextStyle(
+                        fontFamily: TokenType.fontFamily,
+                        color: onLiveSurfaceMuted,
+                      ),
+                      filled: true,
+                      fillColor: liveRaised,
+                      border: const OutlineInputBorder(
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(TokenRadius.radiusMd),
+                        ),
+                        borderSide: BorderSide.none,
                       ),
                     ),
-                    const SizedBox(width: TokenSpace.space3),
-                    Expanded(
-                      child: FilledButton(
-                        key: const Key('quick-thought-save-button'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
+                  ),
+
+                  const SizedBox(height: TokenSpace.space2),
+
+                  // Private reflection toggle. Merged, so the checkbox is
+                  // read with its label (NFR-09).
+                  MergeSemantics(
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          key: const Key('quick-thought-private-checkbox'),
+                          value: _isPrivate,
+                          onChanged: (val) {
+                            setState(() => _isPrivate = val ?? false);
+                          },
+                          activeColor:
                               attenlume?.surfaceBrand ??
                               const Color(0xFF4392F1),
-                          foregroundColor:
-                              attenlume?.onBrandLarge ??
-                              const Color(0xFFFEFFF8),
                         ),
-                        onPressed: _isSaving ? null : _handleSave,
-                        child: _isSaving
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Save thought'),
-                      ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _isPrivate = !_isPrivate),
+                            child: Text(
+                              'Mark as private reflection (excluded from export)',
+                              style: TextStyle(
+                                fontFamily: TokenType.fontFamily,
+                                fontSize: 13,
+                                color: onLiveSurfaceMuted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
+                  ),
+
+                  const SizedBox(height: TokenSpace.space3),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: onLiveSurface,
+                            side: BorderSide(color: onLiveSurfaceMuted),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: TokenSpace.space3),
+                      Expanded(
+                        child: FilledButton(
+                          key: const Key('quick-thought-save-button'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                attenlume?.surfaceBrand ??
+                                const Color(0xFF4392F1),
+                            foregroundColor:
+                                attenlume?.onBrandLarge ??
+                                const Color(0xFFFEFFF8),
+                          ),
+                          onPressed: _isSaving ? null : _handleSave,
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Save thought'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

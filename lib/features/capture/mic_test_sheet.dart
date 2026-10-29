@@ -215,215 +215,226 @@ class _MicTestSheetState extends ConsumerState<MicTestSheet> {
               top: Radius.circular(TokenRadius.radiusLg),
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                children: [
-                  Icon(Icons.mic_rounded, size: 24, color: onLiveSurface),
-                  const SizedBox(width: TokenSpace.space2),
-                  Text(
-                    '10-Second Microphone Test',
-                    style: TextStyle(
-                      fontFamily: TokenType.fontFamily,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: onLiveSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    key: const Key('mic-test-close-button'),
-                    icon: Icon(Icons.close_rounded, color: onLiveSurfaceMuted),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: TokenSpace.space3),
-
-              if (_errorMessage != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(TokenSpace.space3),
-                  decoration: BoxDecoration(
-                    color: warningFill.withValues(alpha: 0.15),
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(TokenRadius.radiusMd),
-                    ),
-                    border: Border.all(color: warningFill),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: warningFill,
-                        size: 20,
-                      ),
-                      const SizedBox(width: TokenSpace.space2),
-                      Expanded(
+          // Scrolls at large text sizes (NFR-09).
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Icon(Icons.mic_rounded, size: 24, color: onLiveSurface),
+                    const SizedBox(width: TokenSpace.space2),
+                    Expanded(
+                      child: Semantics(
+                        header: true,
                         child: Text(
-                          _errorMessage!,
+                          '10-Second Microphone Test',
                           style: TextStyle(
                             fontFamily: TokenType.fontFamily,
-                            fontSize: 14,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                             color: onLiveSurface,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      key: const Key('mic-test-close-button'),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: onLiveSurfaceMuted,
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: TokenSpace.space4),
-              ] else if (_isRunning) ...[
-                Text(
-                  'Speak into your microphone now to test audio input levels.',
-                  style: TextStyle(
-                    fontFamily: TokenType.fontFamily,
-                    fontSize: 14,
-                    color: onLiveSurfaceMuted,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: TokenSpace.space4),
 
-                // Countdown Timer
-                Center(
-                  child: Text(
-                    '00:${_secondsLeft.toString().padLeft(2, '0')}',
-                    key: const Key('mic-test-countdown'),
-                    style:
-                        (attenlume?.timer ??
-                                const TextStyle(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                ))
-                            .copyWith(
-                              color: live,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                  ),
-                ),
                 const SizedBox(height: TokenSpace.space3),
 
-                // Live level meter
-                LevelMeter(
-                  key: const Key('mic-test-level-meter'),
-                  levelDbfs: _currentLevelDbfs,
-                  isRecording: true,
-                  isPaused: false,
-                ),
-                const SizedBox(height: TokenSpace.space4),
-              ] else if (_isFinished) ...[
-                Container(
-                  padding: const EdgeInsets.all(TokenSpace.space3),
-                  decoration: BoxDecoration(
-                    color: liveRaised,
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(TokenRadius.radiusMd),
+                if (_errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(TokenSpace.space3),
+                    decoration: BoxDecoration(
+                      color: warningFill.withValues(alpha: 0.15),
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(TokenRadius.radiusMd),
+                      ),
+                      border: Border.all(color: warningFill),
                     ),
-                    border: Border.all(
-                      color: isFlatSignal ? warningFill : live,
-                      width: 1.5,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: onLiveSurface,
+                          size: 20,
+                        ),
+                        const SizedBox(width: TokenSpace.space2),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              fontFamily: TokenType.fontFamily,
+                              fontSize: 14,
+                              color: onLiveSurface,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isFlatSignal
-                            ? Icons.volume_off_rounded
-                            : Icons.check_circle_outline_rounded,
+                  const SizedBox(height: TokenSpace.space4),
+                ] else if (_isRunning) ...[
+                  Text(
+                    'Speak into your microphone now to test audio input levels.',
+                    style: TextStyle(
+                      fontFamily: TokenType.fontFamily,
+                      fontSize: 14,
+                      color: onLiveSurfaceMuted,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: TokenSpace.space4),
+
+                  // Countdown Timer
+                  Center(
+                    child: Text(
+                      '00:${_secondsLeft.toString().padLeft(2, '0')}',
+                      key: const Key('mic-test-countdown'),
+                      style:
+                          (attenlume?.timer ??
+                                  const TextStyle(
+                                    fontSize: 48,
+                                    fontWeight: FontWeight.bold,
+                                  ))
+                              .copyWith(
+                                color: live,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                    ),
+                  ),
+                  const SizedBox(height: TokenSpace.space3),
+
+                  // Live level meter
+                  LevelMeter(
+                    key: const Key('mic-test-level-meter'),
+                    levelDbfs: _currentLevelDbfs,
+                    isRecording: true,
+                    isPaused: false,
+                  ),
+                  const SizedBox(height: TokenSpace.space4),
+                ] else if (_isFinished) ...[
+                  Container(
+                    padding: const EdgeInsets.all(TokenSpace.space3),
+                    decoration: BoxDecoration(
+                      color: liveRaised,
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(TokenRadius.radiusMd),
+                      ),
+                      border: Border.all(
                         color: isFlatSignal ? warningFill : live,
-                        size: 28,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isFlatSignal
+                              ? Icons.volume_off_rounded
+                              : Icons.check_circle_outline_rounded,
+                          color: isFlatSignal ? warningFill : live,
+                          size: 28,
+                        ),
+                        const SizedBox(width: TokenSpace.space3),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isFlatSignal
+                                    ? 'Flat signal detected'
+                                    : 'Microphone working',
+                                key: const Key('mic-test-result-title'),
+                                style: TextStyle(
+                                  fontFamily: TokenType.fontFamily,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: onLiveSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isFlatSignal
+                                    ? 'No audio detected. Check microphone privacy switch, volume or permissions.'
+                                    : 'Audio signal received clearly (peak: ${maxLevel.toStringAsFixed(1)} dBFS).',
+                                key: const Key('mic-test-result-message'),
+                                style: TextStyle(
+                                  fontFamily: TokenType.fontFamily,
+                                  fontSize: 13,
+                                  color: onLiveSurfaceMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: TokenSpace.space4),
+                ],
+
+                // Actions
+                Row(
+                  children: [
+                    if (_isRunning)
+                      Expanded(
+                        child: OutlinedButton(
+                          key: const Key('mic-test-cancel-button'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: onLiveSurface,
+                            side: BorderSide(color: onLiveSurfaceMuted),
+                          ),
+                          onPressed: _finishTest,
+                          child: const Text('Cancel test'),
+                        ),
+                      )
+                    else ...[
+                      Expanded(
+                        child: OutlinedButton(
+                          key: const Key('mic-test-retry-button'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: onLiveSurface,
+                            side: BorderSide(color: onLiveSurfaceMuted),
+                          ),
+                          onPressed: _startTest,
+                          child: const Text('Test again'),
+                        ),
                       ),
                       const SizedBox(width: TokenSpace.space3),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isFlatSignal
-                                  ? 'Flat signal detected'
-                                  : 'Microphone working',
-                              key: const Key('mic-test-result-title'),
-                              style: TextStyle(
-                                fontFamily: TokenType.fontFamily,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: onLiveSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              isFlatSignal
-                                  ? 'No audio detected. Check microphone privacy switch, volume or permissions.'
-                                  : 'Audio signal received clearly (peak: ${maxLevel.toStringAsFixed(1)} dBFS).',
-                              key: const Key('mic-test-result-message'),
-                              style: TextStyle(
-                                fontFamily: TokenType.fontFamily,
-                                fontSize: 13,
-                                color: onLiveSurfaceMuted,
-                              ),
-                            ),
-                          ],
+                        child: FilledButton(
+                          key: const Key('mic-test-done-button'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                attenlume?.surfaceBrand ??
+                                const Color(0xFF4392F1),
+                            foregroundColor:
+                                attenlume?.onBrandLarge ??
+                                const Color(0xFFFEFFF8),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Done'),
                         ),
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(height: TokenSpace.space4),
-              ],
-
-              // Actions
-              Row(
-                children: [
-                  if (_isRunning)
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const Key('mic-test-cancel-button'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: onLiveSurface,
-                          side: BorderSide(color: onLiveSurfaceMuted),
-                        ),
-                        onPressed: _finishTest,
-                        child: const Text('Cancel test'),
-                      ),
-                    )
-                  else ...[
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const Key('mic-test-retry-button'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: onLiveSurface,
-                          side: BorderSide(color: onLiveSurfaceMuted),
-                        ),
-                        onPressed: _startTest,
-                        child: const Text('Test again'),
-                      ),
-                    ),
-                    const SizedBox(width: TokenSpace.space3),
-                    Expanded(
-                      child: FilledButton(
-                        key: const Key('mic-test-done-button'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              attenlume?.surfaceBrand ??
-                              const Color(0xFF4392F1),
-                          foregroundColor:
-                              attenlume?.onBrandLarge ??
-                              const Color(0xFFFEFFF8),
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Done'),
-                      ),
-                    ),
                   ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -230,8 +230,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                         children: [
                           Center(child: _viewfinder(theme, onSurface, muted)),
                           IgnorePointer(
+                            // No shutter flash with reduced motion (NFR-09).
                             child: AnimatedOpacity(
-                              opacity: _flash ? 0.6 : 0,
+                              opacity:
+                                  _flash &&
+                                      !MediaQuery.disableAnimationsOf(context)
+                                  ? 0.6
+                                  : 0,
                               duration: const Duration(milliseconds: 80),
                               child: const ColoredBox(color: Colors.white),
                             ),
@@ -326,7 +331,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
             border: Border.all(color: ring, width: 4),
           ),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 100),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: enabled ? fill : fill.withValues(alpha: 0.4),
@@ -374,6 +381,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
         MediaPaths.resolve(root, path),
         fit: BoxFit.cover,
         cacheWidth: 112,
+        semanticLabel: 'Last photo taken',
         errorBuilder: (_, _, _) =>
             ColoredBox(color: border.withValues(alpha: 0.2)),
       ),

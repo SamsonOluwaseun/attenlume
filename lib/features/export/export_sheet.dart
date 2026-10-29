@@ -258,7 +258,13 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Export', style: theme.textTheme.titleLarge),
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          'Export',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Close',
@@ -418,14 +424,15 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
         onChanged: _running ? null : (v) => _change(() => _includePrivate = v),
       ),
       _label(theme, 'Save to'),
-      Row(
+      // Wraps at large text instead of overflowing (NFR-09).
+      Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Expanded(
-            child: Text(
-              _destination ?? 'Choose a folder for the export.',
-              key: const Key('export-destination'),
-              style: theme.textTheme.bodyMedium,
-            ),
+          Text(
+            _destination ?? 'Choose a folder for the export.',
+            key: const Key('export-destination'),
+            style: theme.textTheme.bodyMedium,
           ),
           if (ref.read(exportDestinationsProvider).canChoose)
             TextButton.icon(
@@ -571,8 +578,12 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
       children: [
         const Icon(Icons.check_circle_rounded),
         const SizedBox(width: TokenSpace.space2),
+        // Announced when the export finishes (NFR-09).
         Expanded(
-          child: Text('Export saved', style: theme.textTheme.titleMedium),
+          child: Semantics(
+            liveRegion: true,
+            child: Text('Export saved', style: theme.textTheme.titleMedium),
+          ),
         ),
       ],
     ),
