@@ -138,6 +138,7 @@ module.exports = {
     { title: 'Ask before you record', text: 'Some events and speakers do not allow recording. Record only when permitted.' },
     { title: 'Long sessions', text: 'Attenlume checks in after two hours, after ten minutes of silence and when the battery is low. Change these in Settings.' },
     { title: 'Updating', text: 'Installing a newer version keeps all your recordings.' },
+    { title: 'Moving to a new device', text: 'Export a conference, then on the new device open My conferences, menu, Import an export. Every file is checked first, and nothing already in the app is overwritten.' },
     { title: 'Before you uninstall', text: 'Uninstalling deletes everything in the app. Export and share your conferences first.' },
   ],
   closing: 'Be present. Bring ideas to light.',
