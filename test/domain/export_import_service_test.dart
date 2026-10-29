@@ -954,6 +954,87 @@ void main() {
     });
   });
 
+  group('FR-EXP-11 activity types', () {
+    /// An export whose only activity has a custom type, exported under
+    /// [key] and [label].
+    Future<(String, Activity)> customExport(String key, String label) async {
+      final c = await t.conferences.create(
+        name: 'Samlytics Conference 2026',
+        timezone: 'Europe/London',
+      );
+      final type = await t.activities.createCustomType(label);
+      final a = await t.activities.create(
+        conferenceId: c.id,
+        typeId: type.id,
+        title: 'Evening talk',
+      );
+      final out = await export(c.id);
+      final conf = readJson(out, 'conference.json');
+      final folder =
+          ((conf['activities']! as List).first as Map)['folder'] as String;
+      final json = readJson(out, '$folder/activity.json')..['type'] = key;
+      await rewrite(out, '$folder/activity.json', jsonEncode(json));
+      return (out, a);
+    }
+
+    Future<void> addLocalType(String key, String label) => u.db
+        .into(u.db.activityTypes)
+        .insert(
+          ActivityTypesCompanion.insert(
+            id: 'dddddddd-0000-4000-8000-000000000001',
+            key: key,
+            label: label,
+            icon: 'tag',
+            isBuiltin: false,
+            sortOrder: 50,
+            createdAt: DateTime.utc(2026, 10, 1),
+            updatedAt: DateTime.utc(2026, 10, 1),
+          ),
+        );
+
+    test('FR-EXP-11 a custom type with the same key but another label is '
+        'not reused; a new type with the exported label is made', () async {
+      final (out, a) = await customExport('workshop-2', 'Fireside chat');
+      await addLocalType('workshop-2', 'Hackathon');
+      final service = importer(u, newMediaRoot);
+      await service.commit(await service.prepare(out));
+      final imported = (await u.activities.listForConference(a.conferenceId))
+          .single;
+      final types = await u.activities.types();
+      final used = types.singleWhere((x) => x.id == imported.typeId);
+      expect(used.label, 'Fireside chat');
+      expect(used.isBuiltin, isFalse);
+      expect(used.key, isNot('workshop-2'));
+      final hackathon = types.singleWhere((x) => x.key == 'workshop-2');
+      expect(hackathon.label, 'Hackathon', reason: 'existing type unchanged');
+    });
+
+    test('FR-EXP-11 a local custom type with the same label is reused, '
+        'whatever its key', () async {
+      final (out, a) = await customExport(
+        'custom_fireside-chat',
+        'Fireside chat',
+      );
+      await addLocalType('custom_fireside-chat_3', ' fireside CHAT ');
+      final before = (await u.activities.types()).length;
+      final service = importer(u, newMediaRoot);
+      await service.commit(await service.prepare(out));
+      final imported = (await u.activities.listForConference(a.conferenceId))
+          .single;
+      expect(imported.typeId, 'dddddddd-0000-4000-8000-000000000001');
+      expect(await u.activities.types(), hasLength(before));
+    });
+
+    test('FR-EXP-11 built-in types are matched by key', () async {
+      final (id, keynote, _) = await sample();
+      final out = await export(id);
+      final service = importer(u, newMediaRoot);
+      await service.commit(await service.prepare(out));
+      final k = (await u.activities.listForConference(id)).first;
+      expect(k.typeId, keynote.typeId);
+    });
+  });
+
   group('FR-EXP-11 trimmed copies', () {
     test('FR-EXP-11 a trimmed-copy export imports the trimmed files as the '
         'recordings and no cuts', () async {

@@ -685,11 +685,15 @@ class ExportImportService {
       p.posix.joinAll(p.split(p.relative(file.path, from: root.path)));
 
   Future<String> _typeFor(_Act a) async {
+    // Built-in keys are the same on every device; custom keys are local
+    // slugs (`custom_x_2`), so a custom type is matched by its label.
     final byKey = await activities.typeByKey(a.typeKey);
-    if (byKey != null) return byKey.id;
+    if (byKey != null && byKey.isBuiltin) return byKey.id;
     final label = a.typeLabel.trim().isEmpty ? 'Activity' : a.typeLabel.trim();
     for (final t in await activities.types()) {
-      if (t.label.toLowerCase() == label.toLowerCase()) return t.id;
+      if (!t.isBuiltin && t.label.trim().toLowerCase() == label.toLowerCase()) {
+        return t.id;
+      }
     }
     return (await activities.createCustomType(label)).id;
   }
