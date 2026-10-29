@@ -209,6 +209,7 @@ void main() {
       expect(a.sizes.keptOriginalBytes, 20000);
       expect(a.keptOriginalsCount, 1);
       expect(c.sizes.recoveryBytes, 700);
+      expect(a.sizes.recoveryBytes, 700);
       expect(c.sizes.totalBytes, 10000 + 5000 + 800 + 1200 + 20000 + 700);
       expect(b.temporaryExportBytes, 300);
       expect(b.orphanWaveformBytes, 0);
@@ -270,6 +271,32 @@ void main() {
       c = (await service.analyse()).conferences.single;
       expect(c.exportStatus, ExportStatus.verified);
     });
+  });
+
+  test('FR-STO-05 recovery files in an activity folder show under that '
+      'activity, and activities plus conference-level files add up to the '
+      'conference total', () async {
+    final conf = await t.conference();
+    final a1 = await t.activity(conf.id, title: 'Interrupted talk');
+    final a2 = await t.activity(conf.id, title: 'Workshop');
+    write(MediaPaths.partial(MediaPaths.segment(conf.id, a1.id, 1)), 4000);
+    write(MediaPaths.segment(conf.id, a1.id, 2), 1500); // unlinked
+    await segment(a2.id, MediaPaths.segment(conf.id, a2.id, 1), 3000);
+    await photo(conf.id, a2.id, 'photo1');
+    write(MediaPaths.waveform(conf.id, a2.id, 'gone'), 100);
+    // Outside any activity folder.
+    final stray = p.posix.join(MediaPaths.conferenceFolder(conf.id), 'x.tmp');
+    write(stray, 250);
+
+    final c = (await service.analyse()).conferences.single;
+    final byId = {for (final a in c.activities) a.activityId: a};
+    expect(byId[a1.id]!.sizes.recoveryBytes, 5500);
+    expect(byId[a1.id]!.totalBytes, 5500);
+    expect(byId[a2.id]!.totalBytes, 3000 + 5000 + 800 + 100);
+    expect(
+      c.activities.fold(0, (n, a) => n + a.totalBytes) + 250,
+      c.totalBytes,
+    );
   });
 
   group('FR-STO-06 Clear safe temporary files', () {

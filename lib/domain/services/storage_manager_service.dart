@@ -118,19 +118,32 @@ class StorageManagerService {
       final files = _listFiles(root, MediaPaths.conferenceFolder(conf.id));
       var audio = 0, photos = 0, thumbs = 0, waves = 0, originals = 0;
       var recovery = 0;
+      // Files no row names, by activity folder and kind, so each activity
+      // shows what sits in its folder (rows give the rest).
+      final unnamed = <String, StorageKindSizes>{};
+      void addUnnamed(List<String> parts, StorageKindSizes size) {
+        if (parts.length < 6 || parts[2] != 'activities') return;
+        unnamed[parts[3]] = (unnamed[parts[3]] ?? StorageKindSizes.zero) + size;
+      }
+
       for (final MapEntry(key: rel, value: bytes) in files.entries) {
         final parts = p.posix.split(rel);
         final sub = parts.length > 5 ? parts[4] : '';
-        if (MediaPaths.isPartial(rel)) {
-          recovery += bytes;
-        } else if (segmentPaths.contains(rel)) {
+        if (segmentPaths.contains(rel)) {
           audio += bytes;
         } else if (photoPaths.contains(rel)) {
           photos += bytes;
-        } else if (thumbPaths.contains(rel) || sub == 'thumbs') {
+        } else if (thumbPaths.contains(rel)) {
           thumbs += bytes;
+        } else if (MediaPaths.isPartial(rel)) {
+          recovery += bytes;
+          addUnnamed(parts, StorageKindSizes(recoveryBytes: bytes));
+        } else if (sub == 'thumbs') {
+          thumbs += bytes;
+          addUnnamed(parts, StorageKindSizes(thumbnailBytes: bytes));
         } else if (MediaPaths.isKeptOriginal(rel)) {
           originals += bytes;
+          addUnnamed(parts, StorageKindSizes(keptOriginalBytes: bytes));
           kept.add(
             KeptOriginalFile(
               relativePath: rel,
@@ -141,14 +154,17 @@ class StorageManagerService {
           );
         } else if (sub == 'waveforms') {
           waves += bytes;
+          addUnnamed(parts, StorageKindSizes(waveformBytes: bytes));
           if (!segmentIds.contains(p.posix.basenameWithoutExtension(rel))) {
             orphanWaveforms += bytes;
           }
         } else if (sub == 'photos') {
           photos += bytes;
+          addUnnamed(parts, StorageKindSizes(photoBytes: bytes));
         } else {
           // Unlinked audio and anything not recognised: crash recovery's.
           recovery += bytes;
+          addUnnamed(parts, StorageKindSizes(recoveryBytes: bytes));
         }
       }
 
@@ -158,12 +174,12 @@ class StorageManagerService {
         final folder = MediaPaths.activityFolder(conf.id, a.id);
         int sizeOf(Iterable<String> paths) =>
             paths.toSet().fold(0, (n, path) => n + (files[path] ?? 0));
-        int sizeUnder(String sub) => files.entries
-            .where((e) => p.posix.isWithin(p.posix.join(folder, sub), e.key))
-            .fold(0, (n, e) => n + e.value);
         final keptHere = files.keys
             .where(
-              (k) => MediaPaths.isKeptOriginal(k) && k.startsWith('$folder/'),
+              (k) =>
+                  MediaPaths.isKeptOriginal(k) &&
+                  k.startsWith('$folder/') &&
+                  !segmentPaths.contains(k),
             )
             .length;
         actBreakdowns.add(
@@ -172,15 +188,15 @@ class StorageManagerService {
             activityTitle: a.title,
             activityTypeLabel: types[a.typeId] ?? 'Activity',
             exportStatus: _status(jobs, a.id),
-            sizes: StorageKindSizes(
-              audioBytes: sizeOf(rows.segments.map((s) => s.filePath)),
-              photoBytes: sizeOf(rows.photos.map((ph) => ph.filePath)),
-              thumbnailBytes: sizeOf(
-                rows.photos.map((ph) => ph.thumbnailPath).nonNulls,
-              ),
-              waveformBytes: sizeUnder('waveforms'),
-              keptOriginalBytes: sizeUnder(p.posix.join('audio', 'originals')),
-            ),
+            sizes:
+                StorageKindSizes(
+                  audioBytes: sizeOf(rows.segments.map((s) => s.filePath)),
+                  photoBytes: sizeOf(rows.photos.map((ph) => ph.filePath)),
+                  thumbnailBytes: sizeOf(
+                    rows.photos.map((ph) => ph.thumbnailPath).nonNulls,
+                  ),
+                ) +
+                (unnamed[a.id] ?? StorageKindSizes.zero),
             segmentCount: rows.segments.length,
             photoCount: rows.photos.length,
             keptOriginalsCount: keptHere,
