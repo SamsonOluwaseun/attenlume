@@ -100,6 +100,7 @@ class StorageManagerService {
       final acts = await activities.listForConference(conf.id);
       final titles = {for (final a in acts) a.id: a.title};
       final jobs = await _completedJobs(conf.id);
+      final goals = await conferences.goalsFor(conf.id);
 
       // Rows of the conference, to classify each file once.
       final photoPaths = <String>{};
@@ -224,11 +225,9 @@ class StorageManagerService {
           conferenceId: conf.id,
           conferenceName: conf.name,
           isArchived: conf.isArchived,
-          exportStatus: acts.isEmpty
-              ? _status(jobs, null)
-              : actBreakdowns
-                    .map((a) => a.exportStatus)
-                    .reduce((x, y) => x.index <= y.index ? x : y),
+          exportStatus: _conferenceStatus(conf, goals, jobs, [
+            for (final a in actBreakdowns) a.exportStatus,
+          ]),
           sizes: sizes,
           activities: actBreakdowns,
           deleteBlockedReason: acts.isEmpty
@@ -237,11 +236,7 @@ class StorageManagerService {
                         .map((a) => a.deleteBlockedReason)
                         .nonNulls
                         .firstOrNull ??
-                    _conferenceBlockedReason(
-                      conf,
-                      await conferences.goalsFor(conf.id),
-                      jobs,
-                    ),
+                    _conferenceBlockedReason(conf, goals, jobs),
         ),
       );
     }
@@ -622,19 +617,6 @@ class StorageManagerService {
     return false;
   }
 
-  static ExportStatus _status(List<ExportJob> jobs, String? activityId) {
-    var best = ExportStatus.notExported;
-    for (final j in jobs.where((j) => _covers(j, activityId))) {
-      final s = j.verificationLevel == VerificationLevel.checksum
-          ? ExportStatus.verified
-          : j.destination == ExportDestination.local
-          ? ExportStatus.exportedLocally
-          : ExportStatus.uploaded;
-      if (s.index > best.index) best = s;
-    }
-    return best;
-  }
-
   /// Why the activity's local copies may not be deleted, or null.
   ///
   /// Needs a completed export verified by checksum that covers the
@@ -772,19 +754,12 @@ class StorageManagerService {
     List<Goal> goals,
     List<ExportJob> jobs,
   ) {
-    var changed = conf.updatedAt;
-    for (final g in goals) {
-      for (final t in [g.createdAt, g.updatedAt]) {
-        if (t.isAfter(changed)) changed = t;
-      }
-    }
     final whole =
         jobs
             .where(
               (j) =>
                   j.scope['kind'] == 'conference' &&
-                  j.verificationLevel == VerificationLevel.checksum &&
-                  j.scope['content'] == ExportContent.everything.key,
+                  j.verificationLevel == VerificationLevel.checksum,
             )
             .toList()
           ..sort((x, y) => _sortKey(y).compareTo(_sortKey(x)));
@@ -792,13 +767,72 @@ class StorageManagerService {
       return 'Needs a verified export of the whole conference with '
           '"Everything" first.';
     }
-    final snapshot = _snapshot(whole.first);
+    String? reason;
+    for (final j in whole) {
+      final why = _conferenceMissing(conf, goals, j);
+      if (why == null) return null;
+      reason ??= why;
+    }
+    return reason;
+  }
+
+  /// What [j] does not hold of the conference's own details and goals, or
+  /// null when it holds them as they are now. Shared by the conference
+  /// status and the delete gate (ADR-047).
+  static String? _conferenceMissing(
+    Conference conf,
+    List<Goal> goals,
+    ExportJob j,
+  ) {
+    if (j.scope['kind'] != 'conference' ||
+        j.scope['content'] != ExportContent.everything.key) {
+      return 'Needs a verified export of the whole conference with '
+          '"Everything" first.';
+    }
+    final snapshot = _snapshot(j);
     if (snapshot == null) return _noSnapshot;
+    var changed = conf.updatedAt;
+    for (final g in goals) {
+      for (final t in [g.createdAt, g.updatedAt]) {
+        if (t.isAfter(changed)) changed = t;
+      }
+    }
     if (!changed.isBefore(snapshot)) {
       return 'The conference details or goals changed after the last '
           'verified export. Export it again first.';
     }
     return null;
+  }
+
+  /// Export status of the conference: its least-exported activity, held
+  /// down by its own details and goals, judged with the delete gate's rule.
+  static ExportStatus _conferenceStatus(
+    Conference conf,
+    List<Goal> goals,
+    List<ExportJob> jobs,
+    List<ExportStatus> activityStatuses,
+  ) {
+    var details = ExportStatus.notExported;
+    for (final j in jobs.where((j) => j.scope['kind'] == 'conference')) {
+      final ExportStatus s;
+      if (_conferenceMissing(conf, goals, j) != null) {
+        s = ExportStatus.partlyExported;
+      } else if (j.verificationLevel == VerificationLevel.checksum) {
+        s = ExportStatus.verified;
+      } else if (j.destination == ExportDestination.local) {
+        s = ExportStatus.exportedLocally;
+      } else {
+        s = ExportStatus.uploaded;
+      }
+      if (s.index > details.index) details = s;
+    }
+    if (activityStatuses.isEmpty) return details;
+    final least = activityStatuses.reduce((x, y) => x.index <= y.index ? x : y);
+    if (least.index <= details.index) return least;
+    // Activities exported but the conference's own details less so.
+    return details == ExportStatus.notExported
+        ? ExportStatus.partlyExported
+        : details;
   }
 
   // ---------------------------------------------------------------------

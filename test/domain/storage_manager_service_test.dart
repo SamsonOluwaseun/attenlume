@@ -358,6 +358,44 @@ void main() {
     expect(await status(), ExportStatus.partlyExported);
   });
 
+  test('FR-STO-05 a goal edited after a verified export shows the '
+      'conference as Partly exported while its activities stay '
+      'Verified', () async {
+    final conf = await t.conference();
+    final goal = await t.conferences.addGoal(conf.id, 'Meet two vendors');
+    final act = await t.activity(conf.id);
+    await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+    await exported(conf.id);
+    var c = (await service.analyse()).conferences.single;
+    expect(c.exportStatus, ExportStatus.verified);
+
+    t.clock.advance(const Duration(minutes: 1));
+    await t.conferences.updateGoal(goal.id, text: 'Meet three vendors');
+    c = (await service.analyse()).conferences.single;
+    expect(c.exportStatus, ExportStatus.partlyExported);
+    expect(c.activities.single.exportStatus, ExportStatus.verified);
+    expect(c.canDeleteLocalCopies, isFalse);
+  });
+
+  test('FR-STO-05 activities exported one by one leave the conference '
+      'Partly exported until the whole conference is exported', () async {
+    final conf = await t.conference();
+    final act = await t.activity(conf.id);
+    await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+    await exported(
+      conf.id,
+      scope: {
+        ...fullScope(),
+        'kind': 'activities',
+        'activity_ids': [act.id],
+      },
+    );
+    final c = (await service.analyse()).conferences.single;
+    expect(c.activities.single.exportStatus, ExportStatus.verified);
+    expect(c.exportStatus, ExportStatus.partlyExported);
+    expect(c.deleteBlockedReason, contains('whole conference'));
+  });
+
   group('FR-STO-06 Clear safe temporary files', () {
     test('FR-STO-06 FR-REC-08 ADR-038 partial recordings are never cleared; '
         'only export staging and orphaned waveforms go', () async {
