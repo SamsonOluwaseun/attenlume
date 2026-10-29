@@ -258,7 +258,13 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Export', style: theme.textTheme.titleLarge),
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          'Export',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Close',
@@ -572,8 +578,12 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
       children: [
         const Icon(Icons.check_circle_rounded),
         const SizedBox(width: TokenSpace.space2),
+        // Announced when the export finishes (NFR-09).
         Expanded(
-          child: Text('Export saved', style: theme.textTheme.titleMedium),
+          child: Semantics(
+            liveRegion: true,
+            child: Text('Export saved', style: theme.textTheme.titleMedium),
+          ),
         ),
       ],
     ),

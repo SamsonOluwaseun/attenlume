@@ -1,5 +1,6 @@
 import 'package:attenlume/app/theme/app_theme.dart';
 import 'package:attenlume/domain/services/export_service.dart';
+import 'package:attenlume/features/activities/activity_editor_screen.dart';
 import 'package:attenlume/features/export/export_providers.dart';
 import 'package:attenlume/features/export/export_sheet.dart';
 import 'package:attenlume/features/export/import_export_screen.dart';
@@ -33,7 +34,7 @@ class _Destinations implements ExportDestinations {
 
 typedef Screen = Widget Function(SampleConference s);
 
-/// NFR-09 accessibility of review, export, import, Storage Manager,
+/// NFR-09 accessibility of the activity editor, review, export, import, Storage Manager,
 /// Settings, Privacy and app lock, and the quick guide [P1-26].
 void main() {
   List<Override> extra(A11yHarness h) => [
@@ -55,6 +56,7 @@ void main() {
 
   final screens = <String, Screen>{
     'review': (s) => ReviewScreen(activityId: s.keynote.id),
+    'activity editor': (s) => ActivityEditorScreen(activityId: s.keynote.id),
     'export sheet': (s) =>
         Scaffold(body: ExportSheet(conferenceId: s.conference.id)),
     'import': (_) => const ImportExportScreen(),

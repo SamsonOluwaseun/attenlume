@@ -195,8 +195,8 @@ void main() {
 
     testWidgets('NFR-09 camera screen meets the guidelines', (tester) async {
       final handle = tester.ensureSemantics();
-      await sheet(tester, (c, id) => CameraScreen.open(c, id));
-      await expectMeetsGuidelines(tester, contrast: false);
+      await sheet(tester, CameraScreen.open);
+      await expectMeetsGuidelines(tester);
       handle.dispose();
     });
 
@@ -207,7 +207,7 @@ void main() {
             'quick thought',
             (c, id) => QuickThoughtSheet.show(c, activityId: id),
           ),
-          ('camera', (c, id) => CameraScreen.open(c, id)),
+          ('camera', CameraScreen.open),
         ]) {
       testWidgets('NFR-09 $name at 200% text has no overflow', (tester) async {
         await sheet(tester, show, textScale: 2);
