@@ -364,13 +364,11 @@ class StorageManagerService {
     final root = await mediaRoot();
     var deleted = 0;
     var freed = 0;
-    final failedActivities = <String>{};
     var failed = 0;
 
     final failedPaths = <String>{};
     void remove(String rel) {
-      final owners = plan.files[rel];
-      if (owners == null) return;
+      if (!plan.files.containsKey(rel)) return;
       final file = MediaPaths.resolve(root, rel);
       try {
         if (!file.existsSync()) return;
@@ -381,7 +379,6 @@ class StorageManagerService {
       } on FileSystemException {
         failed++;
         failedPaths.add(rel);
-        failedActivities.addAll(owners);
       }
     }
 
@@ -414,35 +411,28 @@ class StorageManagerService {
     for (final path in {for (final sg in segments) sg.filePath}) {
       if (!keepAudio.contains(path)) remove(path);
     }
-    // A planned original skipped above still exists, so its activity
-    // stays.
-    for (final rel in originals) {
-      if (plan.files.containsKey(rel) &&
-          MediaPaths.resolve(root, rel).existsSync()) {
-        failedActivities.addAll(plan.files[rel]!);
-      }
-    }
-
+    // Which rows stay is decided from the files on disk, not from the
+    // bookkeeping above (ADR-047): a segment or photo row whose original
+    // is still there stays, unless another activity's row names that file
+    // (it was never to be deleted); a row whose original is gone, for
+    // whatever reason, is removed. An activity with any row left stays;
+    // missing derived files count as gone.
+    bool exists(String rel) => MediaPaths.resolve(root, rel).existsSync();
+    bool stays(String rel) => exists(rel) && !plan.elsewhere.contains(rel);
     var activitiesDeleted = 0;
+    var activitiesKept = 0;
     for (final a in plan.activities) {
-      if (failedActivities.contains(a.id)) {
-        // Drop the rows whose planned files are gone, so the next attempt
-        // is not refused as "missing" (ADR-047).
-        bool gone(String rel) =>
-            plan.files.containsKey(rel) &&
-            !MediaPaths.resolve(root, rel).existsSync();
-        final rows = plan.rows[a.id]!;
+      final rows = plan.rows[a.id]!;
+      final keep =
+          rows.segments.any((sg) => stays(sg.filePath)) ||
+          rows.photos.any((ph) => stays(ph.filePath));
+      if (keep) {
+        activitiesKept++;
         await media.deleteSegments(
-          rows.segments.where((s) => gone(s.filePath)).map((s) => s.id),
+          rows.segments.where((sg) => !exists(sg.filePath)).map((sg) => sg.id),
         );
         await media.deletePhotos(
-          rows.photos
-              .where(
-                (ph) =>
-                    gone(ph.filePath) &&
-                    (ph.thumbnailPath == null || gone(ph.thumbnailPath!)),
-              )
-              .map((ph) => ph.id),
+          rows.photos.where((ph) => !exists(ph.filePath)).map((ph) => ph.id),
         );
         continue;
       }
@@ -454,7 +444,7 @@ class StorageManagerService {
         ),
       );
     }
-    if (activityId == null && failedActivities.isEmpty) {
+    if (activityId == null && activitiesKept == 0) {
       await conferences.delete(conferenceId);
       _removeEmptyFolders(
         Directory(p.join(root.path, MediaPaths.conferenceFolder(conferenceId))),
@@ -567,6 +557,7 @@ class StorageManagerService {
     return _DeletePlan(
       activities: targets,
       rows: rowsByActivity,
+      elsewhere: elsewhere,
       files: files,
       preview: DeleteLocalPreview(
         conferenceId: conferenceId,
@@ -885,12 +876,16 @@ class _DeletePlan {
   _DeletePlan({
     required this.activities,
     required this.rows,
+    required this.elsewhere,
     required this.files,
     required this.preview,
   });
 
   final List<Activity> activities;
   final Map<String, _ActivityRows> rows;
+
+  /// Files rows outside the targets name; they always stay.
+  final Set<String> elsewhere;
 
   /// Relative path to the ids of the target activities that name it.
   final Map<String, Set<String>> files;

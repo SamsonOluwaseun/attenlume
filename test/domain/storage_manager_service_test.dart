@@ -1013,5 +1013,48 @@ void main() {
       expect(wave2.existsSync(), isFalse);
       expect(await t.conferences.get(conf.id), isNull);
     });
+
+    test('FR-STO-06 a photo whose thumbnail was already missing loses its '
+        'row with its file when another file is locked; the retry '
+        'finishes', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      final rel = MediaPaths.segment(conf.id, act.id, 1);
+      await segment(act.id, rel, 1000);
+      await photo(conf.id, act.id, 'photo1');
+      MediaPaths.resolve(
+        root,
+        MediaPaths.thumbnail(conf.id, act.id, 'photo1'),
+      ).deleteSync();
+      final full = MediaPaths.resolve(
+        root,
+        MediaPaths.photo(conf.id, act.id, 'photo1'),
+      );
+      await exported(conf.id);
+      locked.add(MediaPaths.resolve(root, rel).path);
+
+      var res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.failedFiles, 1);
+      expect(res.activitiesDeleted, 0);
+      expect(full.existsSync(), isFalse);
+      expect(await t.media.photosFor(act.id), isEmpty);
+      expect(await t.media.segmentsFor(act.id), hasLength(1));
+      expect(
+        (await service.analyse())
+            .conferences
+            .single
+            .activities
+            .single
+            .deleteBlockedReason,
+        isNull,
+      );
+
+      locked.clear();
+      res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.failedFiles, 0);
+      expect(res.activitiesDeleted, 1);
+      expect(MediaPaths.resolve(root, rel).existsSync(), isFalse);
+      expect(await t.conferences.get(conf.id), isNull);
+    });
   });
 }
