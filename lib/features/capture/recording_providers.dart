@@ -29,6 +29,7 @@ import '../../platform/foreground_service/foreground_service_bridge.dart';
 import '../../platform/interruptions/audio_interruption_source.dart';
 import '../../platform/interruptions/audio_session_interruption_source.dart';
 import '../../platform/storage/free_space_probe.dart';
+import '../settings/settings_providers.dart';
 
 // Recording wiring [P1-04]. Tests override audioCaptureEngineProvider and
 // mediaRootProvider.
@@ -183,7 +184,8 @@ final batteryProbeProvider = Provider<BatteryProbe>(
 );
 
 /// Still recording after 2 hours, near-silence, low battery (FR-REC-06)
-/// [P1-13].
+/// [P1-13]. The thresholds come from Settings and follow changes without
+/// recreating the service (5.11, ADR-048) [P1-25].
 final safetyPromptServiceProvider = Provider<SafetyPromptService>((ref) {
   final engine = ref.watch(audioCaptureEngineProvider);
   final service = SafetyPromptService(
@@ -191,11 +193,16 @@ final safetyPromptServiceProvider = Provider<SafetyPromptService>((ref) {
     level: engine.levelDbfs,
     battery: ref.watch(batteryProbeProvider),
   )..start();
+  ref.listen(safetyThresholdsSettingProvider, (_, next) {
+    final thresholds = next.value;
+    if (thresholds != null) service.thresholds = thresholds;
+  }, fireImmediately: true);
   ref.onDispose(service.dispose);
   return service;
 });
 
-/// In-app photos with compression and thumbnails [P1-14].
+/// In-app photos with compression and thumbnails [P1-14]. Photo quality
+/// is read from Settings before each photo (FR-PHO-02, ADR-048) [P1-25].
 final photoCaptureServiceProvider = Provider<PhotoCaptureService>(
   (ref) => PhotoCaptureService(
     camera: ref.watch(photoCameraProvider),
@@ -203,6 +210,7 @@ final photoCaptureServiceProvider = Provider<PhotoCaptureService>(
     media: ref.watch(mediaAssetRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
     interruptions: ref.watch(interruptionCoordinatorProvider),
+    qualitySource: ref.watch(settingsRepositoryProvider).photoQuality,
   ),
 );
 

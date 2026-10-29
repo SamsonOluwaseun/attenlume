@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
@@ -56,7 +56,7 @@ void main() {
       );
 
   group('FR-PRI-03 FR-PRI-04 FR-PRI-06 Privacy screen', () {
-    testWidgets('FR-PRI-03 Privacy opens from the conference list menu and '
+    testWidgets('FR-PRI-03 Privacy opens from the conference list menu through Settings and '
         'says data stays on the device with no trackers', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -75,7 +75,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('conference-list-menu')));
       await settle(tester);
-      await tester.tap(find.byKey(const Key('menu-privacy')));
+      await tester.tap(find.byKey(const Key('menu-settings')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('settings-privacy')));
       await settle(tester);
 
       expect(find.byType(PrivacyScreen), findsOneWidget);

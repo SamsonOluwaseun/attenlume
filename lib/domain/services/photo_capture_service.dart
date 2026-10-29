@@ -31,6 +31,7 @@ class PhotoCaptureService {
     this._interruptions,
     DateTime Function()? clock,
     this.quality = const PhotoQuality(),
+    this._qualitySource,
     this._process = processPhoto,
   }) : _clock = clock ?? (() => DateTime.now().toUtc());
 
@@ -41,7 +42,24 @@ class PhotoCaptureService {
   final InterruptionCoordinator? _interruptions;
   final DateTime Function() _clock;
   final PhotoProcess _process;
+
+  /// Used when no quality source is given.
   final PhotoQuality quality;
+
+  /// Reads the quality chosen in Settings before each photo, so a change
+  /// applies to the next shot or import (FR-PHO-02, 5.11, ADR-048).
+  final Future<PhotoQuality> Function()? _qualitySource;
+
+  Future<PhotoQuality> _currentQuality() async {
+    final source = _qualitySource;
+    if (source == null) return quality;
+    try {
+      return await source();
+    } on Object {
+      // A settings read that fails must not lose the shot.
+      return quality;
+    }
+  }
 
   PhotoCamera get camera => _camera;
 
@@ -122,10 +140,11 @@ class PhotoCaptureService {
       onShutterReady?.call();
     }
 
+    final chosen = await _currentQuality();
     final processed = await _process(
       photo: file,
       thumbnail: MediaPaths.resolve(root, thumbPath),
-      quality: quality,
+      quality: chosen,
     );
     return _media.addPhoto(
       id: photoId,
@@ -138,7 +157,7 @@ class PhotoCaptureService {
       height: processed.height,
       bytes: processed.bytes,
       sha256: processed.sha256,
-      originalKept: quality.keepOriginal,
+      originalKept: chosen.keepOriginal,
     );
   }
 
@@ -195,10 +214,11 @@ class PhotoCaptureService {
       final original = File(sourcePath);
       final taken = (takenUtc ?? original.lastModifiedSync()).toUtc();
       await original.copy(file.path);
+      final chosen = await _currentQuality();
       final processed = await _process(
         photo: file,
         thumbnail: MediaPaths.resolve(root, thumbPath),
-        quality: quality,
+        quality: chosen,
       );
       return await _media.addPhoto(
         id: photoId,
@@ -212,7 +232,7 @@ class PhotoCaptureService {
         height: processed.height,
         bytes: processed.bytes,
         sha256: processed.sha256,
-        originalKept: quality.keepOriginal,
+        originalKept: chosen.keepOriginal,
       );
     } on FileSystemException {
       if (file.existsSync()) await file.delete();
