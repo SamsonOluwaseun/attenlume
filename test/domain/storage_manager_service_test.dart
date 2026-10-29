@@ -325,7 +325,7 @@ void main() {
     expect(acts[private.id]!.canDeleteLocalCopies, isFalse);
     expect(
       (await service.analyse()).conferences.single.exportStatus,
-      ExportStatus.notExported,
+      ExportStatus.partlyExported,
     );
 
     await exported(conf.id, scope: fullScope(includePrivate: true));
@@ -394,6 +394,61 @@ void main() {
     expect(c.activities.single.exportStatus, ExportStatus.verified);
     expect(c.exportStatus, ExportStatus.partlyExported);
     expect(c.deleteBlockedReason, contains('whole conference'));
+  });
+
+  test('FR-STO-05 media the export had to leave out (a damaged recording, '
+      'a photo without its full-size file) shows Partly exported', () async {
+    final conf = await t.conference();
+    final damaged = await t.activity(conf.id, title: 'Talk one');
+    final photoAct = await t.activity(conf.id, title: 'Talk two');
+    final segId = await segment(
+      damaged.id,
+      MediaPaths.segment(conf.id, damaged.id, 1),
+      1000,
+    );
+    await t.media.setSegmentState(segId, SegmentState.damaged);
+    await segment(
+      photoAct.id,
+      MediaPaths.segment(conf.id, photoAct.id, 1),
+      1000,
+    );
+    await photo(conf.id, photoAct.id, 'photo1');
+    MediaPaths.resolve(
+      root,
+      MediaPaths.photo(conf.id, photoAct.id, 'photo1'),
+    ).deleteSync();
+    await exported(conf.id);
+
+    final c = (await service.analyse()).conferences.single;
+    for (final a in c.activities) {
+      expect(a.exportStatus, ExportStatus.partlyExported);
+      expect(a.canDeleteLocalCopies, isFalse);
+    }
+    expect(c.exportStatus, ExportStatus.partlyExported);
+  });
+
+  test('FR-STO-05 a conference with one exported and one unexported '
+      'activity shows Partly exported, not Not exported', () async {
+    final conf = await t.conference();
+    final public = await t.activity(conf.id, title: 'Keynote');
+    final private = await t.activity(
+      conf.id,
+      typeKey: 'personal_reflection',
+      title: 'My reflection',
+    );
+    await segment(public.id, MediaPaths.segment(conf.id, public.id, 1), 1000);
+    await segment(private.id, MediaPaths.segment(conf.id, private.id, 1), 1000);
+
+    expect(
+      (await service.analyse()).conferences.single.exportStatus,
+      ExportStatus.notExported,
+    );
+    await exported(conf.id); // the private activity is left out
+    final c = (await service.analyse()).conferences.single;
+    final byId = {for (final a in c.activities) a.activityId: a};
+    expect(byId[public.id]!.exportStatus, ExportStatus.verified);
+    expect(byId[private.id]!.exportStatus, ExportStatus.notExported);
+    expect(c.exportStatus, ExportStatus.partlyExported);
   });
 
   group('FR-STO-06 Clear safe temporary files', () {
