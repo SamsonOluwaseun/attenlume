@@ -42,6 +42,7 @@ class StorageManagerService {
     required this.removeOriginals,
     this.exportRunning = _never,
     this.deleteFile = _deleteFile,
+    this.heldActivityId = _noneHeld,
   });
 
   final ConferenceRepository conferences;
@@ -71,6 +72,12 @@ class StorageManagerService {
   final void Function(File file) deleteFile;
 
   static void _deleteFile(File f) => f.deleteSync();
+
+  /// The activity the recorder holds (recording, paused, interrupted or
+  /// waiting to resume), or null when it is free.
+  final String? Function() heldActivityId;
+
+  static String? _noneHeld() => null;
 
   static const exportsTempFolder = 'exports-temp';
 
@@ -177,7 +184,12 @@ class StorageManagerService {
             segmentCount: rows.segments.length,
             photoCount: rows.photos.length,
             keptOriginalsCount: keptHere,
-            deleteBlockedReason: _blockedReason(a, rows, jobs),
+            deleteBlockedReason: _blockedReason(
+              a,
+              rows,
+              jobs,
+              heldActivityId(),
+            ),
           ),
         );
       }
@@ -438,7 +450,7 @@ class StorageManagerService {
     final rowsByActivity = <String, _ActivityRows>{};
     for (final a in targets) {
       final rows = await _rows(a);
-      final reason = _blockedReason(a, rows, jobs);
+      final reason = _blockedReason(a, rows, jobs, heldActivityId());
       if (reason != null) throw StorageManagerException(reason);
       rowsByActivity[a.id] = rows;
     }
@@ -586,7 +598,14 @@ class StorageManagerService {
     Activity a,
     _ActivityRows rows,
     List<ExportJob> jobs,
+    String? heldActivity,
   ) {
+    // Paused, interrupted or waiting to resume still holds the activity:
+    // Resume would write a new segment into it (FR-REC-09).
+    if (heldActivity == a.id) {
+      return 'This activity has a recording in progress or paused. Stop '
+          'the recording first.';
+    }
     if (rows.segments.any((s) => s.state == SegmentState.writing)) {
       return 'This activity is still recording.';
     }

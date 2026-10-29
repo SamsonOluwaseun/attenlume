@@ -6,6 +6,7 @@ import '../../app/theme/tokens.dart';
 import '../../domain/models/storage_breakdown.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../capture/recording_banner.dart';
 import '../export/export_sheet.dart';
 import 'clear_temp_dialog.dart';
 import 'delete_local_dialog.dart';
@@ -168,59 +169,61 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
           ),
         ],
       ),
-      body: breakdown.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(TokenSpace.space4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Storage could not be measured.'),
-                const SizedBox(height: TokenSpace.space3),
-                AttenlumeButton(
-                  label: 'Try again',
-                  variant: AttenlumeButtonVariant.secondary,
-                  onPressed: _refresh,
-                ),
-              ],
-            ),
-          ),
-        ),
-        data: (b) => ListView(
-          padding: const EdgeInsets.all(TokenSpace.space4),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _overview(b),
-                    if (b.keptOriginals.isNotEmpty) ...[
-                      const SizedBox(height: TokenSpace.space4),
-                      _keptOriginals(b),
-                    ],
-                    const SizedBox(height: TokenSpace.space4),
-                    Text(
-                      'Conferences',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: TokenSpace.space2),
-                    if (b.conferences.isEmpty)
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(TokenSpace.space4),
-                          child: Text('No conferences yet.'),
-                        ),
-                      )
-                    else
-                      for (final c in b.conferences) _conference(c),
-                  ],
-                ),
+      body: WithRecordingBanner(
+        child: breakdown.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(TokenSpace.space4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Storage could not be measured.'),
+                  const SizedBox(height: TokenSpace.space3),
+                  AttenlumeButton(
+                    label: 'Try again',
+                    variant: AttenlumeButtonVariant.secondary,
+                    onPressed: _refresh,
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
+          data: (b) => ListView(
+            padding: const EdgeInsets.all(TokenSpace.space4),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _overview(b),
+                      if (b.keptOriginals.isNotEmpty) ...[
+                        const SizedBox(height: TokenSpace.space4),
+                        _keptOriginals(b),
+                      ],
+                      const SizedBox(height: TokenSpace.space4),
+                      Text(
+                        'Conferences',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: TokenSpace.space2),
+                      if (b.conferences.isEmpty)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(TokenSpace.space4),
+                            child: Text('No conferences yet.'),
+                          ),
+                        )
+                      else
+                        for (final c in b.conferences) _conference(c),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

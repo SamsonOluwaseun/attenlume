@@ -4,8 +4,11 @@ import 'package:attenlume/data/filesystem/media_paths.dart';
 import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/storage_breakdown.dart';
+import 'package:attenlume/domain/services/capture_settings.dart';
 import 'package:attenlume/domain/services/permanent_trim_service.dart';
 import 'package:attenlume/domain/services/private_notes.dart';
+import 'package:attenlume/domain/services/recording_service.dart';
+import 'package:attenlume/domain/services/recording_state.dart';
 import 'package:attenlume/domain/services/storage_manager_service.dart';
 import 'package:attenlume/platform/audio_trimmer/mp4_sample_trimmer.dart';
 import 'package:attenlume/platform/storage/free_space_probe.dart';
@@ -13,6 +16,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import '../fixtures/fake_capture_engine.dart';
 import '../fixtures/fixtures.dart';
 
 class FixedFreeSpace implements FreeSpaceProbe {
@@ -46,6 +50,8 @@ void main() {
   var exportRunning = false;
   // Paths the fake deleter refuses, as if another app had them open.
   final locked = <String>{};
+  // The recorder's held activity, as RecordingService reports it.
+  String? Function() held = () => null;
 
   setUp(() {
     t = TestData();
@@ -54,6 +60,7 @@ void main() {
     temp = Directory(p.join(sandbox.path, 'cache'))..createSync();
     exportRunning = false;
     locked.clear();
+    held = () => null;
     final trim = PermanentTrimService(
       activities: t.activities,
       media: t.media,
@@ -78,6 +85,7 @@ void main() {
         }
         f.deleteSync();
       },
+      heldActivityId: () => held(),
     );
   });
 
@@ -862,6 +870,46 @@ void main() {
       final c = (await service.analyse()).conferences.single;
       expect(c.activities.single.deleteBlockedReason, contains('Export again'));
       expect(c.deleteBlockedReason, contains('earlier version'));
+    });
+
+    test('FR-STO-06 FR-REC-09 a paused recording refuses deleting its '
+        'activity and conference', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      final recorder = RecordingService(
+        engine: FakeCaptureEngine(),
+        activities: t.activities,
+        media: t.media,
+        mediaRoot: () async => root,
+        platform: CapturePlatform.android,
+        clock: t.clock.call,
+      );
+      addTearDown(recorder.dispose);
+      held = () => recorder.status.state.holdsActivity
+          ? recorder.status.activityId
+          : null;
+
+      await recorder.start(act.id);
+      t.clock.advance(const Duration(minutes: 1));
+      await recorder.pause();
+      expect(recorder.status.state, RecordingState.paused);
+      await exported(conf.id, scope: fullScope(includePrivate: true));
+
+      final c = (await service.analyse()).conferences.single;
+      expect(
+        c.activities.single.deleteBlockedReason,
+        contains('Stop the recording'),
+      );
+      expect(c.deleteBlockedReason, contains('Stop the recording'));
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+      expect(await t.activities.get(act.id), isNotNull);
     });
   });
 }

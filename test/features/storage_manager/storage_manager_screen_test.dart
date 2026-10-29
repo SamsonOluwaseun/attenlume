@@ -5,6 +5,8 @@ import 'package:attenlume/data/filesystem/media_paths.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
 import 'package:attenlume/data/repositories/repository_providers.dart';
 import 'package:attenlume/domain/models/enums.dart';
+import 'package:attenlume/domain/services/capture_settings.dart';
+import 'package:attenlume/domain/services/recording_service.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/storage_manager/storage_manager_providers.dart';
 import 'package:attenlume/features/storage_manager/storage_manager_screen.dart';
@@ -14,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import '../../fixtures/fake_capture_engine.dart';
 import '../../fixtures/fixtures.dart';
 
 class FixedFreeSpace implements FreeSpaceProbe {
@@ -98,7 +101,7 @@ void main() {
     await t.exports.complete(job.id, VerificationLevel.checksum);
   }
 
-  Future<void> open(WidgetTester tester) async {
+  Future<void> open(WidgetTester tester, {RecordingService? recorder}) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -117,6 +120,9 @@ void main() {
           mediaRootProvider.overrideWithValue(() async => root),
           storageTempRootProvider.overrideWithValue(() async => temp),
           freeSpaceProbeProvider.overrideWithValue(const FixedFreeSpace()),
+          audioCaptureEngineProvider.overrideWithValue(FakeCaptureEngine()),
+          if (recorder != null)
+            recordingServiceProvider.overrideWithValue(recorder),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),
@@ -340,5 +346,41 @@ void main() {
     expect(find.textContaining('No offline models'), findsOneWidget);
     await tap(tester, find.byKey(const Key('close-models-dialog-button')));
     await pumpUntilGone(tester, find.text('Manage offline models'));
+  });
+
+  testWidgets('FR-STO-06 FR-PRI-02 a paused recording keeps its banner on '
+      'this screen and blocks Delete local copies', (tester) async {
+    late RecordingService recorder;
+    late String activityId;
+    await tester.runAsync(() async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Talk');
+      activityId = act.id;
+      recorder = RecordingService(
+        engine: FakeCaptureEngine(),
+        activities: t.activities,
+        media: t.media,
+        mediaRoot: () async => root,
+        platform: CapturePlatform.android,
+        clock: t.clock.call,
+      );
+      await recorder.start(act.id);
+      t.clock.advance(const Duration(minutes: 1));
+      await recorder.pause();
+      await verifiedExport(conf.id);
+    });
+    addTearDown(() => tester.runAsync(recorder.dispose));
+
+    await open(tester, recorder: recorder);
+    await pumpUntil(tester, find.text('Samlytics Conference 2026'));
+    expect(find.byKey(const Key('recording-banner')), findsOneWidget);
+    expect(find.text('Recording paused'), findsOneWidget);
+
+    await tap(tester, find.text('Samlytics Conference 2026'));
+    final button = tester.widget<TextButton>(
+      find.byKey(Key('delete-local-activity-$activityId')),
+    );
+    expect(button.onPressed, isNull);
+    expect(find.textContaining('Stop the recording'), findsWidgets);
   });
 }

@@ -29,6 +29,10 @@ final storageManagerServiceProvider = Provider<StorageManagerService>((ref) {
     freeSpaceProbe: ref.watch(freeSpaceProbeProvider),
     removeOriginals: ref.watch(permanentTrimServiceProvider).removeOriginals,
     exportRunning: () => ref.read(exportServiceProvider).isRunning,
+    heldActivityId: () {
+      final status = ref.read(recordingServiceProvider).status;
+      return status.state.holdsActivity ? status.activityId : null;
+    },
   );
 });
 
