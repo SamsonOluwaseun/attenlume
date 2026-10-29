@@ -23,7 +23,8 @@ enum _Scope { conference, day, activities }
 /// FR-EXP-10, ADR-040) [P1-21]: scope, what to include, folder or ZIP,
 /// audio option, the private toggle, the size and space check, progress
 /// and where the export was saved. On Android and iOS a ZIP is the default
-/// and the result offers the system share sheet (ADR-042).
+/// and the result offers the system share sheet (ADR-042). Every platform's
+/// result offers "Copy AI prompt" (FR-EXP-08, ADR-046).
 class ExportSheet extends ConsumerStatefulWidget {
   const ExportSheet({super.key, required this.conferenceId, this.activityId});
 
@@ -600,6 +601,25 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
             ?.showSnackBar(const SnackBar(content: Text('Location copied')));
       },
     ),
+    if (outcome.analysisPrompt case final prompt?) ...[
+      const SizedBox(height: TokenSpace.space3),
+      AttenlumeButton(
+        key: const Key('export-copy-prompt'),
+        label: 'Copy AI prompt',
+        variant: AttenlumeButtonVariant.secondary,
+        leading: const Icon(Icons.auto_awesome_outlined),
+        onPressed: () => _copyPrompt(prompt),
+      ),
+      const SizedBox(height: TokenSpace.space1),
+      Text(
+        'The prompt from analysis_prompt.md, filled in with your role, goals '
+        'and outputs. Paste it into an AI tool with the exported files.',
+        key: const Key('export-copy-prompt-hint'),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ],
     const SizedBox(height: TokenSpace.space3),
     AttenlumeButton(
       key: const Key('export-done'),
@@ -610,6 +630,31 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
       onPressed: () => Navigator.of(context).pop(),
     ),
   ];
+
+  /// FR-EXP-08: the filled-in analysis prompt to the clipboard.
+  Future<void> _copyPrompt(String prompt) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await Clipboard.setData(ClipboardData(text: prompt));
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'AI prompt copied. Paste it into your AI tool with the export '
+            'files.',
+          ),
+        ),
+      );
+    } catch (_) {
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Couldn't copy the prompt. Open analysis_prompt.md in the "
+            'export instead.',
+          ),
+        ),
+      );
+    }
+  }
 
   /// Android and iOS (ADR-042): the ZIP goes to the system share sheet. The
   /// file stays in the app's exports folder; nothing deletes it.
