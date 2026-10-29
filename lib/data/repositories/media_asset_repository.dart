@@ -548,6 +548,62 @@ class MediaAssetRepository {
   /// Removes one bookmark [P1-16]. Audio and photos are not touched.
   Future<void> deleteBookmark(String bookmarkId) =>
       (_db.delete(_db.bookmarks)..where((b) => b.id.equals(bookmarkId))).go();
+
+  /// Every file a segment or photo row names (audio, photo and thumbnail),
+  /// leaving out the rows of [excludingActivities] (ADR-036, FR-STO-06)
+  /// [P1-20]. A file in this set must not be deleted.
+  Future<Set<String>> namedFilePaths({
+    Iterable<String> excludingActivities = const [],
+  }) async {
+    final excluded = excludingActivities.toList();
+    final segPath = _db.recordingSegments.filePath;
+    final segQuery = _db.selectOnly(_db.recordingSegments)
+      ..addColumns([segPath]);
+    final photoPath = _db.photos.filePath;
+    final thumbPath = _db.photos.thumbnailPath;
+    final photoQuery = _db.selectOnly(_db.photos)
+      ..addColumns([photoPath, thumbPath]);
+    if (excluded.isNotEmpty) {
+      segQuery.where(_db.recordingSegments.activityId.isNotIn(excluded));
+      photoQuery.where(_db.photos.activityId.isNotIn(excluded));
+    }
+    final named = <String>{
+      ...await segQuery.map((r) => r.read(segPath)!).get(),
+    };
+    for (final row in await photoQuery.get()) {
+      named.add(row.read(photoPath)!);
+      final thumb = row.read(thumbPath);
+      if (thumb != null) named.add(thumb);
+    }
+    return named;
+  }
+
+  /// Deletes segment rows by id; files are the caller's (FR-STO-06)
+  /// [P1-20].
+  Future<void> deleteSegments(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    await (_db.delete(
+      _db.recordingSegments,
+    )..where((s) => s.id.isIn(list))).go();
+  }
+
+  /// Deletes photo rows by id; files are the caller's (FR-STO-06) [P1-20].
+  Future<void> deletePhotos(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    await (_db.delete(_db.photos)..where((p) => p.id.isIn(list))).go();
+  }
+
+  /// Every segment id, to find waveform summaries whose segment is gone
+  /// (ADR-034, FR-STO-06) [P1-20].
+  Future<Set<String>> segmentIds() async {
+    final id = _db.recordingSegments.id;
+    final rows = await (_db.selectOnly(
+      _db.recordingSegments,
+    )..addColumns([id])).map((r) => r.read(id)!).get();
+    return rows.toSet();
+  }
 }
 
 /// A file written by a permanent trim from part of [source] (FR-REV-06)

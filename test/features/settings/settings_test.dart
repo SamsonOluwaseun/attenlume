@@ -17,6 +17,7 @@ import 'package:attenlume/features/guide/quick_guide_screen.dart';
 import 'package:attenlume/features/privacy/privacy_screen.dart';
 import 'package:attenlume/features/settings/settings_providers.dart';
 import 'package:attenlume/features/settings/settings_screen.dart';
+import 'package:attenlume/features/storage_manager/storage_manager_screen.dart';
 import 'package:attenlume/platform/diagnostics/battery_probe.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -263,6 +264,21 @@ void main() {
       await settle(tester);
 
       expect(find.byType(PrivacyScreen), findsOneWidget);
+    });
+
+    testWidgets('FR-STO-05 5.11 Storage opens the Storage Manager', (
+      tester,
+    ) async {
+      tallScreen(tester);
+      await tester.pumpWidget(app(const SettingsScreen()));
+      await settle(tester);
+
+      await tester.tap(find.byKey(const Key('settings-storage')));
+      // The Storage Manager loads from disk; only check it opened.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(StorageManagerScreen), findsOneWidget);
     });
 
     testWidgets('FR-UI-09 5.11 Quick guide opens the guide', (tester) async {
