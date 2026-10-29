@@ -40,6 +40,14 @@ class RecordPage extends ConsumerWidget {
     );
   }
 
+  /// Opens [screen] and reloads the target conference on return: it may
+  /// have been archived, deleted or joined by a newer one meanwhile.
+  Future<void> _push(BuildContext context, WidgetRef ref, Widget screen) async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => screen));
+    ref.invalidate(recentConferencesProvider);
+  }
+
   Future<void> _start(
     BuildContext context,
     WidgetRef ref,
@@ -51,6 +59,7 @@ class RecordPage extends ConsumerWidget {
     );
     if (created == null || !context.mounted) return;
     await _record(context, created);
+    ref.invalidate(recentConferencesProvider);
   }
 
   @override
@@ -82,11 +91,7 @@ class RecordPage extends ConsumerWidget {
         FilledButton.icon(
           key: const Key('record-open-recording'),
           onPressed: () => unawaited(
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => RecordingScreen(activityId: heldId),
-              ),
-            ),
+            _push(context, ref, RecordingScreen(activityId: heldId)),
           ),
           icon: const Icon(Icons.mic),
           label: const Text('Open recording'),
@@ -113,14 +118,8 @@ class RecordPage extends ConsumerWidget {
           const SizedBox(height: TokenSpace.space5),
           FilledButton.icon(
             key: const Key('record-new-conference'),
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ConferenceWizardScreen(),
-                ),
-              );
-              ref.invalidate(recentConferencesProvider);
-            },
+            onPressed: () =>
+                unawaited(_push(context, ref, const ConferenceWizardScreen())),
             icon: const Icon(Icons.add),
             label: const Text('New conference'),
           ),
@@ -157,11 +156,10 @@ class RecordPage extends ConsumerWidget {
           OutlinedButton(
             key: const Key('record-open-conference'),
             onPressed: () => unawaited(
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      ConferenceHomeScreen(conferenceId: conference.id),
-                ),
+              _push(
+                context,
+                ref,
+                ConferenceHomeScreen(conferenceId: conference.id),
               ),
             ),
             child: const Text('Open conference'),

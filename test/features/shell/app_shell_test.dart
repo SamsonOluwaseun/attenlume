@@ -214,6 +214,29 @@ void main() {
     });
   });
 
+  group('FR-UI-11 Record reloads', () {
+    testWidgets('FR-UI-11 Record reloads its conference after Open '
+        'conference, so an archived one is no longer the target', (
+      tester,
+    ) async {
+      final h = await open(tester, const RecordPage(), sample: true);
+      expect(find.byKey(const Key('record-start-activity')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('record-open-conference')));
+      await h.settle(30);
+      expect(find.byType(ConferenceHomeScreen), findsOneWidget);
+      await h.io(() async {
+        final all = await h.t.conferences.getAll();
+        await h.t.conferences.archive(all.single.id);
+      });
+      await tester.pageBack();
+      await h.settle(30);
+
+      expect(find.byKey(const Key('record-no-conference')), findsOneWidget);
+      expect(find.byKey(const Key('record-start-activity')), findsNothing);
+    });
+  });
+
   group('NFR-01 welcome', () {
     testWidgets('NFR-01 welcome has no sign-in, and Open previous opens My '
         'conferences inside the shell', (tester) async {
