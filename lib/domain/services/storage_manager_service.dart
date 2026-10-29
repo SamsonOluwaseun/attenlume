@@ -367,17 +367,54 @@ class StorageManagerService {
     final failedActivities = <String>{};
     var failed = 0;
 
-    for (final MapEntry(key: rel, value: owners) in plan.files.entries) {
+    final failedPaths = <String>{};
+    void remove(String rel) {
+      final owners = plan.files[rel];
+      if (owners == null) return;
       final file = MediaPaths.resolve(root, rel);
       try {
-        if (!file.existsSync()) continue;
+        if (!file.existsSync()) return;
         final bytes = file.lengthSync();
         deleteFile(file);
         deleted++;
         freed += bytes;
       } on FileSystemException {
         failed++;
+        failedPaths.add(rel);
         failedActivities.addAll(owners);
+      }
+    }
+
+    // Derived files first, originals last: if a derived file cannot be
+    // deleted, its original and row stay together, so a retry is never
+    // refused as "missing" (ADR-047).
+    final photos = [for (final r in plan.rows.values) ...r.photos];
+    final segments = [for (final r in plan.rows.values) ...r.segments];
+    final originals = {
+      for (final ph in photos) ph.filePath,
+      for (final sg in segments) sg.filePath,
+    };
+    for (final rel in plan.files.keys) {
+      if (!originals.contains(rel)) remove(rel);
+    }
+    String waveOf(RecordingSegment sg) =>
+        MediaPaths.waveform(conferenceId, sg.activityId, sg.id);
+    for (final ph in photos) {
+      if (ph.thumbnailPath case final t? when failedPaths.contains(t)) {
+        continue;
+      }
+      remove(ph.filePath);
+    }
+    for (final sg in segments) {
+      if (failedPaths.contains(waveOf(sg))) continue;
+      remove(sg.filePath);
+    }
+    // A planned original skipped above still exists, so its activity
+    // stays.
+    for (final rel in originals) {
+      if (plan.files.containsKey(rel) &&
+          MediaPaths.resolve(root, rel).existsSync()) {
+        failedActivities.addAll(plan.files[rel]!);
       }
     }
 

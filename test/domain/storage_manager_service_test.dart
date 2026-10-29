@@ -938,5 +938,51 @@ void main() {
       expect(thumb.existsSync(), isTrue);
       expect(await t.media.photosFor(act.id), hasLength(1));
     });
+
+    for (final lockThumbnail in [true, false]) {
+      test('FR-STO-06 a locked '
+          '${lockThumbnail ? 'thumbnail' : 'full-size photo'} keeps the '
+          'photo file and row together, and a retry finishes', () async {
+        final conf = await t.conference();
+        final act = await t.activity(conf.id);
+        await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+        await photo(conf.id, act.id, 'photo1');
+        final full = MediaPaths.resolve(
+          root,
+          MediaPaths.photo(conf.id, act.id, 'photo1'),
+        );
+        final thumb = MediaPaths.resolve(
+          root,
+          MediaPaths.thumbnail(conf.id, act.id, 'photo1'),
+        );
+        await exported(conf.id);
+        locked.add((lockThumbnail ? thumb : full).path);
+
+        var res = await service.deleteLocalCopies(conferenceId: conf.id);
+        expect(res.failedFiles, 1);
+        expect(res.activitiesDeleted, 0);
+        // The original and its row stay together.
+        expect(full.existsSync(), isTrue);
+        expect(thumb.existsSync(), lockThumbnail);
+        expect(await t.media.photosFor(act.id), hasLength(1));
+        expect(
+          (await service.analyse())
+              .conferences
+              .single
+              .activities
+              .single
+              .deleteBlockedReason,
+          isNull,
+        );
+
+        locked.clear();
+        res = await service.deleteLocalCopies(conferenceId: conf.id);
+        expect(res.failedFiles, 0);
+        expect(res.activitiesDeleted, 1);
+        expect(full.existsSync(), isFalse);
+        expect(thumb.existsSync(), isFalse);
+        expect(await t.conferences.get(conf.id), isNull);
+      });
+    }
   });
 }
