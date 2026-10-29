@@ -535,8 +535,14 @@ class _Row {
 /// time order. `local_time` is in the conference timezone; offsets follow
 /// the 9.4 rule (seconds from the activity's first segment, negative
 /// before it). RFC 4180 quoting, formula-safe text, CRLF line ends.
+/// Without notes and details in the export, user-written text (bookmark
+/// labels and notes, photo labels and captions) is left out.
 String buildTimelineCsv(ExportContext context) {
   final tz = context.conference.timezone;
+  // Audio-only and photos-only exports hold no user-written text: rows keep
+  // their times, offsets and files, but bookmark labels and notes and photo
+  // labels and captions stay out (FR-EXP-01, FR-EXP-10, ADR-046).
+  final withText = context.request.content.text;
   final rows = <_Row>[];
   String offset(int? ms) => ms == null ? '' : (ms / 1000).toStringAsFixed(1);
 
@@ -626,8 +632,8 @@ String buildTimelineCsv(ExportContext context) {
         kind: 'photo',
         file: _join(a.folder, a.files.photoFiles[ph.id]),
         offsetMs: ph.offsetMs ?? offsetOf(ph.takenUtc),
-        label: ph.label,
-        note: ph.caption,
+        label: withText ? ph.label : null,
+        note: withText ? ph.caption : null,
       );
     }
     for (final b in a.bookmarks) {
@@ -636,8 +642,8 @@ String buildTimelineCsv(ExportContext context) {
         4,
         kind: 'bookmark',
         offsetMs: b.offsetMs ?? offsetOf(b.atUtc),
-        label: b.label,
-        note: b.note,
+        label: withText ? b.label : null,
+        note: withText ? b.note : null,
       );
     }
   }

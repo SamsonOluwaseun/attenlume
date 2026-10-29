@@ -151,12 +151,14 @@ void main() {
       takenUtc: start.add(const Duration(seconds: 30)),
       source: PhotoSource.inApp,
       label: 'Slide',
+      caption: 'Whiteboard sketch caption',
     );
     await t.media.addBookmark(
       activityId: keynote.id,
       source: BookmarkSource.ui,
       atUtc: start.add(const Duration(seconds: 5)),
       label: 'Key point',
+      note: 'Bookmark note text',
     );
     await t.media.addBookmark(
       activityId: keynote.id,
@@ -186,11 +188,13 @@ void main() {
     String id, {
     bool includePrivate = false,
     ExportFormat format = ExportFormat.folder,
+    ExportContent content = ExportContent.everything,
   }) => service.run(
     ExportRequest(
       conferenceId: id,
       includePrivate: includePrivate,
       format: format,
+      content: content,
     ),
     destinationParent: dest.path,
   );
@@ -590,6 +594,75 @@ void main() {
         expect(text, isNot(contains('Hidden Contact Name')));
       }
     });
+  });
+
+  group('FR-EXP-01 FR-EXP-10 media-only exports hold no written text', () {
+    const written = [
+      'Key point',
+      'Bookmark note text',
+      'Whiteboard sketch caption',
+      'Public note about domains',
+      'Secret reflection',
+      'My own view',
+    ];
+
+    test('FR-EXP-01 FR-EXP-10 everything export has the written text in the '
+        'timeline', () async {
+      final (id, _, _) = await conference();
+      final timeline = read(await export(id), timelineFileName);
+      expect(timeline, contains('Key point'));
+      expect(timeline, contains('Bookmark note text'));
+      expect(timeline, contains('Whiteboard sketch caption'));
+    });
+
+    for (final content in [ExportContent.audioOnly, ExportContent.photosOnly]) {
+      test('FR-EXP-01 FR-EXP-10 a ${content.key} export has no bookmark, '
+          'note or caption text in any generated file', () async {
+        final (id, _, _) = await conference();
+        final out = await export(id, content: content);
+        final texts = generatedTexts(out);
+        expect(
+          texts.keys,
+          containsAll([
+            readmeFileName,
+            manifestFileName,
+            participantGoalsFileName,
+            timelineFileName,
+            analysisPromptFileName,
+            ...promptTemplateFileNames,
+          ]),
+        );
+        for (final MapEntry(key: path, value: text) in texts.entries) {
+          for (final w in written) {
+            expect(text, isNot(contains(w)), reason: '$path: $w');
+          }
+        }
+        // Times and files stay: the bookmark row is there, without text.
+        final rows = [
+          for (final l in texts[timelineFileName]!.split('\r\n').skip(1))
+            if (l.isNotEmpty) l.split(','),
+        ];
+        final bookmark = rows.singleWhere((r) => r[2] == 'bookmark');
+        expect(bookmark[4], '2026-11-04T09:30:05.000Z');
+        expect(bookmark[6], '5.0');
+        expect(bookmark[7], isEmpty);
+        expect(bookmark[12], isEmpty);
+        expect(rows.where((r) => r[2] == 'notes'), isEmpty);
+        final photo = rows.singleWhere((r) => r[2] == 'photo');
+        expect(photo[7], isEmpty);
+        expect(photo[12], isEmpty);
+        expect(
+          photo[3].isNotEmpty,
+          content == ExportContent.photosOnly,
+          reason: 'photo file only in a photos-only export',
+        );
+        // Goals and role are conference metadata and stay (ADR-046).
+        expect(
+          texts[analysisPromptFileName],
+          contains('Learn how teams run a data mesh'),
+        );
+      });
+    }
   });
 
   group('FR-EXP-06 checksums cover the generated files', () {
