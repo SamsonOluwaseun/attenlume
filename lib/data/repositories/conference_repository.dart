@@ -361,6 +361,17 @@ class ConferenceRepository {
         ),
       );
 
-  Future<void> deleteGoal(String id) =>
-      (_db.delete(_db.goals)..where((g) => g.id.equals(id))).go();
+  /// Removing a goal leaves no row, so it marks the conference changed
+  /// (the Storage Manager checks it against the last export, ADR-047).
+  Future<void> deleteGoal(String id) => _db.transaction(() async {
+    final goal = await (_db.select(
+      _db.goals,
+    )..where((g) => g.id.equals(id))).getSingleOrNull();
+    await (_db.delete(_db.goals)..where((g) => g.id.equals(id))).go();
+    if (goal != null) {
+      await (_db.update(_db.conferences)
+            ..where((c) => c.id.equals(goal.conferenceId)))
+          .write(ConferencesCompanion(updatedAt: Value(_clock())));
+    }
+  });
 }

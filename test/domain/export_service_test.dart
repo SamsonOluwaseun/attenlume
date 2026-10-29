@@ -411,6 +411,12 @@ void main() {
       final job = await t.exports.get(out.jobId);
       expect(job!.state, ExportJobState.completed);
       expect(job.scope['kind'], 'conference');
+      // The Storage Manager's freshness boundary (ADR-047).
+      expect(
+        DateTime.parse(job.scope['snapshot_at']! as String)
+            .isAfter(job.createdAt),
+        isFalse,
+      );
       expect(job.lastError, isNull);
     });
 

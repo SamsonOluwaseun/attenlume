@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:attenlume/data/filesystem/media_paths.dart';
+import 'package:attenlume/data/local_database/app_database.dart';
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/storage_breakdown.dart';
 import 'package:attenlume/domain/services/permanent_trim_service.dart';
@@ -8,6 +9,7 @@ import 'package:attenlume/domain/services/private_notes.dart';
 import 'package:attenlume/domain/services/storage_manager_service.dart';
 import 'package:attenlume/platform/audio_trimmer/mp4_sample_trimmer.dart';
 import 'package:attenlume/platform/storage/free_space_probe.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -149,7 +151,10 @@ void main() {
     t.clock.advance(const Duration(seconds: 1));
     final job = await t.exports.create(
       conferenceId: confId,
-      scope: scope ?? fullScope(),
+      scope: {
+        'snapshot_at': t.clock().toIso8601String(),
+        ...(scope ?? fullScope()),
+      },
       format: ExportFormat.folder,
       audioMode: ExportAudioMode.original,
     );
@@ -638,7 +643,7 @@ void main() {
       t.clock.advance(const Duration(seconds: 1));
       final job = await t.exports.create(
         conferenceId: conf.id,
-        scope: fullScope(),
+        scope: {...fullScope(), 'snapshot_at': t.clock().toIso8601String()},
         format: ExportFormat.folder,
         audioMode: ExportAudioMode.original,
       );
@@ -740,6 +745,123 @@ void main() {
       expect(MediaPaths.resolve(root, second).existsSync(), isFalse);
       expect(await t.activities.get(act.id), isNull);
       expect(await t.conferences.get(conf.id), isNull);
+    });
+
+    test('FR-STO-06 a goal edited after the export refuses deleting the '
+        'conference; its activities can still go on their own', () async {
+      final conf = await t.conference();
+      final goal = await t.conferences.addGoal(conf.id, 'Meet two vendors');
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      await exported(conf.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        isNull,
+      );
+
+      t.clock.advance(const Duration(minutes: 1));
+      await t.conferences.updateGoal(goal.id, text: 'Meet three vendors');
+      final c = (await service.analyse()).conferences.single;
+      expect(c.deleteBlockedReason, contains('goals changed'));
+      expect(c.activities.single.deleteBlockedReason, isNull);
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+      expect(await t.activities.get(act.id), isNotNull);
+
+      final res = await service.deleteLocalCopies(
+        conferenceId: conf.id,
+        activityId: act.id,
+      );
+      expect(res.activitiesDeleted, 1);
+      expect(await t.conferences.get(conf.id), isNotNull);
+    });
+
+    test('FR-STO-06 a goal removed or conference details edited after the '
+        'export refuse deleting the conference', () async {
+      final conf = await t.conference();
+      final goal = await t.conferences.addGoal(conf.id, 'Meet two vendors');
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      await exported(conf.id);
+
+      t.clock.advance(const Duration(minutes: 1));
+      await t.conferences.deleteGoal(goal.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        contains('goals changed'),
+      );
+
+      await exported(conf.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        isNull,
+      );
+      t.clock.advance(const Duration(minutes: 1));
+      await t.conferences.update(
+        conf.id,
+        const ConferencesCompanion(venue: Value('ExCeL London')),
+      );
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        contains('details or goals changed'),
+      );
+    });
+
+    test('FR-STO-06 a segment finalised after the export took its snapshot '
+        'but before the job was created blocks deletion', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+
+      t.clock.advance(const Duration(seconds: 1));
+      final snapshotAt = t.clock();
+      // The export is planning; meanwhile the next segment finalises.
+      t.clock.advance(const Duration(milliseconds: 200));
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 2), 1000);
+      t.clock.advance(const Duration(milliseconds: 200));
+      final job = await t.exports.create(
+        conferenceId: conf.id,
+        scope: {...fullScope(), 'snapshot_at': snapshotAt.toIso8601String()},
+        format: ExportFormat.folder,
+        audioMode: ExportAudioMode.original,
+      );
+      t.clock.advance(const Duration(seconds: 5));
+      await t.exports.complete(job.id, VerificationLevel.checksum);
+
+      expect(
+        (await service.analyse())
+            .conferences
+            .single
+            .activities
+            .single
+            .deleteBlockedReason,
+        contains('changed after'),
+      );
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+    });
+
+    test('FR-STO-06 an export without a recorded snapshot time never allows '
+        'deleting', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      t.clock.advance(const Duration(minutes: 1));
+      final job = await t.exports.create(
+        conferenceId: conf.id,
+        scope: fullScope(),
+        format: ExportFormat.folder,
+        audioMode: ExportAudioMode.original,
+      );
+      await t.exports.complete(job.id, VerificationLevel.checksum);
+
+      final c = (await service.analyse()).conferences.single;
+      expect(c.activities.single.deleteBlockedReason, contains('Export again'));
+      expect(c.deleteBlockedReason, contains('earlier version'));
     });
   });
 }

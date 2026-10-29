@@ -83,7 +83,8 @@ void main() {
     t.clock.advance(const Duration(seconds: 1));
     final job = await t.exports.create(
       conferenceId: conferenceId,
-      scope: const {
+      scope: {
+        'snapshot_at': t.clock().toIso8601String(),
         'kind': 'conference',
         'content': 'everything',
         'format': 'folder',

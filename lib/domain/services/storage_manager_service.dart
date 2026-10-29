@@ -10,6 +10,7 @@ import '../../data/repositories/export_job_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
 import '../../platform/storage/free_space_probe.dart';
 import '../models/activity.dart';
+import '../models/conference.dart';
 import '../models/enums.dart';
 import '../models/export_job.dart';
 import '../models/media.dart';
@@ -205,9 +206,14 @@ class StorageManagerService {
           deleteBlockedReason: acts.isEmpty
               ? 'This conference has no activities.'
               : actBreakdowns
-                    .map((a) => a.deleteBlockedReason)
-                    .nonNulls
-                    .firstOrNull,
+                        .map((a) => a.deleteBlockedReason)
+                        .nonNulls
+                        .firstOrNull ??
+                    _conferenceBlockedReason(
+                      conf,
+                      await conferences.goalsFor(conf.id),
+                      jobs,
+                    ),
         ),
       );
     }
@@ -421,6 +427,14 @@ class StorageManagerService {
       throw const StorageManagerException('There is nothing to delete.');
     }
     final jobs = await _completedJobs(conferenceId);
+    if (activityId == null) {
+      final reason = _conferenceBlockedReason(
+        conf,
+        await conferences.goalsFor(conferenceId),
+        jobs,
+      );
+      if (reason != null) throw StorageManagerException(reason);
+    }
     final rowsByActivity = <String, _ActivityRows>{};
     for (final a in targets) {
       final rows = await _rows(a);
@@ -588,7 +602,7 @@ class StorageManagerService {
                   j.verificationLevel == VerificationLevel.checksum,
             )
             .toList()
-          ..sort((x, y) => _snapshot(y).compareTo(_snapshot(x)));
+          ..sort((x, y) => _sortKey(y).compareTo(_sortKey(x)));
     if (verified.isEmpty) {
       return 'Needs a verified export first. Export as a folder: folder '
           'exports are checked file by file.';
@@ -617,7 +631,9 @@ class StorageManagerService {
         why =
             'The verified export left out private items. Export again '
             'with "Include private items".';
-      } else if (!changed.isBefore(_snapshot(j))) {
+      } else if (_snapshot(j) == null) {
+        why = _noSnapshot;
+      } else if (!changed.isBefore(_snapshot(j)!)) {
         why =
             'This activity changed after the last verified export. '
             'Export it again first.';
@@ -629,11 +645,57 @@ class StorageManagerService {
     return reason;
   }
 
-  /// When the export read its data. `ExportService` plans (reads every
-  /// row) and then creates the job, so `created_at` is just after the
-  /// snapshot; a change at or after it, including while the export ran,
-  /// is not in the export.
-  static DateTime _snapshot(ExportJob j) => j.createdAt;
+  /// When the export started reading its data: `snapshot_at` in the
+  /// job's scope, taken by `ExportService.run` before planning. A change
+  /// at or after it may be missing from the export. Null for exports made
+  /// before it was recorded; those never allow deleting.
+  static DateTime? _snapshot(ExportJob j) {
+    final value = j.scope['snapshot_at'];
+    return value is String ? DateTime.tryParse(value)?.toUtc() : null;
+  }
+
+  static DateTime _sortKey(ExportJob j) => _snapshot(j) ?? j.createdAt;
+
+  static const _noSnapshot =
+      'The verified export was made by an earlier version of the app, '
+      'which did not record when it read the data. Export again first.';
+
+  /// Why the whole conference may not be deleted, beyond its activities:
+  /// its details and goals need a verified export of the whole conference
+  /// that read them after they last changed.
+  static String? _conferenceBlockedReason(
+    Conference conf,
+    List<Goal> goals,
+    List<ExportJob> jobs,
+  ) {
+    var changed = conf.updatedAt;
+    for (final g in goals) {
+      for (final t in [g.createdAt, g.updatedAt]) {
+        if (t.isAfter(changed)) changed = t;
+      }
+    }
+    final whole =
+        jobs
+            .where(
+              (j) =>
+                  j.scope['kind'] == 'conference' &&
+                  j.verificationLevel == VerificationLevel.checksum &&
+                  j.scope['content'] == ExportContent.everything.key,
+            )
+            .toList()
+          ..sort((x, y) => _sortKey(y).compareTo(_sortKey(x)));
+    if (whole.isEmpty) {
+      return 'Needs a verified export of the whole conference with '
+          '"Everything" first.';
+    }
+    final snapshot = _snapshot(whole.first);
+    if (snapshot == null) return _noSnapshot;
+    if (!changed.isBefore(snapshot)) {
+      return 'The conference details or goals changed after the last '
+          'verified export. Export it again first.';
+    }
+    return null;
+  }
 
   // ---------------------------------------------------------------------
   // Helpers.
