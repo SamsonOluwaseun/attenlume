@@ -55,6 +55,9 @@ void main() {
       expect(find.text('Step ${i + 1}: ${steps[i].title}'), findsOneWidget);
     }
     expect(find.text(quickGuide.privacyTitle), findsOneWidget);
-    expect(find.byType(Image), findsNWidgets(allImages().length));
+    // Every screenshot plus the Samlytics Data Services logo at the top.
+    expect(find.byType(Image), findsNWidgets(allImages().length + 1));
+    expect(find.byKey(const Key('quick-guide-company-logo')), findsOneWidget);
+    expect(find.bySemanticsLabel('Samlytics Data Services'), findsWidgets);
   });
 }

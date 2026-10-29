@@ -181,7 +181,6 @@ void main() {
     expect(find.text('Storage Manager'), findsOneWidget);
     expect(find.text('Audio: 12 MB'), findsOneWidget);
     expect(find.text('Photos: 0 B'), findsOneWidget);
-    expect(find.text('Models: 0 B'), findsOneWidget);
     expect(find.textContaining('Free on this device:'), findsOneWidget);
     expect(find.text('Samlytics Conference 2026'), findsOneWidget);
     expect(find.text('Not exported'), findsOneWidget);
@@ -336,16 +335,13 @@ void main() {
     expect(partial.existsSync(), isTrue);
   });
 
-  testWidgets('FR-STO-06 Manage models explains that no models are '
-      'downloaded', (tester) async {
+  testWidgets('FR-STO-06 Manage models stays hidden until offline models '
+      'exist (P2-08)', (tester) async {
     await open(tester);
-    await pumpUntil(tester, find.byKey(const Key('manage-models-button')));
-    await tap(tester, find.byKey(const Key('manage-models-button')));
+    await pumpUntil(tester, find.byKey(const Key('clear-safe-temp-button')));
 
-    expect(find.text('Manage offline models'), findsOneWidget);
-    expect(find.textContaining('No offline models'), findsOneWidget);
-    await tap(tester, find.byKey(const Key('close-models-dialog-button')));
-    await pumpUntilGone(tester, find.text('Manage offline models'));
+    expect(find.byKey(const Key('manage-models-button')), findsNothing);
+    expect(find.textContaining('Models'), findsNothing);
   });
 
   testWidgets('FR-STO-06 FR-PRI-02 a paused recording keeps its banner on '

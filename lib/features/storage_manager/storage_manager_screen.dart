@@ -10,7 +10,6 @@ import '../capture/recording_banner.dart';
 import '../export/export_sheet.dart';
 import 'clear_temp_dialog.dart';
 import 'delete_local_dialog.dart';
-import 'models_dialog.dart';
 import 'storage_manager_providers.dart';
 
 /// Storage Manager (FR-STO-05, FR-STO-06, ADR-047) [P1-20]: sizes per
@@ -275,7 +274,8 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                 _chip('Temporary exports', b.temporaryExportBytes),
                 if (s.recoveryBytes > 0)
                   _chip('Kept for recovery', s.recoveryBytes),
-                _chip('Models', 0),
+                // Offline models arrive in Phase 2 (P2-08); until then the
+                // owner asked to hide the Models size and Manage models.
               ],
             ),
             const SizedBox(height: TokenSpace.space4),
@@ -288,15 +288,6 @@ class _StorageManagerScreenState extends ConsumerState<StorageManagerScreen> {
                   label: 'Clear temporary files',
                   variant: AttenlumeButtonVariant.secondary,
                   onPressed: () => _clearTemporary(b),
-                ),
-                AttenlumeButton(
-                  key: const Key('manage-models-button'),
-                  label: 'Manage models',
-                  variant: AttenlumeButtonVariant.secondary,
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (_) => const ModelsDialog(),
-                  ),
                 ),
               ],
             ),

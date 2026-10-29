@@ -4,6 +4,9 @@ const G = require('./content');
 
 const REPO = require('path').resolve(__dirname, '..', '..').replace(/\\/g, '/');
 const ASSETS = `file:///${REPO}/assets`;
+// Samlytics Data Services logo (navy lettering, transparent): bare on cream
+// pages, on a cream plate on the blue cover.
+const LOGO = `<img class="company-logo" src="${ASSETS}/brand/samlytics/samlytics-logo.png" alt="Samlytics Data Services">`;
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const phone = (name) =>
   `<figure class="phone"><img src="${ASSETS}/guide/${name}.jpg" alt="Attenlume screen: ${esc(name.replace(/^\d+-/, '').replace(/-/g, ' '))}"></figure>`;
@@ -36,7 +39,8 @@ const html = `<!doctype html>
 html, body { margin: 0; background: var(--cream); color: var(--navy); font-family: Montserrat, Calibri, sans-serif; font-size: 10.5pt; line-height: 1.5; }
 .page { width: 210mm; height: 297mm; padding: 16mm 16mm 14mm; position: relative; overflow: hidden; page-break-after: always; }
 .page:last-child { page-break-after: auto; }
-.footer { position: absolute; left: 16mm; right: 16mm; bottom: 8mm; display: flex; justify-content: space-between; font-size: 8pt; color: var(--muted); }
+.footer { position: absolute; left: 16mm; right: 16mm; bottom: 7mm; display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: var(--muted); }
+.footer .company-logo { height: 5.5mm; width: auto; }
 h1, h2, h3 { margin: 0; line-height: 1.15; }
 h2 { color: var(--blue); font-size: 22pt; font-weight: 700; margin-bottom: 4mm; }
 h3 { color: var(--blue); font-size: 15pt; font-weight: 700; margin: 1mm 0 3mm; }
@@ -45,7 +49,8 @@ h3 { color: var(--blue); font-size: 15pt; font-weight: 700; margin: 1mm 0 3mm; }
 
 /* Cover */
 .cover { background: var(--blue); color: var(--cream); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.cover .brand { position: absolute; top: 14mm; left: 16mm; font-size: 9.5pt; }
+.cover .brand { position: absolute; top: 12mm; left: 16mm; margin: 0; background: var(--cream); border-radius: 2.5mm; padding: 2.5mm 3.5mm; line-height: 0; }
+.cover .brand .company-logo { height: 9mm; width: auto; }
 .cover img.icon { width: 34mm; height: 34mm; margin-bottom: 9mm; }
 .cover h1 { font-size: 36pt; font-weight: 700; }
 .cover .sub { color: var(--lime); font-size: 14pt; font-weight: 500; max-width: 140mm; margin: 6mm auto 0; }
@@ -88,7 +93,7 @@ li { margin-bottom: 2.2mm; }
   <div class="pill" style="width:70mm;height:16mm;background:var(--cream);top:-6mm;right:-14mm"></div>
   <div class="pill" style="width:40mm;height:11mm;background:var(--lime);top:16mm;right:-6mm"></div>
   <div class="pill" style="width:56mm;height:13mm;background:var(--lime);bottom:4mm;left:-16mm"></div>
-  <p class="brand">Samlytics Data Services</p>
+  <p class="brand">${LOGO}</p>
   <img class="icon" src="${ASSETS}/brand/icons/attenlume-app-icon-filled.png" alt="Attenlume app icon">
   <h1>${esc(G.title)}</h1>
   <p class="sub">${esc(G.subtitle)}</p>
@@ -102,7 +107,7 @@ li { margin-bottom: 2.2mm; }
   <span class="chip">1  ${esc(G.sections[0].title)}</span>
   <p class="blurb">${esc(G.sections[0].blurb)}</p>
   ${step(G.sections[0].steps[0])}
-  <div class="footer"><span>${esc(G.title)}</span><span>Samlytics Data Services</span></div>
+  <div class="footer"><span>${esc(G.title)}</span>${LOGO}</div>
 </div>
 
 ${(() => {
@@ -120,7 +125,7 @@ ${(() => {
     if (current.length === 2) { pages.push(current); current = []; }
   });
   if (current.length) pages.push(current);
-  return pages.map((p) => `<div class="page">${p.join('')}<div class="footer"><span>${esc(G.title)}</span><span>Samlytics Data Services</span></div></div>`).join('\n');
+  return pages.map((p) => `<div class="page">${p.join('')}<div class="footer"><span>${esc(G.title)}</span>${LOGO}</div></div>`).join('\n');
 })()}
 
 <div class="page">
@@ -134,7 +139,7 @@ ${(() => {
   <h2 style="margin-top:4mm">Good to know</h2>
   <div class="tips">${G.tips.map((t) => `<div class="tip"><b>${esc(t.title)}</b>${esc(t.text)}</div>`).join('')}</div>
   <div class="closing"><p class="big">${esc(G.closing)}</p><p>Download for Android or Windows: <span class="link">${esc(G.download)}</span></p></div>
-  <div class="footer"><span>${esc(G.title)}</span><span>Samlytics Data Services</span></div>
+  <div class="footer"><span>${esc(G.title)}</span>${LOGO}</div>
 </div>
 
 </body></html>`;

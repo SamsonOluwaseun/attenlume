@@ -86,6 +86,8 @@ flutter:
     - assets/brand/logos/attenlume-logo-stacked.png
     # Quick guide screenshots (tool/guide).
     - assets/guide/
+    # Samlytics Data Services logo for the quick guide (owner request).
+    - assets/brand/samlytics/samlytics-logo.png
 
   # Montserrat, SIL Open Font License 1.1 (assets/fonts/OFL.txt).
   # Static TTFs from https://github.com/JulietaUla/Montserrat (fonts/ttf).
