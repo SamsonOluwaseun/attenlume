@@ -42,6 +42,8 @@ void main() {
   late Directory temp;
   late StorageManagerService service;
   var exportRunning = false;
+  // Paths the fake deleter refuses, as if another app had them open.
+  final locked = <String>{};
 
   setUp(() {
     t = TestData();
@@ -49,6 +51,7 @@ void main() {
     root = Directory(p.join(sandbox.path, 'media'))..createSync();
     temp = Directory(p.join(sandbox.path, 'cache'))..createSync();
     exportRunning = false;
+    locked.clear();
     final trim = PermanentTrimService(
       activities: t.activities,
       media: t.media,
@@ -61,11 +64,18 @@ void main() {
       activities: t.activities,
       media: t.media,
       exports: t.exports,
+      cuts: t.cuts,
       mediaRoot: () async => root,
       tempRoot: () async => temp,
       freeSpaceProbe: const FixedFreeSpace(),
       removeOriginals: trim.removeOriginals,
       exportRunning: () => exportRunning,
+      deleteFile: (f) {
+        if (locked.contains(f.path)) {
+          throw FileSystemException('Locked', f.path);
+        }
+        f.deleteSync();
+      },
     );
   });
 
@@ -656,6 +666,80 @@ void main() {
         service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
         throwsA(isA<StorageManagerException>()),
       );
+    });
+
+    test('FR-STO-06 a cut added after the export refuses Delete local '
+        'copies', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      await exported(conf.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        isNull,
+      );
+
+      t.clock.advance(const Duration(minutes: 1));
+      await t.cuts.add(act.id, startOffsetMs: 0, endOffsetMs: 5000);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        contains('changed after'),
+      );
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id),
+        throwsA(isA<StorageManagerException>()),
+      );
+    });
+
+    test('FR-STO-06 a cut removed after the export refuses Delete local '
+        'copies', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
+      final cut = await t.cuts.add(act.id, startOffsetMs: 0, endOffsetMs: 5000);
+      await exported(conf.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        isNull,
+      );
+
+      t.clock.advance(const Duration(minutes: 1));
+      await t.cuts.remove(cut.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        contains('changed after'),
+      );
+    });
+
+    test('FR-STO-06 a delete that fails on a locked file can be retried and '
+        'finishes', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      final first = MediaPaths.segment(conf.id, act.id, 1);
+      final second = MediaPaths.segment(conf.id, act.id, 2);
+      await segment(act.id, first, 1000);
+      await segment(act.id, second, 2000);
+      await exported(conf.id);
+      locked.add(MediaPaths.resolve(root, second).path);
+
+      var res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.failedFiles, 1);
+      expect(res.activitiesDeleted, 0);
+      expect(MediaPaths.resolve(root, first).existsSync(), isFalse);
+      expect(MediaPaths.resolve(root, second).existsSync(), isTrue);
+      // Only the row of the file still on disk is kept.
+      expect((await t.media.segmentsFor(act.id)).map((s) => s.filePath), [
+        second,
+      ]);
+      expect(await t.conferences.get(conf.id), isNotNull);
+
+      locked.clear();
+      res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.failedFiles, 0);
+      expect(res.activitiesDeleted, 1);
+      expect(MediaPaths.resolve(root, second).existsSync(), isFalse);
+      expect(await t.activities.get(act.id), isNull);
+      expect(await t.conferences.get(conf.id), isNull);
     });
   });
 }

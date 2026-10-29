@@ -23,6 +23,7 @@ final storageManagerServiceProvider = Provider<StorageManagerService>((ref) {
     activities: ref.watch(activityRepositoryProvider),
     media: ref.watch(mediaAssetRepositoryProvider),
     exports: ref.watch(exportJobRepositoryProvider),
+    cuts: ref.watch(cutRangeRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
     tempRoot: ref.watch(storageTempRootProvider),
     freeSpaceProbe: ref.watch(freeSpaceProbeProvider),

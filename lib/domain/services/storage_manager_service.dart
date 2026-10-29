@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/conference_repository.dart';
+import '../../data/repositories/cut_range_repository.dart';
 import '../../data/repositories/export_job_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
 import '../../platform/storage/free_space_probe.dart';
@@ -36,8 +37,10 @@ class StorageManagerService {
     required this.mediaRoot,
     required this.tempRoot,
     required this.freeSpaceProbe,
+    required this.cuts,
     required this.removeOriginals,
     this.exportRunning = _never,
+    this.deleteFile = _deleteFile,
   });
 
   final ConferenceRepository conferences;
@@ -58,6 +61,15 @@ class StorageManagerService {
   final bool Function() exportRunning;
 
   static bool _never() => false;
+
+  /// Cut ranges: a cut added, removed or restored after an export changes
+  /// what the activity holds (ADR-036).
+  final CutRangeRepository cuts;
+
+  /// Deletes one file. Tests replace it to simulate a locked file.
+  final void Function(File file) deleteFile;
+
+  static void _deleteFile(File f) => f.deleteSync();
 
   static const exportsTempFolder = 'exports-temp';
 
@@ -324,7 +336,8 @@ class StorageManagerService {
 
   /// Deletes the files in the preview, then the activities' rows (and the
   /// conference row when every activity went). An activity whose file
-  /// could not be deleted keeps its rows so nothing is left unnamed.
+  /// could not be deleted is kept, with only the rows of files still on
+  /// disk, so a retry can finish and nothing is left unnamed.
   Future<DeleteLocalResult> deleteLocalCopies({
     required String conferenceId,
     String? activityId,
@@ -341,7 +354,7 @@ class StorageManagerService {
       try {
         if (!file.existsSync()) continue;
         final bytes = file.lengthSync();
-        file.deleteSync();
+        deleteFile(file);
         deleted++;
         freed += bytes;
       } on FileSystemException {
@@ -352,7 +365,27 @@ class StorageManagerService {
 
     var activitiesDeleted = 0;
     for (final a in plan.activities) {
-      if (failedActivities.contains(a.id)) continue;
+      if (failedActivities.contains(a.id)) {
+        // Drop the rows whose planned files are gone, so the next attempt
+        // is not refused as "missing" (ADR-047).
+        bool gone(String rel) =>
+            plan.files.containsKey(rel) &&
+            !MediaPaths.resolve(root, rel).existsSync();
+        final rows = plan.rows[a.id]!;
+        await media.deleteSegments(
+          rows.segments.where((s) => gone(s.filePath)).map((s) => s.id),
+        );
+        await media.deletePhotos(
+          rows.photos
+              .where(
+                (ph) =>
+                    gone(ph.filePath) &&
+                    (ph.thumbnailPath == null || gone(ph.thumbnailPath!)),
+              )
+              .map((ph) => ph.id),
+        );
+        continue;
+      }
       await activities.delete(a.id);
       activitiesDeleted++;
       _removeEmptyFolders(
@@ -465,6 +498,7 @@ class StorageManagerService {
 
     return _DeletePlan(
       activities: targets,
+      rows: rowsByActivity,
       files: files,
       preview: DeleteLocalPreview(
         conferenceId: conferenceId,
@@ -608,6 +642,7 @@ class StorageManagerService {
     final root = await mediaRoot();
     final segments = await media.segmentsFor(a.id);
     return _ActivityRows(
+      cutChange: await cuts.lastChangeFor(a.id),
       segments: segments,
       photos: await media.photosFor(a.id),
       bookmarks: await media.bookmarksFor(a.id),
@@ -677,6 +712,7 @@ class StorageManagerService {
 
 class _ActivityRows {
   _ActivityRows({
+    required this.cutChange,
     required this.segments,
     required this.photos,
     required this.bookmarks,
@@ -691,8 +727,12 @@ class _ActivityRows {
   /// hold them.
   final int unexportable;
 
+  /// Latest add, change, removal or restore of a cut range.
+  final DateTime? cutChange;
+
   DateTime lastChange(Activity a) {
     var last = a.updatedAt;
+    if (cutChange case final c? when c.isAfter(last)) last = c;
     for (final t in [
       ...segments.map((s) => s.updatedAt),
       ...photos.map((ph) => ph.updatedAt),
@@ -707,11 +747,13 @@ class _ActivityRows {
 class _DeletePlan {
   _DeletePlan({
     required this.activities,
+    required this.rows,
     required this.files,
     required this.preview,
   });
 
   final List<Activity> activities;
+  final Map<String, _ActivityRows> rows;
 
   /// Relative path to the ids of the target activities that name it.
   final Map<String, Set<String>> files;

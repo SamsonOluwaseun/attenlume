@@ -578,6 +578,23 @@ class MediaAssetRepository {
     return named;
   }
 
+  /// Deletes segment rows by id; files are the caller's (FR-STO-06)
+  /// [P1-20].
+  Future<void> deleteSegments(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    await (_db.delete(
+      _db.recordingSegments,
+    )..where((s) => s.id.isIn(list))).go();
+  }
+
+  /// Deletes photo rows by id; files are the caller's (FR-STO-06) [P1-20].
+  Future<void> deletePhotos(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return;
+    await (_db.delete(_db.photos)..where((p) => p.id.isIn(list))).go();
+  }
+
   /// Every segment id, to find waveform summaries whose segment is gone
   /// (ADR-034, FR-STO-06) [P1-20].
   Future<Set<String>> segmentIds() async {

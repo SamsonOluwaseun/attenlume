@@ -49,6 +49,17 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     ref.invalidate(allConferencesFutureProvider);
   }
 
+  /// Deleting local copies can remove a conference, so the list reloads
+  /// on return (FR-STO-06) [P1-20].
+  Future<void> _openStorageManager() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => const StorageManagerScreen(),
+      ),
+    );
+    ref.invalidate(allConferencesFutureProvider);
+  }
+
   Future<void> _openCreateWizard() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -68,13 +79,7 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
             key: const Key('open-storage-manager-button'),
             icon: const Icon(Icons.storage_outlined),
             tooltip: 'Storage Manager',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (context) => const StorageManagerScreen(),
-                ),
-              );
-            },
+            onPressed: _openStorageManager,
           ),
           // Settings (P1-25) will take this over; Privacy lives here until
           // then (FR-PRI-03, FR-PRI-06).
