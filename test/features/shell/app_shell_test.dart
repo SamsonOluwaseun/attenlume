@@ -91,6 +91,40 @@ void main() {
     });
   });
 
+  group('FR-UI-11 resizing', () {
+    testWidgets('FR-UI-11 crossing the breakpoint keeps the search text and '
+        'the selected tab', (tester) async {
+      final h = await open(tester, const AppShell(), sample: true);
+      await tester.enterText(
+        find.byKey(const Key('conference-search-field')),
+        'Samlytics',
+      );
+      await tester.tap(find.text('Archived'));
+      await h.settle(20);
+
+      // Phone to a wide Windows window, then back.
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      await h.settle();
+      expect(find.byType(NavigationRail), findsOneWidget);
+      TextField field() => tester.widget<TextField>(
+        find.byKey(const Key('conference-search-field')),
+      );
+      expect(field().controller!.text, 'Samlytics');
+
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      await h.settle();
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(field().controller!.text, 'Samlytics');
+      final tabs = DefaultTabController.maybeOf(
+        tester.element(find.byType(TabBar)),
+      );
+      final bar = tester.widget<TabBar>(find.byType(TabBar));
+      expect((bar.controller ?? tabs)!.index, 1);
+    });
+  });
+
   group('FR-UI-11 destinations', () {
     testWidgets('FR-UI-11 each destination opens its page, and the list '
         'keeps its search when you come back', (tester) async {

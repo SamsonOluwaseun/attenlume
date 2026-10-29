@@ -100,10 +100,13 @@ class _AppShellState extends ConsumerState<AppShell> {
       ],
     );
 
-    if (rail) {
-      return Scaffold(
-        body: Row(
-          children: [
+    // One Scaffold and one Row in both layouts, with the page stack in a
+    // keyed child, so resizing a Windows window or rotating a tablet across
+    // the breakpoint keeps each page's state (search, tab, scroll).
+    return Scaffold(
+      body: Row(
+        children: [
+          if (rail) ...[
             SafeArea(
               right: false,
               child: NavigationRail(
@@ -123,28 +126,26 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             ),
             const VerticalDivider(width: 1, thickness: 1),
-            Expanded(child: body),
           ],
-        ),
-      );
-    }
-
-    return Scaffold(
-      body: body,
-      bottomNavigationBar: NavigationBar(
-        key: const Key('shell-navigation-bar'),
-        selectedIndex: index,
-        onDestinationSelected: _select,
-        destinations: [
-          for (final d in ShellDestination.values)
-            NavigationDestination(
-              key: Key('nav-${d.name}'),
-              icon: Icon(d.icon),
-              selectedIcon: Icon(d.selectedIcon),
-              label: d.label,
-            ),
+          Expanded(key: const ValueKey('shell-pages'), child: body),
         ],
       ),
+      bottomNavigationBar: rail
+          ? null
+          : NavigationBar(
+              key: const Key('shell-navigation-bar'),
+              selectedIndex: index,
+              onDestinationSelected: _select,
+              destinations: [
+                for (final d in ShellDestination.values)
+                  NavigationDestination(
+                    key: Key('nav-${d.name}'),
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.selectedIcon),
+                    label: d.label,
+                  ),
+              ],
+            ),
     );
   }
 }
