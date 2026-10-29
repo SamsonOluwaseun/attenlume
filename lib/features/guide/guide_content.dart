@@ -161,6 +161,10 @@ const quickGuide = QuickGuide(
       text: 'Installing a newer version keeps all your recordings.',
     ),
     GuideTip(
+      title: 'Moving to a new device',
+      text: 'Export a conference, then on the new device open My conferences, menu, Import an export. Every file is checked first, and nothing already in the app is overwritten.',
+    ),
+    GuideTip(
       title: 'Before you uninstall',
       text: 'Uninstalling deletes everything in the app. Export and share your conferences first.',
     ),

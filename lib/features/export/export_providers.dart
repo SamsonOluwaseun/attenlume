@@ -6,7 +6,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../data/filesystem/app_data_directory.dart';
+import '../../data/local_database/database_provider.dart';
 import '../../data/repositories/repository_providers.dart';
+import '../../domain/services/export_import_service.dart';
 import '../../domain/services/export_service.dart';
 import '../../platform/share/export_sharer.dart';
 import '../capture/recording_providers.dart';
@@ -68,4 +70,53 @@ final exportDestinationsProvider = Provider<ExportDestinations>(
 /// override it with a fake.
 final exportSharerProvider = Provider<ExportSharer>(
   (ref) => const SharePlusExportSharer(),
+);
+
+/// Re-import of exports (FR-EXP-11, ADR-049) [P1-23].
+final exportImportServiceProvider = Provider<ExportImportService>(
+  (ref) => ExportImportService(
+    db: ref.watch(appDatabaseProvider),
+    activities: ref.watch(activityRepositoryProvider),
+    mediaRoot: ref.watch(mediaRootProvider),
+    freeSpace: ref.watch(freeSpaceProbeProvider),
+  ),
+);
+
+/// How the user picks an export to import. Tests override it.
+abstract interface class ImportPicker {
+  /// A `.zip` file, or null when cancelled.
+  Future<String?> pickZip();
+
+  /// An export folder, or null when cancelled.
+  Future<String?> pickFolder();
+}
+
+/// The system pickers from `file_selector` (ADR-040 uses the same package
+/// for the export folder).
+class FileSelectorImportPicker implements ImportPicker {
+  const FileSelectorImportPicker();
+
+  @override
+  Future<String?> pickZip() async {
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'ZIP',
+          extensions: ['zip'],
+          mimeTypes: ['application/zip'],
+          uniformTypeIdentifiers: ['public.zip-archive'],
+        ),
+      ],
+      confirmButtonText: 'Import',
+    );
+    return file?.path;
+  }
+
+  @override
+  Future<String?> pickFolder() =>
+      getDirectoryPath(confirmButtonText: 'Import this folder');
+}
+
+final importPickerProvider = Provider<ImportPicker>(
+  (ref) => const FileSelectorImportPicker(),
 );

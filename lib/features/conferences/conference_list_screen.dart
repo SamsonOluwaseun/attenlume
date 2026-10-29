@@ -9,6 +9,7 @@ import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_banner.dart';
+import '../export/import_export_screen.dart';
 import '../settings/settings_screen.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
@@ -56,6 +57,13 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     ref.invalidate(allConferencesFutureProvider);
   }
 
+  /// "Import an export" (FR-EXP-11, ADR-049) [P1-23].
+  Future<void> _openImport() async {
+    final id = await ImportExportScreen.open(context);
+    ref.invalidate(allConferencesFutureProvider);
+    if (id != null && mounted) await _openConference(id);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,14 +71,20 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
         title: const Text('My conferences'),
         actions: [
           // Settings holds Privacy, app lock and the quick guide (5.11,
-          // ADR-048) [P1-25].
+          // ADR-048) [P1-25]. Import an export (FR-EXP-11) [P1-23].
           PopupMenuButton<String>(
             key: const Key('conference-list-menu'),
             tooltip: 'More',
             onSelected: (value) {
               if (value == 'settings') unawaited(SettingsScreen.open(context));
+              if (value == 'import') unawaited(_openImport());
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                key: Key('menu-import'),
+                value: 'import',
+                child: Text('Import an export'),
+              ),
               PopupMenuItem(
                 key: Key('menu-settings'),
                 value: 'settings',
