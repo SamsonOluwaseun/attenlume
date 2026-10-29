@@ -13,6 +13,7 @@ import 'package:attenlume/features/export/export_sheet.dart';
 import 'package:attenlume/platform/share/export_sharer.dart';
 import 'package:attenlume/platform/storage/free_space_probe.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,19 +23,23 @@ import '../../fixtures/fixtures.dart';
 
 /// Real planning and preflight; [run] is recorded instead of writing.
 class _RecordingExportService extends ExportService {
-  _RecordingExportService(TestData t, Directory root, FreeSpaceProbe probe)
-    : super(
-        conferences: t.conferences,
-        activities: t.activities,
-        media: t.media,
-        cuts: t.cuts,
-        jobs: t.exports,
-        mediaRoot: () async => root,
-        tempRoot: () async => root,
-        freeSpace: probe,
-        reserveBytes: 0,
-        clock: t.clock.call,
-      );
+  _RecordingExportService(
+    TestData t,
+    Directory root,
+    FreeSpaceProbe probe, {
+    super.contributors,
+  }) : super(
+         conferences: t.conferences,
+         activities: t.activities,
+         media: t.media,
+         cuts: t.cuts,
+         jobs: t.exports,
+         mediaRoot: () async => root,
+         tempRoot: () async => root,
+         freeSpace: probe,
+         reserveBytes: 0,
+         clock: t.clock.call,
+       );
 
   final runs = <(ExportRequest, String)>[];
 
@@ -60,7 +65,10 @@ class _RecordingExportService extends ExportService {
       ),
     );
     if (gate case final g?) await g.future;
+    // The real prompt, so Copy AI prompt is tested with real text.
+    final prompt = (await plan(request)).analysisPrompt;
     return ExportOutcome(
+      analysisPrompt: prompt,
       jobId: 'job',
       outputPath:
           '$destinationParent/2026-11-04_samlytics-conference-2026'
@@ -530,6 +538,112 @@ void main() {
         SharePlusExportSharer.mimeTypeFor('/x/a'),
         'application/octet-stream',
       );
+    });
+  });
+
+  group('FR-EXP-08 Copy AI prompt', () {
+    /// Records what the app puts on the clipboard.
+    List<String> fakeClipboard(WidgetTester tester) {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      return copied;
+    }
+
+    Future<String> expectedPrompt(String conferenceId) async =>
+        (await service.plan(ExportRequest(conferenceId: conferenceId)))
+            .analysisPrompt!;
+
+    for (final (platform, sharer) in [
+      ('Windows', FakeExportSharer(canShare: false)),
+      ('Android and iOS', FakeExportSharer()),
+    ]) {
+      testWidgets(
+        'FR-EXP-08 on $platform the export result copies the filled-in '
+        'analysis prompt',
+        (tester) async {
+          final sample = await SampleConference.build(t);
+          final copied = fakeClipboard(tester);
+          await tester.pumpWidget(
+            subject(
+              tester,
+              ExportSheet(conferenceId: sample.conference.id),
+              sharer: sharer,
+            ),
+          );
+          await tester.pumpAndSettle();
+          await startExport(tester);
+          expect(find.text('Export saved'), findsOneWidget);
+          expect(find.byKey(const Key('export-copy-path')), findsOneWidget);
+          if (sharer.canShare) {
+            expect(find.byKey(const Key('export-share')), findsOneWidget);
+          }
+
+          final button = find.byKey(const Key('export-copy-prompt'));
+          expect(button, findsOneWidget);
+          expect(find.text('Copy AI prompt'), findsOneWidget);
+          await tester.ensureVisible(button);
+          await tester.tap(button);
+          await tester.pumpAndSettle();
+
+          final expected = await tester.runAsync(
+            () => expectedPrompt(sample.conference.id),
+          );
+          expect(copied, [expected]);
+          expect(copied.single, startsWith('# Analysis prompt: Samlytics'));
+          expect(copied.single, contains('Senior enterprise data architect'));
+          expect(
+            copied.single,
+            contains(
+              'Where could enterprise data architecture improve '
+              'reproducibility? (priority 1)',
+            ),
+          );
+          expect(
+            copied.single,
+            contains('They want these outputs: Briefing, Blog.'),
+          );
+          expect(
+            find.text(
+              'AI prompt copied. Paste it into your AI tool with the export '
+              'files.',
+            ),
+            findsOneWidget,
+          );
+        },
+      );
+    }
+
+    testWidgets('FR-EXP-08 no Copy AI prompt when the export has no prompt', (
+      tester,
+    ) async {
+      final sample = await SampleConference.build(t);
+      service = _RecordingExportService(
+        t,
+        root,
+        probe,
+        contributors: const [BasicConferenceJsonContributor()],
+      );
+      await tester.pumpWidget(
+        subject(tester, ExportSheet(conferenceId: sample.conference.id)),
+      );
+      await tester.pumpAndSettle();
+      await startExport(tester);
+      expect(find.text('Export saved'), findsOneWidget);
+      expect(find.byKey(const Key('export-copy-prompt')), findsNothing);
     });
   });
 }
