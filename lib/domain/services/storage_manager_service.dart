@@ -674,6 +674,16 @@ class StorageManagerService {
   /// holds all of it as it is now. One rule for both the export status and
   /// the delete gate, so they cannot disagree (ADR-047).
   static String? _missing(Activity a, _ActivityRows rows, ExportJob j) {
+    // ExportService.plan leaves out damaged or missing recordings and
+    // photos without their full-size file, so no export holds them.
+    if (rows.missingPhotos > 0) {
+      return 'A photo in this activity is missing its full-size file, so no '
+          'export holds it. Its thumbnail and details are kept.';
+    }
+    if (rows.unexportable > 0) {
+      return 'A recording in this activity is damaged or missing, so no '
+          'export holds it. Its local copies are kept.';
+    }
     final scope = j.scope;
     final audioMode = scope['audio_mode'];
     final notes = a.notesMd;
@@ -827,12 +837,15 @@ class StorageManagerService {
       if (s.index > details.index) details = s;
     }
     if (activityStatuses.isEmpty) return details;
-    final least = activityStatuses.reduce((x, y) => x.index <= y.index ? x : y);
-    if (least.index <= details.index) return least;
-    // Activities exported but the conference's own details less so.
-    return details == ExportStatus.notExported
-        ? ExportStatus.partlyExported
-        : details;
+    final all = [...activityStatuses, details];
+    final least = all.reduce((x, y) => x.index <= y.index ? x : y);
+    // Something is exported but not everything: say so rather than hide
+    // the backup that exists.
+    if (least == ExportStatus.notExported &&
+        all.any((s) => s != ExportStatus.notExported)) {
+      return ExportStatus.partlyExported;
+    }
+    return least;
   }
 
   // ---------------------------------------------------------------------
