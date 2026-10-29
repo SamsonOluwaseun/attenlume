@@ -858,6 +858,9 @@ class ExportService {
     void Function(ExportWriteProgress progress)? onProgress,
     Future<void>? cancel,
   }) async {
+    // Taken before planning reads anything: a change at or after it may
+    // be missing from this export (Storage Manager, ADR-047).
+    final snapshotAt = clock();
     final plan = await this.plan(request);
     if (plan.activityCount == 0) {
       throw ExportException(
@@ -869,7 +872,10 @@ class ExportService {
     }
     final job = await jobs.create(
       conferenceId: request.conferenceId,
-      scope: request.toScopeJson(),
+      scope: {
+        ...request.toScopeJson(),
+        'snapshot_at': snapshotAt.toIso8601String(),
+      },
       format: request.format,
       audioMode: request.effectiveAudioMode,
       bytesTotal: plan.contentBytes,

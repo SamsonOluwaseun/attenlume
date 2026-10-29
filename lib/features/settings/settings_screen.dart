@@ -10,6 +10,7 @@ import '../../data/repositories/settings_repository.dart';
 import '../../domain/models/enums.dart';
 import '../guide/quick_guide_screen.dart';
 import '../privacy/privacy_screen.dart';
+import '../storage_manager/storage_manager_screen.dart';
 import 'settings_providers.dart';
 
 /// Settings (BUILD_GUIDE 5.11, ADR-048) [P1-25].
@@ -172,6 +173,26 @@ class SettingsScreen extends ConsumerWidget {
                   () => settings.setThemeMode(m),
                   themeModeSettingProvider,
                 ),
+              ),
+              heading('Storage'),
+              ListTile(
+                key: const Key('settings-storage'),
+                leading: const Icon(Icons.storage_outlined),
+                title: const Text('Storage manager'),
+                subtitle: const Text(
+                  'Space used, clear temporary files, delete copies you exported',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const StorageManagerScreen(),
+                    ),
+                  );
+                  // A conference may have been deleted: My conferences
+                  // must not show it when the user goes back.
+                  ref.invalidate(allConferencesFutureProvider);
+                },
               ),
               heading('Privacy and security'),
               ListTile(

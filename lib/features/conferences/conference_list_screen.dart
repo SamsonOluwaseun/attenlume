@@ -11,6 +11,7 @@ import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_banner.dart';
 import '../export/import_export_screen.dart';
 import '../settings/settings_screen.dart';
+import '../storage_manager/storage_manager_screen.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
 
@@ -48,6 +49,17 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     ref.invalidate(allConferencesFutureProvider);
   }
 
+  /// Deleting local copies can remove a conference, so the list reloads
+  /// on return (FR-STO-06) [P1-20].
+  Future<void> _openStorageManager() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => const StorageManagerScreen(),
+      ),
+    );
+    ref.invalidate(allConferencesFutureProvider);
+  }
+
   Future<void> _openCreateWizard() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -70,6 +82,12 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
       appBar: AppBar(
         title: const Text('My conferences'),
         actions: [
+          IconButton(
+            key: const Key('open-storage-manager-button'),
+            icon: const Icon(Icons.storage_outlined),
+            tooltip: 'Storage Manager',
+            onPressed: _openStorageManager,
+          ),
           // Settings holds Privacy, app lock and the quick guide (5.11,
           // ADR-048) [P1-25]. Import an export (FR-EXP-11) [P1-23].
           PopupMenuButton<String>(

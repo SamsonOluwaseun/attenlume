@@ -67,6 +67,22 @@ class CutRangeRepository {
         ),
       );
 
+  /// The latest time any range of [activityId] was added, changed,
+  /// removed or restored, soft-deleted ranges included; null when it has
+  /// none (FR-STO-06, ADR-047) [P1-20].
+  Future<DateTime?> lastChangeFor(String activityId) async {
+    final rows = await (_db.select(
+      _db.cutRanges,
+    )..where((c) => c.activityId.equals(activityId))).get();
+    DateTime? last;
+    for (final r in rows) {
+      for (final t in [r.createdAt, r.updatedAt, r.deletedAt].nonNulls) {
+        if (last == null || t.isAfter(last)) last = t;
+      }
+    }
+    return last;
+  }
+
   /// Ranges in effect, in timeline order.
   Future<List<CutRange>> activeFor(String activityId) =>
       (_db.select(_db.cutRanges)
