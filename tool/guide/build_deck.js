@@ -112,7 +112,7 @@ for (const section of G.sections) {
   d.addShape(pres.ShapeType.roundRect, { x: -0.6, y: 4.9, w: 2.4, h: 0.55, rectRadius: 0.27, fill: { color: C.lime }, line: { color: C.lime }, rotate: 30 });
   d.addShape(pres.ShapeType.roundRect, { x: 8.7, y: -0.3, w: 2.4, h: 0.6, rectRadius: 0.3, fill: { color: C.blue }, line: { color: C.blue }, rotate: 30 });
   d.addText(section.n, { x: 0.75, y: 1.35, w: 1.5, h: 1.1, fontFace: FONT, fontSize: 66, bold: true, color: C.lime, margin: 0, isTextBox: true });
-  d.addText(section.title, { x: 0.75, y: 2.45, w: 5.2, h: 0.8, fontFace: FONT, fontSize: 40, bold: true, color: C.cream, margin: 0, isTextBox: true });
+  d.addText(section.title, { x: 0.75, y: 2.45, w: 6.2, h: 0.8, fontFace: FONT, fontSize: section.title.length > 16 ? 32 : 40, bold: true, color: C.cream, margin: 0, isTextBox: true });
   d.addText(section.blurb, { x: 0.75, y: 3.3, w: 5.2, h: 0.6, fontFace: FONT, fontSize: 16, color: C.blue, margin: 0, isTextBox: true });
   phone(d, section.steps[0].images[section.steps[0].images.length - 1], 7.3, 0.55, 4.5);
   for (const step of section.steps) stepSlide(section, step);

@@ -113,12 +113,46 @@ module.exports = {
           ],
         },
         {
-          title: 'Save and share',
+          title: 'Save, share and ask AI',
           images: ['14-export-saved', '15-share'],
           points: [
-            'When the export is saved, tap Share.',
-            'Send the ZIP to Google Drive, Gmail, Files or an AI app.',
-            'A copy stays in Attenlume. Checksums inside the ZIP let you confirm nothing changed.',
+            'When the export is saved, tap Share to send the ZIP to Google Drive, Gmail, Files or an AI app.',
+            'Tap Copy AI prompt, then paste it into ChatGPT, Claude or Gemini with the exported files. It already holds your role, goals and the outputs you want.',
+            'Inside the export, README_START_HERE explains every file, and timeline.csv lists each bookmark and photo with the exact place in the recording.',
+          ],
+        },
+      ],
+    },
+    {
+      n: '5',
+      title: 'Settings and storage',
+      blurb: 'Make Attenlume work your way, and keep your device tidy.',
+      steps: [
+        {
+          title: 'Settings',
+          images: ['17-menu', '18-settings'],
+          points: [
+            'On My conferences, tap the menu, then Settings.',
+            'Choose the default recording quality, when Attenlume checks in during long recordings, photo quality and the theme.',
+            'Privacy and app lock, the quick guide and About are here too.',
+          ],
+        },
+        {
+          title: 'Storage manager',
+          images: ['19-storage'],
+          points: [
+            'See how much space each conference uses, and whether it is exported, partly exported or verified.',
+            'Clear temporary files at any time. Your recordings and photos are never touched.',
+            'Delete local copies is only possible after a complete, verified export of a folder, with a preview and a second confirmation.',
+          ],
+        },
+        {
+          title: 'Moving to a new device',
+          images: ['20-import'],
+          points: [
+            'Export the conference, then copy the ZIP to the new device.',
+            'On the new device, tap the menu on My conferences, then Import an export.',
+            'Every file is checked first, and nothing already in the app is overwritten.',
           ],
         },
       ],
@@ -138,7 +172,6 @@ module.exports = {
     { title: 'Ask before you record', text: 'Some events and speakers do not allow recording. Record only when permitted.' },
     { title: 'Long sessions', text: 'Attenlume checks in after two hours, after ten minutes of silence and when the battery is low. Change these in Settings.' },
     { title: 'Updating', text: 'Installing a newer version keeps all your recordings.' },
-    { title: 'Moving to a new device', text: 'Export a conference, then on the new device open My conferences, menu, Import an export. Every file is checked first, and nothing already in the app is overwritten.' },
     { title: 'Before you uninstall', text: 'Uninstalling deletes everything in the app. Export and share your conferences first.' },
   ],
   closing: 'Be present. Bring ideas to light.',
