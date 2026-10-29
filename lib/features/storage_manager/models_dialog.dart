@@ -30,7 +30,7 @@ class ModelsDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(TokenRadius.radiusPill),
             ),
             child: Text(
-              'Phase 2 Feature',
+              'Coming later',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -40,7 +40,9 @@ class ModelsDialog extends StatelessWidget {
           ),
           const SizedBox(height: TokenSpace.space3),
           Text(
-            'Attenlume is strictly offline-first. No cloud account or external AI service is required.\n\nIn Phase 2, optional speech-to-text models (such as Whisper or Vosk) can be downloaded on demand for transcription. Each model will display its exact storage size and RAM requirements before downloading.\n\nCurrently, no offline models are downloaded, and 0 B of local storage is used.',
+            'No offline models are downloaded, so they use no space. '
+            'Speech-to-text models come in a later version; each will show '
+            'its size before it downloads.',
             style: theme.textTheme.bodyMedium,
           ),
         ],

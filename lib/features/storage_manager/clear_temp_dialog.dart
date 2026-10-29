@@ -4,134 +4,67 @@ import '../../app/theme/tokens.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 
-/// Dialog to confirm clearing safe temporary files and optionally kept originals
-/// (FR-STO-06, ADR-034, ADR-037) [P1-20].
-class ClearTempDialog extends StatefulWidget {
+/// Confirms "Clear safe temporary files" (FR-STO-06, ADR-038, ADR-047)
+/// [P1-20]. Pops `true` to clear.
+class ClearTempDialog extends StatelessWidget {
   const ClearTempDialog({
     super.key,
-    required this.safeTemporaryBytes,
-    required this.keptOriginalsBytes,
-    required this.keptOriginalsCount,
-    required this.onConfirm,
+    required this.temporaryExportBytes,
+    required this.orphanWaveformBytes,
+    required this.recoveryBytes,
   });
 
-  final int safeTemporaryBytes;
-  final int keptOriginalsBytes;
-  final int keptOriginalsCount;
-  final Future<void> Function(bool includeKeptOriginals) onConfirm;
-
-  @override
-  State<ClearTempDialog> createState() => _ClearTempDialogState();
-}
-
-class _ClearTempDialogState extends State<ClearTempDialog> {
-  bool _includeKeptOriginals = false;
-  bool _isCleaning = false;
-
-  Future<void> _handleConfirm() async {
-    setState(() => _isCleaning = true);
-    try {
-      await widget.onConfirm(_includeKeptOriginals);
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isCleaning = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to clear temporary files: $e')),
-        );
-      }
-    }
-  }
+  final int temporaryExportBytes;
+  final int orphanWaveformBytes;
+  final int recoveryBytes;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final totalToFree =
-        widget.safeTemporaryBytes +
-        (_includeKeptOriginals ? widget.keptOriginalsBytes : 0);
-
+    Widget row(String label, int bytes) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(formatStorageBytes(bytes)),
+        ],
+      ),
+    );
     return AlertDialog(
       title: const Text('Clear safe temporary files'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Safe temporary files include derived waveform summaries and export scratch files. These can be removed at any time without losing original recordings or photos.',
-              style: theme.textTheme.bodyMedium,
+            const Text(
+              'This removes leftovers that nothing needs. Recordings, photos, '
+              'notes and your exports are not touched.',
             ),
             const SizedBox(height: TokenSpace.space3),
-            Container(
-              padding: const EdgeInsets.all(TokenSpace.space3),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.5,
-                ),
-                borderRadius: BorderRadius.circular(TokenRadius.radiusMd),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Derived & scratch files:'),
-                  Text(
-                    formatStorageBytes(widget.safeTemporaryBytes),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-            if (widget.keptOriginalsCount > 0) ...[
+            row('Unfinished export copies', temporaryExportBytes),
+            row('Waveforms of deleted recordings', orphanWaveformBytes),
+            if (recoveryBytes > 0) ...[
               const SizedBox(height: TokenSpace.space3),
-              CheckboxListTile(
-                key: const Key('include-kept-originals-checkbox'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'Also remove kept originals (${formatStorageBytes(widget.keptOriginalsBytes)})',
-                ),
-                subtitle: Text(
-                  '${widget.keptOriginalsCount} full recording(s) retained when permanent trims were applied. No current activity references them.',
-                ),
-                value: _includeKeptOriginals,
-                onChanged: _isCleaning
-                    ? null
-                    : (val) =>
-                          setState(() => _includeKeptOriginals = val ?? false),
+              Text(
+                'Unfinished recordings (${formatStorageBytes(recoveryBytes)}) '
+                'are kept: the app offers to recover them.',
+                style: theme.textTheme.bodySmall,
               ),
             ],
-            const SizedBox(height: TokenSpace.space3),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Total space to reclaim:',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  formatStorageBytes(totalToFree),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: _isCleaning ? null : () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
         AttenlumeButton(
           key: const Key('confirm-clear-temp-button'),
-          label: _isCleaning ? 'Clearing…' : 'Clear temporary files',
+          label: 'Clear',
           variant: AttenlumeButtonVariant.secondary,
-          onPressed: _isCleaning ? null : _handleConfirm,
+          onPressed: () => Navigator.of(context).pop(true),
         ),
       ],
     );

@@ -2,70 +2,95 @@ import 'dart:io';
 
 import 'package:attenlume/data/filesystem/media_paths.dart';
 import 'package:attenlume/domain/models/enums.dart';
-import 'package:attenlume/domain/models/media.dart';
 import 'package:attenlume/domain/models/storage_breakdown.dart';
+import 'package:attenlume/domain/services/permanent_trim_service.dart';
+import 'package:attenlume/domain/services/private_notes.dart';
 import 'package:attenlume/domain/services/storage_manager_service.dart';
+import 'package:attenlume/platform/audio_trimmer/mp4_sample_trimmer.dart';
 import 'package:attenlume/platform/storage/free_space_probe.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../fixtures/fixtures.dart';
 
-class FakeFreeSpaceProbe implements FreeSpaceProbe {
-  FakeFreeSpaceProbe({
-    this.availableBytes = 50 * 1024 * 1024 * 1024,
-    this.totalBytes = 128 * 1024 * 1024 * 1024,
-  });
-
-  int? availableBytes;
-  int? totalBytes;
+class FixedFreeSpace implements FreeSpaceProbe {
+  const FixedFreeSpace();
 
   @override
-  Future<FreeSpace?> query(String path) async {
-    if (availableBytes == null || totalBytes == null) return null;
-    return FreeSpace(availableBytes: availableBytes!, totalBytes: totalBytes!);
-  }
+  Future<FreeSpace?> query(String path) async =>
+      const FreeSpace(availableBytes: 50 << 30, totalBytes: 128 << 30);
 }
+
+/// The scope an export of the whole conference stores (ADR-040).
+Map<String, Object?> fullScope({
+  String audioMode = 'original',
+  String content = 'everything',
+  bool includePrivate = false,
+}) => {
+  'kind': 'conference',
+  'content': content,
+  'format': 'folder',
+  'audio_mode': audioMode,
+  'include_private': includePrivate,
+  'include_kept_originals': false,
+};
 
 void main() {
   late TestData t;
-  late Directory tempMediaDir;
-  late FakeFreeSpaceProbe fakeProbe;
+  late Directory sandbox;
+  late Directory root;
+  late Directory temp;
   late StorageManagerService service;
+  var exportRunning = false;
 
-  setUp(() async {
+  setUp(() {
     t = TestData();
-    tempMediaDir = await Directory.systemTemp.createTemp(
-      'attenlume_storage_test_',
+    sandbox = Directory.systemTemp.createTempSync('attenlume_storage_');
+    root = Directory(p.join(sandbox.path, 'media'))..createSync();
+    temp = Directory(p.join(sandbox.path, 'cache'))..createSync();
+    exportRunning = false;
+    final trim = PermanentTrimService(
+      activities: t.activities,
+      media: t.media,
+      cuts: t.cuts,
+      trimmer: const Mp4SampleTrimmer(),
+      mediaRoot: () async => root,
     );
-    fakeProbe = FakeFreeSpaceProbe();
     service = StorageManagerService(
       conferences: t.conferences,
       activities: t.activities,
       media: t.media,
       exports: t.exports,
-      mediaRoot: () async => tempMediaDir,
-      freeSpaceProbe: fakeProbe,
+      mediaRoot: () async => root,
+      tempRoot: () async => temp,
+      freeSpaceProbe: const FixedFreeSpace(),
+      removeOriginals: trim.removeOriginals,
+      exportRunning: () => exportRunning,
     );
   });
 
   tearDown(() async {
     await t.close();
-    if (tempMediaDir.existsSync()) {
-      await tempMediaDir.delete(recursive: true);
-    }
+    sandbox.deleteSync(recursive: true);
   });
 
-  Future<RecordingSegment> createTestSegment(
-    String activityId, {
-    required String filePath,
-    required int bytes,
-    DateTime? start,
+  File write(String rel, int bytes, {Directory? base}) {
+    final f = MediaPaths.resolve(base ?? root, rel);
+    f.parent.createSync(recursive: true);
+    f.writeAsBytesSync(List.filled(bytes, 1));
+    return f;
+  }
+
+  Future<String> segment(
+    String activityId,
+    String rel,
+    int bytes, {
+    bool finalise = true,
   }) async {
-    final now = start ?? DateTime.utc(2026, 11, 4, 9, 30);
-    final seg = await t.media.startSegment(
+    write(rel, bytes);
+    final s = await t.media.startSegment(
       activityId: activityId,
-      filePath: filePath,
+      filePath: rel,
       requestedProfile: RecordingProfile.balanced,
       codec: 'aac_lc',
       container: 'm4a',
@@ -73,509 +98,414 @@ void main() {
       sampleRateHz: 48000,
       requestedBitrateBps: 48000,
       inputRoute: 'built_in',
-      startUtc: now,
+      startUtc: t.clock(),
     );
-    return t.media.finaliseSegment(
-      seg.id,
-      endUtc: now.add(const Duration(seconds: 30)),
-      endReason: SegmentEndReason.userStop,
-      durationMs: 30000,
-      bytes: bytes,
-      sha256: 'f' * 64,
-      observedBitrateBps: 48000,
+    if (finalise) {
+      await t.media.finaliseSegment(
+        s.id,
+        endUtc: t.clock().add(const Duration(minutes: 1)),
+        endReason: SegmentEndReason.userStop,
+        durationMs: 60000,
+        bytes: bytes,
+        sha256: 'f' * 64,
+        observedBitrateBps: 48000,
+      );
+    }
+    return s.id;
+  }
+
+  Future<void> photo(String confId, String activityId, String id) async {
+    final rel = MediaPaths.photo(confId, activityId, id);
+    final thumb = MediaPaths.thumbnail(confId, activityId, id);
+    write(rel, 5000);
+    write(thumb, 800);
+    await t.media.addPhoto(
+      id: id,
+      activityId: activityId,
+      filePath: rel,
+      thumbnailPath: thumb,
+      takenUtc: t.clock(),
+      source: PhotoSource.inApp,
+      bytes: 5000,
     );
   }
 
-  group('StorageManagerService analyzeStorage (FR-STO-05)', () {
-    test('FR-STO-05 reports empty breakdown when no data exists', () async {
-      final breakdown = await service.analyzeStorage();
-      expect(breakdown.appTotalBytes, 0);
-      expect(breakdown.conferences, isEmpty);
-      expect(breakdown.totalDeviceFreeBytes, 50 * 1024 * 1024 * 1024);
-      expect(breakdown.totalDeviceCapacityBytes, 128 * 1024 * 1024 * 1024);
-      expect(breakdown.safeTemporaryBytes, 0);
-      expect(breakdown.keptOriginalsCount, 0);
+  Future<void> exported(
+    String confId, {
+    Map<String, Object?>? scope,
+    VerificationLevel level = VerificationLevel.checksum,
+  }) async {
+    final job = await t.exports.create(
+      conferenceId: confId,
+      scope: scope ?? fullScope(),
+      format: ExportFormat.folder,
+      audioMode: ExportAudioMode.original,
+    );
+    await t.exports.complete(job.id, level);
+  }
+
+  group('FR-STO-05 sizes and export status', () {
+    test('FR-STO-05 an empty app reports nothing used', () async {
+      final b = await service.analyse();
+      expect(b.totalBytes, 0);
+      expect(b.conferences, isEmpty);
+      expect(b.freeBytes, 50 << 30);
+      expect(b.capacityBytes, 128 << 30);
     });
 
-    test('FR-STO-05 calculates breakdown across audio, photos, thumbnails, kept originals and waveforms', () async {
-      final conf = await t.conference(name: 'Data Summit London');
-      final act = await t.activity(conf.id, title: 'Keynote');
-
-      // 1. Audio segment: 10,000 bytes.
-      final segPath = MediaPaths.segment(conf.id, act.id, 1);
-      final segFile = MediaPaths.resolve(tempMediaDir, segPath);
-      await segFile.parent.create(recursive: true);
-      await segFile.writeAsBytes(List.filled(10000, 1));
-      await createTestSegment(act.id, filePath: segPath, bytes: 10000);
-
-      // 2. Photo: 5,000 bytes.
-      final photoRel = MediaPaths.photo(conf.id, act.id, 'photo1');
-      final thumbRel = MediaPaths.thumbnail(conf.id, act.id, 'photo1');
-      final pFile = MediaPaths.resolve(tempMediaDir, photoRel);
-      await pFile.parent.create(recursive: true);
-      await pFile.writeAsBytes(List.filled(5000, 2));
-
-      final thumbFile = MediaPaths.resolve(tempMediaDir, thumbRel);
-      await thumbFile.parent.create(recursive: true);
-      await thumbFile.writeAsBytes(List.filled(800, 3));
-
-      await t.media.addPhoto(
-        id: 'photo1',
-        activityId: act.id,
-        filePath: photoRel,
-        thumbnailPath: thumbRel,
-        takenUtc: DateTime.utc(2026, 11, 4, 9, 30),
-        source: PhotoSource.inApp,
-        bytes: 5000,
+    test('FR-STO-05 sizes split into audio, photos, thumbnails, waveforms, '
+        'kept originals, temporary exports and recovery files', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Opening keynote');
+      final segId = await segment(
+        act.id,
+        MediaPaths.segment(conf.id, act.id, 1),
+        10000,
       );
-
-      // 3. Kept original in audio/originals/: 20,000 bytes.
-      final origDir = Directory(
-        p.join(tempMediaDir.path, MediaPaths.originalsFolder(conf.id, act.id)),
-      );
-      await origDir.create(recursive: true);
-      final origFile = File(p.join(origDir.path, 'segment-001-orig.m4a'));
-      await origFile.writeAsBytes(List.filled(20000, 4));
-
-      // 4. Waveform summary in waveforms/: 1,200 bytes.
-      final waveDir = Directory(
-        p.join(
-          tempMediaDir.path,
-          MediaPaths.activityFolder(conf.id, act.id),
-          'waveforms',
+      await photo(conf.id, act.id, 'photo1');
+      write(MediaPaths.waveform(conf.id, act.id, segId), 1200);
+      write(
+        p.posix.join(
+          MediaPaths.originalsFolder(conf.id, act.id),
+          'segment-001.m4a',
         ),
+        20000,
       );
-      await waveDir.create(recursive: true);
-      final waveFile = File(p.join(waveDir.path, 'seg1.wave'));
-      await waveFile.writeAsBytes(List.filled(1200, 5));
+      write(MediaPaths.partial(MediaPaths.segment(conf.id, act.id, 2)), 700);
+      write('exports-temp/job-1/audio.m4a', 300, base: temp);
 
-      final breakdown = await service.analyzeStorage();
-
-      expect(breakdown.conferences.length, 1);
-      final confBreakdown = breakdown.conferences.single;
-      expect(confBreakdown.conferenceName, 'Data Summit London');
-      expect(confBreakdown.exportStatus, ExportStatus.notExported);
-
-      // Activity breakdown
-      expect(confBreakdown.activities.length, 1);
-      final actBreakdown = confBreakdown.activities.single;
-      expect(actBreakdown.sizes.audioBytes, 10000);
-      expect(actBreakdown.sizes.photoBytes, 5000);
-      expect(actBreakdown.sizes.thumbnailBytes, 800);
-      expect(actBreakdown.sizes.keptOriginalBytes, 20000);
-      expect(actBreakdown.sizes.derivedBytes, 1200);
-      expect(actBreakdown.keptOriginalsCount, 1);
-      expect(actBreakdown.totalBytes, 10000 + 5000 + 800 + 20000 + 1200);
-
-      // Conference & App totals
-      expect(confBreakdown.sizes.audioBytes, 10000);
-      expect(confBreakdown.sizes.photoBytes, 5000);
-      expect(confBreakdown.sizes.thumbnailBytes, 800);
-      expect(confBreakdown.sizes.keptOriginalBytes, 20000);
-      expect(confBreakdown.sizes.derivedBytes, 1200);
-      expect(confBreakdown.totalBytes, actBreakdown.totalBytes);
-
-      expect(breakdown.keptOriginalsCount, 1);
-      expect(breakdown.keptOriginalsTotalBytes, 20000);
-      expect(breakdown.safeTemporaryBytes, 1200); // waveforms
-    });
-
-    test('FR-STO-05 shared audio files are deduplicated across activities (ADR-036)', () async {
-      final conf = await t.conference();
-      final act1 = await t.activity(conf.id, title: 'Part 1');
-      final act2 = await t.activity(conf.id, title: 'Part 2');
-
-      // Both activities share the exact same audio file (as resulting from split, ADR-036)
-      const sharedPath = 'conferences/c1/activities/a1/audio/segment-001.m4a';
-      final sharedFile = MediaPaths.resolve(tempMediaDir, sharedPath);
-      await sharedFile.parent.create(recursive: true);
-      await sharedFile.writeAsBytes(List.filled(15000, 1));
-
-      await createTestSegment(act1.id, filePath: sharedPath, bytes: 15000);
-      await createTestSegment(act2.id, filePath: sharedPath, bytes: 15000);
-
-      final breakdown = await service.analyzeStorage();
-      final confBreakdown = breakdown.conferences.single;
-
-      // Each activity reports using the 15,000 bytes
-      expect(confBreakdown.activities[0].sizes.audioBytes, 15000);
-      expect(confBreakdown.activities[1].sizes.audioBytes, 15000);
-
-      // BUT conference total and app total count the file ONLY ONCE
-      expect(confBreakdown.sizes.audioBytes, 15000);
-      expect(breakdown.appTotalBytes, 15000);
-    });
-
-    test('FR-STO-05 export status ranks completed jobs correctly', () async {
-      final conf = await t.conference();
-      await t.activity(conf.id);
-
-      // Initially not exported
-      var breakdown = await service.analyzeStorage();
+      final b = await service.analyse();
+      final c = b.conferences.single;
+      final a = c.activities.single;
+      expect(a.sizes.audioBytes, 10000);
+      expect(a.sizes.photoBytes, 5000);
+      expect(a.sizes.thumbnailBytes, 800);
+      expect(a.sizes.waveformBytes, 1200);
+      expect(a.sizes.keptOriginalBytes, 20000);
+      expect(a.keptOriginalsCount, 1);
+      expect(c.sizes.recoveryBytes, 700);
+      expect(c.sizes.totalBytes, 10000 + 5000 + 800 + 1200 + 20000 + 700);
+      expect(b.temporaryExportBytes, 300);
+      expect(b.orphanWaveformBytes, 0);
+      expect(b.totalBytes, c.sizes.totalBytes + 300);
+      expect(b.keptOriginals.single.activityTitle, 'Opening keynote');
       expect(
-        breakdown.conferences.single.exportStatus,
-        ExportStatus.notExported,
+        b.keptOriginals.single.conferenceName,
+        'Samlytics Conference 2026',
       );
-
-      // 1. Local export completed without checksum
-      final job1 = await t.exports.create(
-        conferenceId: conf.id,
-        scope: const {'kind': 'conference'},
-        format: ExportFormat.zip,
-        audioMode: ExportAudioMode.original,
-        destination: ExportDestination.local,
-      );
-      await t.exports.complete(job1.id, VerificationLevel.none);
-
-      breakdown = await service.analyzeStorage();
-      expect(
-        breakdown.conferences.single.exportStatus,
-        ExportStatus.exportedLocally,
-      );
-
-      // 2. Cloud upload completed
-      final job2 = await t.exports.create(
-        conferenceId: conf.id,
-        scope: const {'kind': 'conference'},
-        format: ExportFormat.folder,
-        audioMode: ExportAudioMode.original,
-        destination: ExportDestination.googleDrive,
-      );
-      await t.exports.complete(job2.id, VerificationLevel.size);
-
-      breakdown = await service.analyzeStorage();
-      expect(breakdown.conferences.single.exportStatus, ExportStatus.uploaded);
-
-      // 3. Verified export completed with checksum
-      final job3 = await t.exports.create(
-        conferenceId: conf.id,
-        scope: const {'kind': 'conference'},
-        format: ExportFormat.folder,
-        audioMode: ExportAudioMode.original,
-        destination: ExportDestination.local,
-      );
-      await t.exports.complete(job3.id, VerificationLevel.checksum);
-
-      breakdown = await service.analyzeStorage();
-      expect(breakdown.conferences.single.exportStatus, ExportStatus.verified);
-      expect(breakdown.conferences.single.exportStatus.isVerified, isTrue);
     });
 
-    test('FR-STO-05 activity-scoped export jobs assign status to relevant activities only', () async {
+    test('FR-STO-05 ADR-036 a file shared by two segment rows is counted '
+        'once', () async {
       final conf = await t.conference();
-      final act1 = await t.activity(conf.id, title: 'Act 1');
-      final act2 = await t.activity(conf.id, title: 'Act 2');
+      final part1 = await t.activity(conf.id, title: 'Panel');
+      final part2 = await t.activity(conf.id, title: 'Panel (Part 2)');
+      final shared = MediaPaths.segment(conf.id, part1.id, 1);
+      await segment(part1.id, shared, 15000);
+      await segment(part2.id, shared, 15000);
 
-      final job = await t.exports.create(
-        conferenceId: conf.id,
+      final b = await service.analyse();
+      final c = b.conferences.single;
+      expect(c.activities.map((a) => a.sizes.audioBytes), [15000, 15000]);
+      expect(c.sizes.audioBytes, 15000);
+      expect(b.sizes.audioBytes, 15000);
+      expect(b.totalBytes, 15000);
+    });
+
+    test('FR-STO-05 export status comes from export_jobs: not exported, '
+        'exported locally, verified', () async {
+      final conf = await t.conference();
+      final a1 = await t.activity(conf.id, title: 'Talk one');
+      final a2 = await t.activity(conf.id, title: 'Talk two');
+
+      var c = (await service.analyse()).conferences.single;
+      expect(c.exportStatus, ExportStatus.notExported);
+
+      // A ZIP is not checked file by file (ADR-040).
+      await exported(conf.id, level: VerificationLevel.none);
+      c = (await service.analyse()).conferences.single;
+      expect(c.exportStatus, ExportStatus.exportedLocally);
+
+      await exported(
+        conf.id,
         scope: {
+          ...fullScope(),
           'kind': 'activities',
-          'activity_ids': [act1.id],
+          'activity_ids': [a1.id],
         },
-        format: ExportFormat.folder,
-        audioMode: ExportAudioMode.original,
       );
-      await t.exports.complete(job.id, VerificationLevel.checksum);
+      c = (await service.analyse()).conferences.single;
+      final byId = {for (final a in c.activities) a.activityId: a};
+      expect(byId[a1.id]!.exportStatus, ExportStatus.verified);
+      expect(byId[a2.id]!.exportStatus, ExportStatus.exportedLocally);
+      // The conference shows the least-exported activity.
+      expect(c.exportStatus, ExportStatus.exportedLocally);
 
-      final breakdown = await service.analyzeStorage();
-      final confBreakdown = breakdown.conferences.single;
-
-      final act1Breakdown = confBreakdown.activities.singleWhere(
-        (a) => a.activityId == act1.id,
-      );
-      final act2Breakdown = confBreakdown.activities.singleWhere(
-        (a) => a.activityId == act2.id,
-      );
-
-      expect(act1Breakdown.exportStatus, ExportStatus.verified);
-      expect(act2Breakdown.exportStatus, ExportStatus.notExported);
+      await exported(conf.id);
+      c = (await service.analyse()).conferences.single;
+      expect(c.exportStatus, ExportStatus.verified);
     });
   });
 
-  group('StorageManagerService safe cleanup (FR-STO-06)', () {
-    test('FR-STO-06 FR-REC-08 cleanup preserves orphaned partial recordings, originals and photos', () async {
+  group('FR-STO-06 Clear safe temporary files', () {
+    test('FR-STO-06 FR-REC-08 ADR-038 partial recordings are never cleared; '
+        'only export staging and orphaned waveforms go', () async {
       final conf = await t.conference();
       final act = await t.activity(conf.id);
-
-      // Create permanent recording
-      final segPath = MediaPaths.segment(conf.id, act.id, 1);
-      final segFile = MediaPaths.resolve(tempMediaDir, segPath);
-      await segFile.parent.create(recursive: true);
-      await segFile.writeAsBytes(List.filled(1000, 1));
-      await createTestSegment(act.id, filePath: segPath, bytes: 1000);
-
-      // Create photo
-      final photoPath = MediaPaths.photo(conf.id, act.id, 'p1');
-      final photoFile = MediaPaths.resolve(tempMediaDir, photoPath);
-      await photoFile.parent.create(recursive: true);
-      await photoFile.writeAsBytes(List.filled(2000, 2));
-
-      // Create temporary safe files:
-      // 1. Waveform summary
-      final wavePath = MediaPaths.waveform(conf.id, act.id, 'seg1');
-      final waveFile = MediaPaths.resolve(tempMediaDir, wavePath);
-      await waveFile.parent.create(recursive: true);
-      await waveFile.writeAsBytes(List.filled(300, 3));
-
-      // 2. Orphaned partial file
-      final partialFile = MediaPaths.resolve(
-        tempMediaDir,
-        MediaPaths.partial(MediaPaths.segment(conf.id, act.id, 2)),
+      final segRel = MediaPaths.segment(conf.id, act.id, 1);
+      final segId = await segment(act.id, segRel, 1000);
+      await photo(conf.id, act.id, 'photo1');
+      final liveWave = write(MediaPaths.waveform(conf.id, act.id, segId), 300);
+      final orphanWave = write(
+        MediaPaths.waveform(conf.id, act.id, 'gone-segment'),
+        200,
       );
-      await partialFile.parent.create(recursive: true);
-      await partialFile.writeAsBytes(List.filled(500, 4));
+      final partial = write(
+        MediaPaths.partial(MediaPaths.segment(conf.id, act.id, 2)),
+        500,
+      );
+      final unlinked = write(MediaPaths.segment(conf.id, act.id, 3), 600);
+      final original = write(
+        p.posix.join(MediaPaths.originalsFolder(conf.id, act.id), 'a.m4a'),
+        900,
+      );
+      final staging = write('exports-temp/job-1/x.m4a', 400, base: temp);
 
-      // 3. Export scratch file
-      final scratchDir = Directory(p.join(tempMediaDir.path, 'exports'));
-      await scratchDir.create(recursive: true);
-      final scratchFile = File(p.join(scratchDir.path, 'temp_archive.zip'));
-      await scratchFile.writeAsBytes(List.filled(400, 5));
-
+      expect((await service.analyse()).safeTemporaryBytes, 600);
       final res = await service.clearSafeTemporaryFiles();
       expect(res.filesDeleted, 2);
-      expect(res.bytesFreed, 300 + 400);
+      expect(res.bytesFreed, 600);
 
-      // Permanent files must stay intact
-      expect(segFile.existsSync(), isTrue);
-      expect(photoFile.existsSync(), isTrue);
-
-      // Safe temporary files must be gone
-      expect(waveFile.existsSync(), isFalse);
-      expect(partialFile.readAsBytesSync(), List.filled(500, 4));
-      expect(scratchFile.existsSync(), isFalse);
+      expect(staging.existsSync(), isFalse);
+      expect(orphanWave.existsSync(), isFalse);
+      expect(partial.readAsBytesSync(), List.filled(500, 1));
+      expect(unlinked.existsSync(), isTrue);
+      expect(liveWave.existsSync(), isTrue);
+      expect(original.existsSync(), isTrue);
+      expect(MediaPaths.resolve(root, segRel).existsSync(), isTrue);
+      expect(
+        MediaPaths.resolve(
+          root,
+          MediaPaths.photo(conf.id, act.id, 'photo1'),
+        ).existsSync(),
+        isTrue,
+      );
     });
 
-    test('FR-STO-06 removeKeptOriginals removes unlinked files in audio/originals/ and preserves files named by segments', () async {
+    test('FR-STO-06 export staging is left alone while an export runs, and '
+        'orphaned waveforms while anything records', () async {
       final conf = await t.conference();
       final act = await t.activity(conf.id);
-
-      final origDir = Directory(
-        p.join(tempMediaDir.path, MediaPaths.originalsFolder(conf.id, act.id)),
+      await segment(
+        act.id,
+        MediaPaths.segment(conf.id, act.id, 1),
+        100,
+        finalise: false,
       );
-      await origDir.create(recursive: true);
+      final orphan = write(MediaPaths.waveform(conf.id, act.id, 'old'), 50);
+      final staging = write('exports-temp/job-1/x.m4a', 400, base: temp);
+      exportRunning = true;
 
-      // File 1: true kept original, no segment row names it
-      final unlinkedOriginal = File(
-        p.join(origDir.path, 'trimmed_original.m4a'),
-      );
-      await unlinkedOriginal.writeAsBytes(List.filled(7000, 1));
-
-      // File 2: named by a segment row (edge case: segment still points to it)
-      final namedPath = p.posix.join(
-        MediaPaths.activityFolder(conf.id, act.id),
-        'audio',
-        'originals',
-        'named_original.m4a',
-      );
-      final namedFile = MediaPaths.resolve(tempMediaDir, namedPath);
-      await namedFile.parent.create(recursive: true);
-      await namedFile.writeAsBytes(List.filled(3000, 2));
-
-      await createTestSegment(act.id, filePath: namedPath, bytes: 3000);
-
-      final res = await service.removeKeptOriginals();
-      expect(res.filesDeleted, 1);
-      expect(res.bytesFreed, 7000);
-
-      expect(unlinkedOriginal.existsSync(), isFalse);
-      expect(namedFile.existsSync(), isTrue);
+      final res = await service.clearSafeTemporaryFiles();
+      expect(res.filesDeleted, 0);
+      expect(staging.existsSync(), isTrue);
+      expect(orphan.existsSync(), isTrue);
     });
   });
 
-  group('StorageManagerService Delete local copies (FR-STO-06, FR-STO-07)', () {
-    test('FR-STO-06 preview and delete throw StorageManagerException when export is not verified', () async {
+  group('FR-STO-06 ADR-037 kept originals', () {
+    test('FR-STO-06 kept originals are listed and removable; a file a row '
+        'names is never removed', () async {
       final conf = await t.conference();
-      await t.activity(conf.id);
+      final act = await t.activity(conf.id, title: 'Workshop');
+      final folder = MediaPaths.originalsFolder(conf.id, act.id);
+      final kept = write(p.posix.join(folder, 'segment-001.m4a'), 7000);
+      final namedRel = p.posix.join(folder, 'segment-002.m4a');
+      await segment(act.id, namedRel, 3000);
 
-      expect(
-        () => service.previewDeleteLocalCopies(
-          conferenceId: conf.id,
-          keepLightweightIndex: true,
+      final b = await service.analyse();
+      expect(b.keptOriginals.map((o) => o.relativePath), [
+        p.posix.join(folder, 'segment-001.m4a'),
+      ]);
+      expect(b.keptOriginalBytes, 7000);
+
+      // Even when asked to, a named file stays.
+      final res = await service.removeKeptOriginals([
+        ...b.keptOriginals,
+        KeptOriginalFile(
+          relativePath: namedRel,
+          bytes: 3000,
+          conferenceName: conf.name,
+          activityTitle: act.title,
         ),
+      ]);
+      expect(res.filesDeleted, 1);
+      expect(res.bytesFreed, 7000);
+      expect(kept.existsSync(), isFalse);
+      expect(MediaPaths.resolve(root, namedRel).existsSync(), isTrue);
+      expect((await service.analyse()).keptOriginals, isEmpty);
+    });
+  });
+
+  group('FR-STO-06 FR-STO-07 Delete local copies', () {
+    test('FR-STO-06 delete local copies is refused without a verified '
+        'export', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id);
+      final rel = MediaPaths.segment(conf.id, act.id, 1);
+      await segment(act.id, rel, 1000);
+      // Exported as a ZIP: completed but not verified.
+      await exported(conf.id, level: VerificationLevel.none);
+
+      final c = (await service.analyse()).conferences.single;
+      expect(c.canDeleteLocalCopies, isFalse);
+      expect(c.activities.single.canDeleteLocalCopies, isFalse);
+      await expectLater(
+        service.previewDeleteLocalCopies(conferenceId: conf.id),
         throwsA(isA<StorageManagerException>()),
       );
-
-      expect(
-        () => service.deleteLocalCopies(
-          conferenceId: conf.id,
-          keepLightweightIndex: true,
-        ),
+      await expectLater(
+        service.deleteLocalCopies(conferenceId: conf.id, activityId: act.id),
         throwsA(isA<StorageManagerException>()),
       );
+      expect(MediaPaths.resolve(root, rel).existsSync(), isTrue);
+      expect(await t.activities.get(act.id), isNotNull);
     });
 
-    test('FR-STO-06 previewDeleteLocalCopies calculates preview numbers and preserves shared files (ADR-036)', () async {
+    test('FR-STO-06 a verified export that does not hold everything does '
+        'not allow deleting', () async {
       final conf = await t.conference();
-      final act1 = await t.activity(conf.id, title: 'Session A');
-      final act2 = await t.activity(conf.id, title: 'Session B');
-
-      // Shared audio file between act1 and act2
-      const sharedPath = 'conferences/c1/activities/a1/audio/shared.m4a';
-      final sharedFile = MediaPaths.resolve(tempMediaDir, sharedPath);
-      await sharedFile.parent.create(recursive: true);
-      await sharedFile.writeAsBytes(List.filled(8000, 1));
-
-      await createTestSegment(act1.id, filePath: sharedPath, bytes: 8000);
-      await createTestSegment(act2.id, filePath: sharedPath, bytes: 8000);
-
-      // Distinct audio file for act1
-      final unsharedPath = MediaPaths.segment(conf.id, act1.id, 2);
-      final unsharedFile = MediaPaths.resolve(tempMediaDir, unsharedPath);
-      await unsharedFile.parent.create(recursive: true);
-      await unsharedFile.writeAsBytes(List.filled(4000, 2));
-
-      await createTestSegment(act1.id, filePath: unsharedPath, bytes: 4000);
-
-      // Verified export for conference
-      final job = await t.exports.create(
-        conferenceId: conf.id,
-        scope: const {'kind': 'conference'},
-        format: ExportFormat.folder,
-        audioMode: ExportAudioMode.original,
-      );
-      await t.exports.complete(job.id, VerificationLevel.checksum);
-
-      // Preview delete for act1 only
-      final preview = await service.previewDeleteLocalCopies(
-        conferenceId: conf.id,
-        activityId: act1.id,
-        keepLightweightIndex: true,
-      );
-
-      expect(
-        preview.audioFilesCount,
-        1,
-      ); // Only the unshared file is eligible to delete
-      expect(preview.audioBytes, 4000);
-      expect(preview.sharedFilesPreservedCount, 1); // Shared file is preserved!
-      expect(preview.totalBytesToFree, 4000);
-    });
-
-    test('FR-STO-06 & FR-STO-07 deleteLocalCopies with keepLightweightIndex=true deletes audio and full photos but keeps thumbnails, bookmarks, notes, and activity rows', () async {
-      final conf = await t.conference();
-      final act = await t.activity(conf.id, title: 'Keynote');
-
-      // Add audio
-      final segPath = MediaPaths.segment(conf.id, act.id, 1);
-      final segFile = MediaPaths.resolve(tempMediaDir, segPath);
-      await segFile.parent.create(recursive: true);
-      await segFile.writeAsBytes(List.filled(6000, 1));
-      await createTestSegment(act.id, filePath: segPath, bytes: 6000);
-
-      // Add photo + thumbnail
-      final photoPath = MediaPaths.photo(conf.id, act.id, 'p1');
-      final thumbPath = MediaPaths.thumbnail(conf.id, act.id, 'p1');
-      final pFile = MediaPaths.resolve(tempMediaDir, photoPath);
-      final tFile = MediaPaths.resolve(tempMediaDir, thumbPath);
-      await pFile.parent.create(recursive: true);
-      await pFile.writeAsBytes(List.filled(3000, 2));
-      await tFile.parent.create(recursive: true);
-      await tFile.writeAsBytes(List.filled(500, 3));
-
-      await t.media.addPhoto(
-        id: 'p1',
-        activityId: act.id,
-        filePath: photoPath,
-        thumbnailPath: thumbPath,
-        takenUtc: DateTime.utc(2026, 11, 4, 10),
-        source: PhotoSource.inApp,
-        bytes: 3000,
-      );
-
-      // Add bookmark
+      final act = await t.activity(conf.id, title: 'Reflection');
+      await segment(act.id, MediaPaths.segment(conf.id, act.id, 1), 1000);
       await t.media.addBookmark(
         activityId: act.id,
         source: BookmarkSource.ui,
-        label: 'Important slide',
+        label: privateThoughtLabel,
+        note: 'Follow up with Samlytics Data Services',
       );
 
-      // Verified export
-      final job = await t.exports.create(
-        conferenceId: conf.id,
-        scope: const {'kind': 'conference'},
-        format: ExportFormat.folder,
-        audioMode: ExportAudioMode.original,
-      );
-      await t.exports.complete(job.id, VerificationLevel.checksum);
+      Future<String?> reason() async => (await service.analyse())
+          .conferences
+          .single
+          .activities
+          .single
+          .deleteBlockedReason;
 
-      // Execute delete local copies with lightweight index preserved
-      final res = await service.deleteLocalCopies(
-        conferenceId: conf.id,
-        activityId: act.id,
-        keepLightweightIndex: true,
-      );
+      t.clock.advance(const Duration(seconds: 1));
+      await exported(conf.id, scope: fullScope(audioMode: 'trimmed'));
+      expect(await reason(), contains('trimmed audio'));
+      t.clock.advance(const Duration(seconds: 1));
+      await exported(conf.id, scope: fullScope(content: 'audio_only'));
+      expect(await reason(), contains('Everything'));
+      t.clock.advance(const Duration(seconds: 1));
+      await exported(conf.id, scope: fullScope());
+      expect(await reason(), contains('private items'));
 
-      expect(res.keptIndex, isTrue);
-      expect(res.bytesFreed, 6000 + 3000);
+      t.clock.advance(const Duration(seconds: 1));
+      await exported(conf.id, scope: fullScope(includePrivate: true));
+      expect(await reason(), isNull);
 
-      // Files on disk:
-      expect(segFile.existsSync(), isFalse); // Audio deleted
-      expect(pFile.existsSync(), isFalse); // Full photo deleted
-      expect(tFile.existsSync(), isTrue); // Thumbnail KEPT!
-
-      // Database rows:
-      final remainingAct = await t.activities.get(act.id);
-      expect(remainingAct, isNotNull); // Activity record KEPT
-      final remainingBookmarks = await t.media.bookmarksFor(act.id);
-      expect(remainingBookmarks.length, 1); // Bookmarks KEPT
-      final remainingPhotos = await t.media.photosFor(act.id);
-      expect(remainingPhotos.length, 1); // Photo row with thumbnail KEPT
-      final remainingSegs = await t.media.segmentsFor(act.id);
-      expect(remainingSegs, isEmpty); // Audio segment row removed
+      // A change after the export needs a new export.
+      t.clock.advance(const Duration(minutes: 5));
+      await t.media.addBookmark(activityId: act.id, source: BookmarkSource.ui);
+      expect(await reason(), contains('changed after'));
     });
 
-    test('FR-STO-06 & FR-STO-07 deleteLocalCopies with keepLightweightIndex=false deletes all media files and database rows ("delete means delete")', () async {
+    test('FR-STO-06 delete local copies is refused while recording', () async {
       final conf = await t.conference();
-      final act = await t.activity(conf.id, title: 'Panel');
+      final act = await t.activity(conf.id);
+      await segment(
+        act.id,
+        MediaPaths.segment(conf.id, act.id, 1),
+        100,
+        finalise: false,
+      );
+      await exported(conf.id);
+      expect(
+        (await service.analyse()).conferences.single.deleteBlockedReason,
+        contains('still recording'),
+      );
+    });
 
-      final segPath = MediaPaths.segment(conf.id, act.id, 1);
-      final segFile = MediaPaths.resolve(tempMediaDir, segPath);
-      await segFile.parent.create(recursive: true);
-      await segFile.writeAsBytes(List.filled(4000, 1));
-      await createTestSegment(act.id, filePath: segPath, bytes: 4000);
+    test(
+      'FR-STO-06 ADR-036 refuses to delete a file another row names',
+      () async {
+        final conf = await t.conference();
+        final part1 = await t.activity(conf.id, title: 'Panel');
+        final part2 = await t.activity(conf.id, title: 'Panel (Part 2)');
+        final shared = MediaPaths.segment(conf.id, part1.id, 1);
+        final own = MediaPaths.segment(conf.id, part1.id, 2);
+        await segment(part1.id, shared, 8000);
+        await segment(part1.id, own, 4000);
+        await segment(part2.id, shared, 8000);
+        await exported(conf.id);
 
-      final photoPath = MediaPaths.photo(conf.id, act.id, 'p1');
-      final thumbPath = MediaPaths.thumbnail(conf.id, act.id, 'p1');
-      final pFile = MediaPaths.resolve(tempMediaDir, photoPath);
-      final tFile = MediaPaths.resolve(tempMediaDir, thumbPath);
-      await pFile.parent.create(recursive: true);
-      await pFile.writeAsBytes(List.filled(2000, 2));
-      await tFile.parent.create(recursive: true);
-      await tFile.writeAsBytes(List.filled(400, 3));
+        final preview = await service.previewDeleteLocalCopies(
+          conferenceId: conf.id,
+          activityId: part1.id,
+        );
+        expect(preview.audioFiles, 1);
+        expect(preview.audioBytes, 4000);
+        expect(preview.sharedFilesKept, 1);
 
-      await t.media.addPhoto(
-        id: 'p1',
+        final res = await service.deleteLocalCopies(
+          conferenceId: conf.id,
+          activityId: part1.id,
+        );
+        expect(res.filesDeleted, 1);
+        expect(res.activitiesDeleted, 1);
+        expect(MediaPaths.resolve(root, own).existsSync(), isFalse);
+        expect(MediaPaths.resolve(root, shared).existsSync(), isTrue);
+        expect(await t.activities.get(part1.id), isNull);
+        expect((await t.media.segmentsFor(part2.id)).single.filePath, shared);
+      },
+    );
+
+    test('FR-STO-06 FR-STO-07 deleting a conference removes its files and '
+        'rows ("delete means delete") but keeps partial recordings', () async {
+      final conf = await t.conference();
+      final act = await t.activity(conf.id, title: 'Opening keynote');
+      final segRel = MediaPaths.segment(conf.id, act.id, 1);
+      final segId = await segment(act.id, segRel, 6000);
+      await photo(conf.id, act.id, 'photo1');
+      await t.media.addBookmark(
         activityId: act.id,
-        filePath: photoPath,
-        thumbnailPath: thumbPath,
-        takenUtc: DateTime.utc(2026, 11, 4, 11),
-        source: PhotoSource.inApp,
-        bytes: 2000,
+        source: BookmarkSource.ui,
+        label: 'Key slide',
       );
+      final wave = write(MediaPaths.waveform(conf.id, act.id, segId), 100);
+      final original = write(
+        p.posix.join(MediaPaths.originalsFolder(conf.id, act.id), 'old.m4a'),
+        900,
+      );
+      final partial = write(
+        MediaPaths.partial(MediaPaths.segment(conf.id, act.id, 2)),
+        500,
+      );
+      await exported(conf.id);
 
-      // Verified export
-      final job = await t.exports.create(
+      final preview = await service.previewDeleteLocalCopies(
         conferenceId: conf.id,
-        scope: const {'kind': 'conference'},
-        format: ExportFormat.folder,
-        audioMode: ExportAudioMode.original,
       );
-      await t.exports.complete(job.id, VerificationLevel.checksum);
+      expect(preview.audioFiles, 1);
+      expect(preview.photoFiles, 2);
+      expect(preview.otherFiles, 2);
+      expect(preview.bookmarkCount, 1);
+      expect(preview.recoveryFilesKept, 1);
+      expect(preview.totalBytes, 6000 + 5000 + 800 + 100 + 900);
 
-      // Execute "delete means delete"
-      final res = await service.deleteLocalCopies(
-        conferenceId: conf.id,
-        activityId: act.id,
-        keepLightweightIndex: false,
-      );
+      final res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.filesDeleted, 5);
+      expect(res.bytesFreed, preview.totalBytes);
+      expect(res.failedFiles, 0);
 
-      expect(res.keptIndex, isFalse);
-      expect(segFile.existsSync(), isFalse);
-      expect(pFile.existsSync(), isFalse);
-      expect(tFile.existsSync(), isFalse); // Thumbnail deleted
-
-      final actAfter = await t.activities.get(act.id);
-      expect(actAfter, isNull); // Activity deleted
+      expect(MediaPaths.resolve(root, segRel).existsSync(), isFalse);
+      expect(wave.existsSync(), isFalse);
+      expect(original.existsSync(), isFalse);
+      expect(partial.existsSync(), isTrue);
+      expect(await t.activities.get(act.id), isNull);
+      expect(await t.conferences.get(conf.id), isNull);
+      expect(await t.media.bookmarksFor(act.id), isEmpty);
     });
   });
 }

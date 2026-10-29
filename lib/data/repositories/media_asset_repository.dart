@@ -549,37 +549,43 @@ class MediaAssetRepository {
   Future<void> deleteBookmark(String bookmarkId) =>
       (_db.delete(_db.bookmarks)..where((b) => b.id.equals(bookmarkId))).go();
 
-  /// Every stored segment path outside [excludedActivityIds] (ADR-036, FR-STO-06) [P1-20].
-  /// Used by storage cleanup so shared audio files are never deleted while
-  /// another activity still references them.
-  Future<Set<String>> segmentPathsExcludingActivities(
-    Iterable<String> excludedActivityIds,
-  ) async {
-    final path = _db.recordingSegments.filePath;
-    final query = _db.selectOnly(_db.recordingSegments)..addColumns([path]);
-    if (excludedActivityIds.isNotEmpty) {
-      query.where(
-        _db.recordingSegments.activityId.isNotIn(excludedActivityIds),
-      );
+  /// Every file a segment or photo row names (audio, photo and thumbnail),
+  /// leaving out the rows of [excludingActivities] (ADR-036, FR-STO-06)
+  /// [P1-20]. A file in this set must not be deleted.
+  Future<Set<String>> namedFilePaths({
+    Iterable<String> excludingActivities = const [],
+  }) async {
+    final excluded = excludingActivities.toList();
+    final segPath = _db.recordingSegments.filePath;
+    final segQuery = _db.selectOnly(_db.recordingSegments)
+      ..addColumns([segPath]);
+    final photoPath = _db.photos.filePath;
+    final thumbPath = _db.photos.thumbnailPath;
+    final photoQuery = _db.selectOnly(_db.photos)
+      ..addColumns([photoPath, thumbPath]);
+    if (excluded.isNotEmpty) {
+      segQuery.where(_db.recordingSegments.activityId.isNotIn(excluded));
+      photoQuery.where(_db.photos.activityId.isNotIn(excluded));
     }
-    final rows = await query.map((r) => r.read(path)!).get();
-    return rows.toSet();
+    final named = <String>{
+      ...await segQuery.map((r) => r.read(segPath)!).get(),
+    };
+    for (final row in await photoQuery.get()) {
+      named.add(row.read(photoPath)!);
+      final thumb = row.read(thumbPath);
+      if (thumb != null) named.add(thumb);
+    }
+    return named;
   }
 
-  /// Deletes segment rows by ID [FR-STO-06, P1-20]. Files on disk are handled
-  /// separately by the caller.
-  Future<void> deleteSegments(Iterable<String> ids) async {
-    if (ids.isEmpty) return;
-    await (_db.delete(
+  /// Every segment id, to find waveform summaries whose segment is gone
+  /// (ADR-034, FR-STO-06) [P1-20].
+  Future<Set<String>> segmentIds() async {
+    final id = _db.recordingSegments.id;
+    final rows = await (_db.selectOnly(
       _db.recordingSegments,
-    )..where((s) => s.id.isIn(ids))).go();
-  }
-
-  /// Deletes photo rows by ID [FR-STO-06, P1-20]. Files on disk are handled
-  /// separately by the caller.
-  Future<void> deletePhotos(Iterable<String> ids) async {
-    if (ids.isEmpty) return;
-    await (_db.delete(_db.photos)..where((p) => p.id.isIn(ids))).go();
+    )..addColumns([id])).map((r) => r.read(id)!).get();
+    return rows.toSet();
   }
 }
 

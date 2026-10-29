@@ -8,13 +8,24 @@ import '../../data/repositories/conference_repository.dart';
 import '../../data/repositories/export_job_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
 import '../../platform/storage/free_space_probe.dart';
+import '../models/activity.dart';
 import '../models/enums.dart';
 import '../models/export_job.dart';
+import '../models/media.dart';
 import '../models/storage_breakdown.dart';
+import 'export_documents.dart' show isPrivateThought;
+import 'export_service.dart' show ExportContent;
+import 'permanent_trim_service.dart' show KeptOriginal;
 
-/// Service that analyzes storage breakdown, provides preview and execution
-/// of local media deletion gated by verified export, and cleans safe temporary files
-/// (FR-STO-05, FR-STO-06, FR-STO-07, ADR-036, ADR-037) [P1-20].
+/// Storage Manager (FR-STO-05, FR-STO-06, ADR-038, ADR-047) [P1-20].
+///
+/// Sizes come from the files on disk, attributed through the database
+/// rows that name them; a file two rows share (ADR-036) is counted once.
+/// Cleanup only removes what is safe: leftover export staging and waveform
+/// summaries whose segment is gone. Partial and unlinked recordings belong
+/// to crash recovery and are never touched (ADR-038). "Delete local
+/// copies" needs a verified export that covers everything it removes, and
+/// never deletes a file another row still names.
 class StorageManagerService {
   StorageManagerService({
     required this.conferences,
@@ -22,7 +33,10 @@ class StorageManagerService {
     required this.media,
     required this.exports,
     required this.mediaRoot,
+    required this.tempRoot,
     required this.freeSpaceProbe,
+    required this.removeOriginals,
+    this.exportRunning = _never,
   });
 
   final ConferenceRepository conferences;
@@ -30,627 +44,526 @@ class StorageManagerService {
   final MediaAssetRepository media;
   final ExportJobRepository exports;
   final Future<Directory> Function() mediaRoot;
+
+  /// The app cache folder; exports stage in `exports-temp/` there (ADR-040).
+  final Future<Directory> Function() tempRoot;
   final FreeSpaceProbe freeSpaceProbe;
 
-  /// Analyzes storage breakdown per conference and per activity across all
-  /// storage kinds, calculating export statuses and deduplicating shared files
-  /// (FR-STO-05, ADR-036, ADR-037).
-  Future<AppStorageBreakdown> analyzeStorage() async {
+  /// `PermanentTrimService.removeOriginals` (ADR-037), which refuses any
+  /// file a row names or outside an `audio/originals/` folder.
+  final Future<int> Function(List<KeptOriginal> originals) removeOriginals;
+
+  /// Whether an export is being written now; its staging is left alone.
+  final bool Function() exportRunning;
+
+  static bool _never() => false;
+
+  static const exportsTempFolder = 'exports-temp';
+
+  // ---------------------------------------------------------------------
+  // FR-STO-05: sizes and export status.
+
+  Future<AppStorageBreakdown> analyse() async {
     final root = await mediaRoot();
-    final space = await _safeQuerySpace(root.path);
+    final space = await _space(root.path);
+    final segmentPaths = await media.segmentPaths();
+    final segmentIds = await media.segmentIds();
+    final types = {for (final t in await activities.types()) t.id: t.label};
 
-    final allConfs = await conferences.getAll(includeArchived: true);
-    final allTypes = {for (final t in await activities.types()) t.id: t};
-    final confBreakdowns = <ConferenceStorageBreakdown>[];
+    final confs = <ConferenceStorageBreakdown>[];
+    final kept = <KeptOriginalFile>[];
+    var total = StorageKindSizes.zero;
+    var orphanWaveforms = 0;
 
-    // Global trackers to deduplicate shared audio files across the app (ADR-036).
-    final globalTrackedAudioPaths = <String>{};
-    var globalUniqueAudioBytes = 0;
-    var globalPhotoBytes = 0;
-    var globalThumbnailBytes = 0;
-    var globalTranscriptBytes = 0;
-    var globalTemporaryExportBytes = 0;
-    const globalModelBytes = 0;
-    var globalKeptOriginalBytes = 0;
-    var globalDerivedBytes = 0;
-    var globalKeptOriginalsCount = 0;
-
-    for (final conf in allConfs) {
+    for (final conf in await conferences.getAll(includeArchived: true)) {
       final acts = await activities.listForConference(conf.id);
-      final jobs = await exports.forConference(conf.id);
-      final completedJobs = jobs
-          .where((j) => j.state == ExportJobState.completed)
-          .toList();
+      final titles = {for (final a in acts) a.id: a.title};
+      final jobs = await _completedJobs(conf.id);
 
-      final confExportStatus = _determineConferenceExportStatus(completedJobs);
+      // Rows of the conference, to classify each file once.
+      final photoPaths = <String>{};
+      final thumbPaths = <String>{};
+      final details = <String, _ActivityRows>{};
+      for (final a in acts) {
+        final rows = await _rows(a);
+        details[a.id] = rows;
+        for (final ph in rows.photos) {
+          photoPaths.add(ph.filePath);
+          if (ph.thumbnailPath != null) thumbPaths.add(ph.thumbnailPath!);
+        }
+      }
+
+      // Every file in the conference folder, once.
+      final files = _listFiles(root, MediaPaths.conferenceFolder(conf.id));
+      var audio = 0, photos = 0, thumbs = 0, waves = 0, originals = 0;
+      var recovery = 0;
+      for (final MapEntry(key: rel, value: bytes) in files.entries) {
+        final parts = p.posix.split(rel);
+        final sub = parts.length > 5 ? parts[4] : '';
+        if (MediaPaths.isPartial(rel)) {
+          recovery += bytes;
+        } else if (segmentPaths.contains(rel)) {
+          audio += bytes;
+        } else if (photoPaths.contains(rel)) {
+          photos += bytes;
+        } else if (thumbPaths.contains(rel) || sub == 'thumbs') {
+          thumbs += bytes;
+        } else if (MediaPaths.isKeptOriginal(rel)) {
+          originals += bytes;
+          kept.add(
+            KeptOriginalFile(
+              relativePath: rel,
+              bytes: bytes,
+              conferenceName: conf.name,
+              activityTitle: titles[parts[3]],
+            ),
+          );
+        } else if (sub == 'waveforms') {
+          waves += bytes;
+          if (!segmentIds.contains(p.posix.basenameWithoutExtension(rel))) {
+            orphanWaveforms += bytes;
+          }
+        } else if (sub == 'photos') {
+          photos += bytes;
+        } else {
+          // Unlinked audio and anything not recognised: crash recovery's.
+          recovery += bytes;
+        }
+      }
 
       final actBreakdowns = <ActivityStorageBreakdown>[];
-      final confTrackedAudioPaths = <String>{};
-      var confUniqueAudioBytes = 0;
-      var confPhotoBytes = 0;
-      var confThumbnailBytes = 0;
-      var confTranscriptBytes = 0;
-      var confKeptOriginalBytes = 0;
-      var confDerivedBytes = 0;
-
-      for (final act in acts) {
-        final actExportStatus = _determineActivityExportStatus(
-          completedJobs,
-          act.id,
-        );
-
-        // Audio segments.
-        final segs = await media.segmentsFor(act.id);
-        var actAudioBytes = 0;
-        for (final s in segs) {
-          final sBytes = s.bytes ?? 0;
-          actAudioBytes += sBytes;
-          if (!confTrackedAudioPaths.contains(s.filePath)) {
-            confTrackedAudioPaths.add(s.filePath);
-            confUniqueAudioBytes += sBytes;
-          }
-          if (!globalTrackedAudioPaths.contains(s.filePath)) {
-            globalTrackedAudioPaths.add(s.filePath);
-            globalUniqueAudioBytes += sBytes;
-          }
-        }
-
-        // Photos.
-        final photos = await media.photosFor(act.id);
-        var actPhotoBytes = 0;
-        for (final pRow in photos) {
-          final b = pRow.bytes ?? 0;
-          actPhotoBytes += b;
-        }
-        confPhotoBytes += actPhotoBytes;
-        globalPhotoBytes += actPhotoBytes;
-
-        // On-disk files inside the activity folder.
-        final actDir = Directory(
-          p.join(root.path, MediaPaths.activityFolder(conf.id, act.id)),
-        );
-
-        final actThumbnailBytes = _directoryFileSize(
-          Directory(p.join(actDir.path, 'thumbs')),
-        );
-        confThumbnailBytes += actThumbnailBytes;
-        globalThumbnailBytes += actThumbnailBytes;
-
-        final originalsDir = Directory(
-          p.join(actDir.path, 'audio', 'originals'),
-        );
-        final originalsCount = _directoryFileCount(originalsDir);
-        final actKeptOriginalBytes = _directoryFileSize(originalsDir);
-        confKeptOriginalBytes += actKeptOriginalBytes;
-        globalKeptOriginalBytes += actKeptOriginalBytes;
-        globalKeptOriginalsCount += originalsCount;
-
-        final actDerivedBytes = _directoryFileSize(
-          Directory(p.join(actDir.path, 'waveforms')),
-        );
-        confDerivedBytes += actDerivedBytes;
-        globalDerivedBytes += actDerivedBytes;
-
-        // Transcripts (Phase 2 check).
-        var actTranscriptBytes = 0;
-        final transcriptFile = File(p.join(actDir.path, 'transcript.md'));
-        if (transcriptFile.existsSync()) {
-          actTranscriptBytes += transcriptFile.lengthSync();
-        }
-        actTranscriptBytes += _directoryFileSize(
-          Directory(p.join(actDir.path, 'transcripts')),
-        );
-        confTranscriptBytes += actTranscriptBytes;
-        globalTranscriptBytes += actTranscriptBytes;
-
-        final actType = allTypes[act.typeId];
-        final actSizes = StorageKindSizes(
-          audioBytes: actAudioBytes,
-          photoBytes: actPhotoBytes,
-          thumbnailBytes: actThumbnailBytes,
-          transcriptBytes: actTranscriptBytes,
-          temporaryExportBytes: 0,
-          modelBytes: 0,
-          keptOriginalBytes: actKeptOriginalBytes,
-          derivedBytes: actDerivedBytes,
-        );
-
+      for (final a in acts) {
+        final rows = details[a.id]!;
+        final folder = MediaPaths.activityFolder(conf.id, a.id);
+        int sizeOf(Iterable<String> paths) =>
+            paths.toSet().fold(0, (n, path) => n + (files[path] ?? 0));
+        int sizeUnder(String sub) => files.entries
+            .where((e) => p.posix.isWithin(p.posix.join(folder, sub), e.key))
+            .fold(0, (n, e) => n + e.value);
+        final keptHere = files.keys
+            .where(
+              (k) => MediaPaths.isKeptOriginal(k) && k.startsWith('$folder/'),
+            )
+            .length;
         actBreakdowns.add(
           ActivityStorageBreakdown(
-            activityId: act.id,
-            activityTitle: act.title,
-            activityTypeLabel: actType?.label ?? 'Activity',
-            exportStatus: actExportStatus,
-            sizes: actSizes,
-            segmentCount: segs.length,
-            photoCount: photos.length,
-            keptOriginalsCount: originalsCount,
+            activityId: a.id,
+            activityTitle: a.title,
+            activityTypeLabel: types[a.typeId] ?? 'Activity',
+            exportStatus: _status(jobs, a.id),
+            sizes: StorageKindSizes(
+              audioBytes: sizeOf(rows.segments.map((s) => s.filePath)),
+              photoBytes: sizeOf(rows.photos.map((ph) => ph.filePath)),
+              thumbnailBytes: sizeOf(
+                rows.photos.map((ph) => ph.thumbnailPath).nonNulls,
+              ),
+              waveformBytes: sizeUnder('waveforms'),
+              keptOriginalBytes: sizeUnder(p.posix.join('audio', 'originals')),
+            ),
+            segmentCount: rows.segments.length,
+            photoCount: rows.photos.length,
+            keptOriginalsCount: keptHere,
+            deleteBlockedReason: _blockedReason(a, rows, jobs),
           ),
         );
       }
 
-      // Check for conference-level temporary exports or files.
-      final confExportsDir = Directory(
-        p.join(root.path, MediaPaths.conferenceFolder(conf.id), 'exports'),
+      final sizes = StorageKindSizes(
+        audioBytes: audio,
+        photoBytes: photos,
+        thumbnailBytes: thumbs,
+        waveformBytes: waves,
+        keptOriginalBytes: originals,
+        recoveryBytes: recovery,
       );
-      final confTempExportBytes = _directoryFileSize(confExportsDir);
-      globalTemporaryExportBytes += confTempExportBytes;
-
-      final confSizes = StorageKindSizes(
-        audioBytes: confUniqueAudioBytes,
-        photoBytes: confPhotoBytes,
-        thumbnailBytes: confThumbnailBytes,
-        transcriptBytes: confTranscriptBytes,
-        temporaryExportBytes: confTempExportBytes,
-        modelBytes: 0,
-        keptOriginalBytes: confKeptOriginalBytes,
-        derivedBytes: confDerivedBytes,
-      );
-
-      confBreakdowns.add(
+      total += sizes;
+      confs.add(
         ConferenceStorageBreakdown(
           conferenceId: conf.id,
           conferenceName: conf.name,
           isArchived: conf.isArchived,
-          exportStatus: confExportStatus,
-          sizes: confSizes,
+          exportStatus: acts.isEmpty
+              ? _status(jobs, null)
+              : actBreakdowns
+                    .map((a) => a.exportStatus)
+                    .reduce((x, y) => x.index <= y.index ? x : y),
+          sizes: sizes,
           activities: actBreakdowns,
+          deleteBlockedReason: acts.isEmpty
+              ? 'This conference has no activities.'
+              : actBreakdowns
+                    .map((a) => a.deleteBlockedReason)
+                    .nonNulls
+                    .firstOrNull,
         ),
       );
     }
 
-    // App-level temporary export staging or partial files.
-    final rootExportsDir = Directory(p.join(root.path, 'exports'));
-    final rootExportBytes = _directoryFileSize(rootExportsDir);
-    globalTemporaryExportBytes += rootExportBytes;
-
-    final safeTemporaryBytes = globalDerivedBytes + globalTemporaryExportBytes;
-
-    final overallSizes = StorageKindSizes(
-      audioBytes: globalUniqueAudioBytes,
-      photoBytes: globalPhotoBytes,
-      thumbnailBytes: globalThumbnailBytes,
-      transcriptBytes: globalTranscriptBytes,
-      temporaryExportBytes: globalTemporaryExportBytes,
-      modelBytes: globalModelBytes,
-      keptOriginalBytes: globalKeptOriginalBytes,
-      derivedBytes: globalDerivedBytes,
-    );
+    final temp = await tempRoot();
+    final tempExports = _listFiles(
+      temp,
+      exportsTempFolder,
+    ).values.fold(0, (n, b) => n + b);
 
     return AppStorageBreakdown(
-      totalDeviceFreeBytes: space?.availableBytes,
-      totalDeviceCapacityBytes: space?.totalBytes,
-      appTotalBytes: overallSizes.totalBytes,
-      overallSizes: overallSizes,
-      conferences: confBreakdowns,
-      safeTemporaryBytes: safeTemporaryBytes,
-      keptOriginalsTotalBytes: globalKeptOriginalBytes,
-      keptOriginalsCount: globalKeptOriginalsCount,
+      freeBytes: space?.availableBytes,
+      capacityBytes: space?.totalBytes,
+      sizes: total,
+      conferences: confs,
+      temporaryExportBytes: tempExports,
+      orphanWaveformBytes: orphanWaveforms,
+      keptOriginals: kept,
     );
   }
 
-  /// Clears safe temporary files: waveform summaries
-  /// and temporary export staging files (FR-STO-06). If [includeKeptOriginals]
-  /// is true, also removes unlinked originals kept after permanent trimming (ADR-037).
-  Future<SafeCleanupResult> clearSafeTemporaryFiles({
-    bool includeKeptOriginals = false,
-  }) async {
-    final root = await mediaRoot();
-    var filesDeleted = 0;
-    var bytesFreed = 0;
+  // ---------------------------------------------------------------------
+  // FR-STO-06: Clear safe temporary files.
 
-    // 1. Waveform summaries across all activity waveforms/ directories.
-    if (root.existsSync()) {
+  /// Deletes leftover export staging (`exports-temp/`, unless an export is
+  /// running) and waveform summaries whose segment no longer exists
+  /// (skipped while anything records). Never touches recordings, partial
+  /// files, photos, thumbnails, kept originals or live waveforms
+  /// (FR-REC-08, ADR-038, ADR-047).
+  Future<SafeCleanupResult> clearSafeTemporaryFiles() async {
+    var deleted = 0;
+    var freed = 0;
+
+    void remove(File f) {
       try {
-        final entities = root.listSync(recursive: true, followLinks: false);
-        for (final entity in entities) {
-          if (entity is! File) continue;
-          final path = entity.path;
-
-          // Waveform summaries.
-          if (path.endsWith('.wave')) {
-            final len = entity.lengthSync();
-            try {
-              entity.deleteSync();
-              filesDeleted++;
-              bytesFreed += len;
-            } on FileSystemException {
-              // Ignore locked files.
-            }
-          }
-          // Partial recordings are recovery candidates, even without a row.
-          // Never treat them as disposable cache (FR-REC-08, NFR-07).
-        }
+        final bytes = f.lengthSync();
+        f.deleteSync();
+        deleted++;
+        freed += bytes;
       } on FileSystemException {
-        // Continue if listing encounters inaccessible paths.
+        // In use or gone; left for next time.
       }
     }
 
-    // 2. Staging / temporary export files.
-    final rootExportsDir = Directory(p.join(root.path, 'exports'));
-    if (rootExportsDir.existsSync()) {
-      try {
-        for (final f in rootExportsDir.listSync(recursive: true)) {
-          if (f is File) {
-            final len = f.lengthSync();
-            try {
-              f.deleteSync();
-              filesDeleted++;
-              bytesFreed += len;
-            } on FileSystemException {
-              // Ignore locked files.
-            }
-          }
-        }
-      } on FileSystemException {
-        // Ignored.
+    if (!exportRunning()) {
+      final temp = await tempRoot();
+      final staging = Directory(p.join(temp.path, exportsTempFolder));
+      for (final rel in _listFiles(temp, exportsTempFolder).keys) {
+        remove(File(p.joinAll([temp.path, ...p.posix.split(rel)])));
+      }
+      _removeEmptyFolders(staging, keepTop: true);
+    }
+
+    if ((await media.unfinalisedSegments()).isEmpty) {
+      final root = await mediaRoot();
+      final ids = await media.segmentIds();
+      for (final rel in _listFiles(root, 'conferences').keys) {
+        final parts = p.posix.split(rel);
+        if (parts.length != 6 || parts[4] != 'waveforms') continue;
+        if (p.posix.extension(rel) != '.wave') continue;
+        if (ids.contains(p.posix.basenameWithoutExtension(rel))) continue;
+        remove(MediaPaths.resolve(root, rel));
       }
     }
-
-    // 3. Kept originals if explicitly requested.
-    if (includeKeptOriginals) {
-      final originalsResult = await removeKeptOriginals();
-      filesDeleted += originalsResult.filesDeleted;
-      bytesFreed += originalsResult.bytesFreed;
-    }
-
-    return SafeCleanupResult(
-      filesDeleted: filesDeleted,
-      bytesFreed: bytesFreed,
-    );
+    return SafeCleanupResult(filesDeleted: deleted, bytesFreed: freed);
   }
 
-  /// Removes recordings kept in `audio/originals/` after permanent trimming
-  /// (ADR-037, FR-REV-06, FR-STO-06). Never touches any file named by a segment row.
-  Future<SafeCleanupResult> removeKeptOriginals({
-    String? conferenceId,
-    String? activityId,
-  }) async {
+  // ---------------------------------------------------------------------
+  // FR-STO-06, ADR-037: Remove kept originals after trimming.
+
+  /// Removes [originals] through `PermanentTrimService.removeOriginals`,
+  /// which skips any file a row names.
+  Future<SafeCleanupResult> removeKeptOriginals(
+    List<KeptOriginalFile> originals,
+  ) async {
     final root = await mediaRoot();
-    final namedPaths = await media.segmentPaths();
-    var filesDeleted = 0;
-    var bytesFreed = 0;
-
-    if (!root.existsSync()) {
-      return const SafeCleanupResult(filesDeleted: 0, bytesFreed: 0);
-    }
-
-    try {
-      final entities = root.listSync(recursive: true, followLinks: false);
-      for (final entity in entities) {
-        if (entity is! File) continue;
-        final relPath = p.posix.joinAll(
-          p.split(p.relative(entity.path, from: root.path)),
-        );
-
-        if (!MediaPaths.isKeptOriginal(relPath)) continue;
-        if (namedPaths.contains(relPath)) continue;
-
-        // Scope filter if requested.
-        final parts = p.posix.split(relPath);
-        if (conferenceId != null && parts[1] != conferenceId) continue;
-        if (activityId != null && parts[3] != activityId) continue;
-
-        final len = entity.lengthSync();
-        try {
-          entity.deleteSync();
-          filesDeleted++;
-          bytesFreed += len;
-        } on FileSystemException {
-          // Ignored.
-        }
-      }
-    } on FileSystemException {
-      // Ignored.
-    }
-
-    return SafeCleanupResult(
-      filesDeleted: filesDeleted,
-      bytesFreed: bytesFreed,
-    );
+    final removed = await removeOriginals([
+      for (final o in originals)
+        KeptOriginal(relativePath: o.relativePath, bytes: o.bytes),
+    ]);
+    final freed = originals
+        .where((o) => !MediaPaths.resolve(root, o.relativePath).existsSync())
+        .fold(0, (n, o) => n + o.bytes);
+    return SafeCleanupResult(filesDeleted: removed, bytesFreed: freed);
   }
 
-  /// Generates a preview for the "Delete local copies" action (FR-STO-06, FR-STO-07).
-  /// Throws [StorageManagerException] if the target does not have a verified export.
+  // ---------------------------------------------------------------------
+  // FR-STO-06, FR-STO-07: Delete local copies.
+
+  /// What "Delete local copies" of [activityId], or of the whole
+  /// conference when null, would remove. Throws [StorageManagerException]
+  /// when it is not allowed; nothing changes.
   Future<DeleteLocalPreview> previewDeleteLocalCopies({
     required String conferenceId,
     String? activityId,
-    required bool keepLightweightIndex,
-  }) async {
-    final conf = await conferences.get(conferenceId);
-    if (conf == null) {
-      throw const StorageManagerException('Conference not found.');
-    }
+  }) async => (await _plan(conferenceId, activityId)).preview;
 
-    final jobs = await exports.forConference(conferenceId);
-    final completedJobs = jobs
-        .where((j) => j.state == ExportJobState.completed)
-        .toList();
-
-    // Verify integrity gate (FR-STO-06, NFR-11).
-    if (activityId == null) {
-      final status = _determineConferenceExportStatus(completedJobs);
-      if (!status.isVerified) {
-        throw const StorageManagerException(
-          'Deleting local copies requires a verified export with checksum verification.',
-        );
-      }
-    } else {
-      final status = _determineActivityExportStatus(completedJobs, activityId);
-      if (!status.isVerified) {
-        throw const StorageManagerException(
-          'Deleting local copies requires a verified export with checksum verification.',
-        );
-      }
-    }
-
-    final targetActivityIds = activityId != null
-        ? [activityId]
-        : (await activities.listForConference(conferenceId))
-              .map((a) => a.id)
-              .toList();
-
-    final remainingNamedPaths = await media.segmentPathsExcludingActivities(
-      targetActivityIds,
-    );
-
-    var audioFilesCount = 0;
-    var audioBytes = 0;
-    var photoFilesCount = 0;
-    var photoBytes = 0;
-    var keptOriginalsCount = 0;
-    var keptOriginalsBytes = 0;
-    var derivedFilesCount = 0;
-    var derivedBytes = 0;
-    var sharedFilesPreservedCount = 0;
-
-    final root = await mediaRoot();
-    final inspectedAudioPaths = <String>{};
-
-    for (final actId in targetActivityIds) {
-      final segs = await media.segmentsFor(actId);
-      for (final s in segs) {
-        if (inspectedAudioPaths.contains(s.filePath)) continue;
-        inspectedAudioPaths.add(s.filePath);
-
-        if (remainingNamedPaths.contains(s.filePath)) {
-          // File is shared with another activity not being deleted (ADR-036).
-          sharedFilesPreservedCount++;
-        } else {
-          audioFilesCount++;
-          audioBytes += s.bytes ?? 0;
-        }
-      }
-
-      final photos = await media.photosFor(actId);
-      photoFilesCount += photos.length;
-      for (final pRow in photos) {
-        photoBytes += pRow.bytes ?? 0;
-      }
-
-      final actDir = Directory(
-        p.join(root.path, MediaPaths.activityFolder(conferenceId, actId)),
-      );
-
-      final originalsDir = Directory(p.join(actDir.path, 'audio', 'originals'));
-      if (originalsDir.existsSync()) {
-        final files = originalsDir.listSync().whereType<File>().toList();
-        keptOriginalsCount += files.length;
-        for (final f in files) {
-          keptOriginalsBytes += f.lengthSync();
-        }
-      }
-
-      final waveformsDir = Directory(p.join(actDir.path, 'waveforms'));
-      if (waveformsDir.existsSync()) {
-        final files = waveformsDir.listSync().whereType<File>().toList();
-        derivedFilesCount += files.length;
-        for (final f in files) {
-          derivedBytes += f.lengthSync();
-        }
-      }
-    }
-
-    final totalFilesToDelete =
-        audioFilesCount +
-        photoFilesCount +
-        keptOriginalsCount +
-        derivedFilesCount;
-    final totalBytesToFree =
-        audioBytes + photoBytes + keptOriginalsBytes + derivedBytes;
-
-    String? actTitle;
-    if (activityId != null) {
-      final act = await activities.get(activityId);
-      actTitle = act?.title;
-    }
-
-    return DeleteLocalPreview(
-      conferenceId: conferenceId,
-      conferenceName: conf.name,
-      activityId: activityId,
-      activityTitle: actTitle,
-      keepLightweightIndex: keepLightweightIndex,
-      audioFilesCount: audioFilesCount,
-      audioBytes: audioBytes,
-      photoFilesCount: photoFilesCount,
-      photoBytes: photoBytes,
-      keptOriginalsCount: keptOriginalsCount,
-      keptOriginalsBytes: keptOriginalsBytes,
-      derivedFilesCount: derivedFilesCount,
-      derivedBytes: derivedBytes,
-      sharedFilesPreservedCount: sharedFilesPreservedCount,
-      totalFilesToDelete: totalFilesToDelete,
-      totalBytesToFree: totalBytesToFree,
-    );
-  }
-
-  /// Executes "Delete local copies" after verified export (FR-STO-06, FR-STO-07).
-  /// Preserves shared files (ADR-036) and supports lightweight archived index mode
-  /// (FR-STO-07).
+  /// Deletes the files in the preview, then the activities' rows (and the
+  /// conference row when every activity went). An activity whose file
+  /// could not be deleted keeps its rows so nothing is left unnamed.
   Future<DeleteLocalResult> deleteLocalCopies({
     required String conferenceId,
     String? activityId,
-    required bool keepLightweightIndex,
   }) async {
-    // 1. Run preview validation first to verify gate and gather deletion targets.
-    final preview = await previewDeleteLocalCopies(
-      conferenceId: conferenceId,
-      activityId: activityId,
-      keepLightweightIndex: keepLightweightIndex,
-    );
-
+    final plan = await _plan(conferenceId, activityId);
     final root = await mediaRoot();
-    final targetActivityIds = activityId != null
-        ? [activityId]
-        : (await activities.listForConference(conferenceId))
-              .map((a) => a.id)
-              .toList();
+    var deleted = 0;
+    var freed = 0;
+    final failedActivities = <String>{};
+    var failed = 0;
 
-    final remainingNamedPaths = await media.segmentPathsExcludingActivities(
-      targetActivityIds,
-    );
-
-    var filesDeleted = 0;
-    var bytesFreed = 0;
-    final processedAudioPaths = <String>{};
-
-    for (final actId in targetActivityIds) {
-      // 2. Audio segments: delete physical files if not shared elsewhere.
-      final segs = await media.segmentsFor(actId);
-      for (final s in segs) {
-        if (processedAudioPaths.contains(s.filePath)) continue;
-        processedAudioPaths.add(s.filePath);
-
-        if (!remainingNamedPaths.contains(s.filePath)) {
-          final file = MediaPaths.resolve(root, s.filePath);
-          if (file.existsSync()) {
-            final len = file.lengthSync();
-            try {
-              file.deleteSync();
-              filesDeleted++;
-              bytesFreed += len;
-            } on FileSystemException {
-              // Ignored.
-            }
-          }
-        }
+    for (final MapEntry(key: rel, value: owners) in plan.files.entries) {
+      final file = MediaPaths.resolve(root, rel);
+      try {
+        if (!file.existsSync()) continue;
+        final bytes = file.lengthSync();
+        file.deleteSync();
+        deleted++;
+        freed += bytes;
+      } on FileSystemException {
+        failed++;
+        failedActivities.addAll(owners);
       }
+    }
 
-      // 3. Audio originals.
-      final originalsDir = Directory(
-        p.join(root.path, MediaPaths.originalsFolder(conferenceId, actId)),
-      );
-      if (originalsDir.existsSync()) {
-        try {
-          for (final f in originalsDir.listSync().whereType<File>()) {
-            final len = f.lengthSync();
-            try {
-              f.deleteSync();
-              filesDeleted++;
-              bytesFreed += len;
-            } on FileSystemException {
-              // Ignored.
-            }
-          }
-        } on FileSystemException {
-          // Ignored.
-        }
-      }
-
-      // 4. Derived waveform summaries.
-      final waveformsDir = Directory(
-        p.join(
-          root.path,
-          MediaPaths.activityFolder(conferenceId, actId),
-          'waveforms',
+    var activitiesDeleted = 0;
+    for (final a in plan.activities) {
+      if (failedActivities.contains(a.id)) continue;
+      await activities.delete(a.id);
+      activitiesDeleted++;
+      _removeEmptyFolders(
+        Directory(
+          p.join(root.path, MediaPaths.activityFolder(conferenceId, a.id)),
         ),
       );
-      if (waveformsDir.existsSync()) {
-        try {
-          for (final f in waveformsDir.listSync().whereType<File>()) {
-            final len = f.lengthSync();
-            try {
-              f.deleteSync();
-              filesDeleted++;
-              bytesFreed += len;
-            } on FileSystemException {
-              // Ignored.
-            }
-          }
-        } on FileSystemException {
-          // Ignored.
-        }
-      }
-
-      // 5. Photos:
-      final photos = await media.photosFor(actId);
-      for (final pRow in photos) {
-        final photoFile = MediaPaths.resolve(root, pRow.filePath);
-        if (photoFile.existsSync()) {
-          final len = photoFile.lengthSync();
-          try {
-            photoFile.deleteSync();
-            filesDeleted++;
-            bytesFreed += len;
-          } on FileSystemException {
-            // Ignored.
-          }
-        }
-
-        // Thumbnails: delete only if NOT keeping lightweight index (FR-STO-07).
-        if (!keepLightweightIndex && pRow.thumbnailPath != null) {
-          final thumbFile = MediaPaths.resolve(root, pRow.thumbnailPath!);
-          if (thumbFile.existsSync()) {
-            final len = thumbFile.lengthSync();
-            try {
-              thumbFile.deleteSync();
-              filesDeleted++;
-              bytesFreed += len;
-            } on FileSystemException {
-              // Ignored.
-            }
-          }
-        }
-      }
-
-      // 6. Database rows update:
-      if (keepLightweightIndex) {
-        // Keep lightweight index: delete segment rows only, keeping notes,
-        // bookmarks, metadata and photo rows (with thumbnails intact).
-        await media.deleteSegments(segs.map((s) => s.id));
-      } else {
-        // "Delete means delete": delete the activity entirely.
-        await activities.delete(actId);
-      }
     }
-
-    // 7. If conference-wide and not keeping index, remove the conference entirely.
-    if (activityId == null && !keepLightweightIndex) {
+    if (activityId == null && failedActivities.isEmpty) {
       await conferences.delete(conferenceId);
-      final confDir = Directory(
-        p.join(root.path, MediaPaths.conferenceFolder(conferenceId)),
+      _removeEmptyFolders(
+        Directory(p.join(root.path, MediaPaths.conferenceFolder(conferenceId))),
       );
-      if (confDir.existsSync()) {
-        try {
-          confDir.deleteSync(recursive: true);
-        } on FileSystemException {
-          // Ignored.
-        }
-      }
     }
-
     return DeleteLocalResult(
-      filesDeleted: filesDeleted,
-      bytesFreed: bytesFreed,
-      sharedFilesPreserved: preview.sharedFilesPreservedCount,
-      keptIndex: keepLightweightIndex,
+      filesDeleted: deleted,
+      bytesFreed: freed,
+      activitiesDeleted: activitiesDeleted,
+      failedFiles: failed,
     );
   }
 
-  // --- Helpers ---
+  Future<_DeletePlan> _plan(String conferenceId, String? activityId) async {
+    final conf = await conferences.get(conferenceId);
+    if (conf == null) {
+      throw const StorageManagerException('This conference no longer exists.');
+    }
+    final all = await activities.listForConference(conferenceId);
+    final targets = activityId == null
+        ? all
+        : all.where((a) => a.id == activityId).toList();
+    if (targets.isEmpty) {
+      throw const StorageManagerException('There is nothing to delete.');
+    }
+    final jobs = await _completedJobs(conferenceId);
+    final rowsByActivity = <String, _ActivityRows>{};
+    for (final a in targets) {
+      final rows = await _rows(a);
+      final reason = _blockedReason(a, rows, jobs);
+      if (reason != null) throw StorageManagerException(reason);
+      rowsByActivity[a.id] = rows;
+    }
 
-  Future<FreeSpace?> _safeQuerySpace(String path) async {
+    final root = await mediaRoot();
+    final elsewhere = await media.namedFilePaths(
+      excludingActivities: targets.map((a) => a.id),
+    );
+    final files = <String, Set<String>>{};
+    final shared = <String>{};
+    var audioFiles = 0, audioBytes = 0, photoFiles = 0, photoBytes = 0;
+    var otherFiles = 0, otherBytes = 0, recoveryKept = 0, bookmarks = 0;
+
+    int add(String rel, String owner) {
+      if (elsewhere.contains(rel)) {
+        shared.add(rel);
+        return -1;
+      }
+      final file = MediaPaths.resolve(root, rel);
+      if (files.containsKey(rel)) {
+        files[rel]!.add(owner);
+        return -1;
+      }
+      if (!file.existsSync()) return -1;
+      files[rel] = {owner};
+      return file.lengthSync();
+    }
+
+    for (final a in targets) {
+      final rows = rowsByActivity[a.id]!;
+      bookmarks += rows.bookmarks.length;
+      for (final s in rows.segments) {
+        final b = add(s.filePath, a.id);
+        if (b >= 0) {
+          audioFiles++;
+          audioBytes += b;
+        }
+      }
+      for (final ph in rows.photos) {
+        for (final rel in [ph.filePath, ph.thumbnailPath].nonNulls) {
+          final b = add(rel, a.id);
+          if (b >= 0) {
+            photoFiles++;
+            photoBytes += b;
+          }
+        }
+      }
+      // Kept originals and waveform summaries in the activity folder.
+      // Partial and unlinked recordings stay for crash recovery.
+      final folder = MediaPaths.activityFolder(conferenceId, a.id);
+      for (final rel in _listFiles(root, folder).keys) {
+        if (files.containsKey(rel) || elsewhere.contains(rel)) continue;
+        final parts = p.posix.split(rel);
+        final isWave = parts.length == 6 && parts[4] == 'waveforms';
+        if (!MediaPaths.isPartial(rel) &&
+            (MediaPaths.isKeptOriginal(rel) || isWave)) {
+          final b = add(rel, a.id);
+          if (b >= 0) {
+            otherFiles++;
+            otherBytes += b;
+          }
+        } else if (!_namedByTargets(rel, rowsByActivity.values)) {
+          recoveryKept++;
+        }
+      }
+    }
+
+    return _DeletePlan(
+      activities: targets,
+      files: files,
+      preview: DeleteLocalPreview(
+        conferenceId: conferenceId,
+        conferenceName: conf.name,
+        activityId: activityId,
+        activityTitles: [for (final a in targets) a.title],
+        audioFiles: audioFiles,
+        audioBytes: audioBytes,
+        photoFiles: photoFiles,
+        photoBytes: photoBytes,
+        otherFiles: otherFiles,
+        otherBytes: otherBytes,
+        sharedFilesKept: shared.length,
+        recoveryFilesKept: recoveryKept,
+        bookmarkCount: bookmarks,
+      ),
+    );
+  }
+
+  static bool _namedByTargets(String rel, Iterable<_ActivityRows> rows) =>
+      rows.any(
+        (r) =>
+            r.segments.any((s) => s.filePath == rel) ||
+            r.photos.any((ph) => ph.filePath == rel || ph.thumbnailPath == rel),
+      );
+
+  // ---------------------------------------------------------------------
+  // Export status and the delete gate (ADR-040, ADR-047).
+
+  Future<List<ExportJob>> _completedJobs(String conferenceId) async =>
+      (await exports.forConference(conferenceId))
+          .where((j) => j.state == ExportJobState.completed)
+          .toList();
+
+  /// True when [job]'s scope names [activityId] (or the whole conference;
+  /// [activityId] null asks about the conference). A one-day export does
+  /// not count: its activities are not stored in the job.
+  static bool _covers(ExportJob job, String? activityId) {
+    final kind = job.scope['kind'];
+    if (kind == 'conference') return true;
+    if (activityId != null && kind == 'activities') {
+      final ids = job.scope['activity_ids'];
+      return ids is List && ids.contains(activityId);
+    }
+    return false;
+  }
+
+  static ExportStatus _status(List<ExportJob> jobs, String? activityId) {
+    var best = ExportStatus.notExported;
+    for (final j in jobs.where((j) => _covers(j, activityId))) {
+      final s = j.verificationLevel == VerificationLevel.checksum
+          ? ExportStatus.verified
+          : j.destination == ExportDestination.local
+          ? ExportStatus.exportedLocally
+          : ExportStatus.uploaded;
+      if (s.index > best.index) best = s;
+    }
+    return best;
+  }
+
+  /// Why the activity's local copies may not be deleted, or null.
+  ///
+  /// Needs a completed export verified by checksum that covers the
+  /// activity, holds everything (all content, full-length audio, private
+  /// items when the activity has any) and finished after the activity's
+  /// media last changed. Never while a segment is being written.
+  static String? _blockedReason(
+    Activity a,
+    _ActivityRows rows,
+    List<ExportJob> jobs,
+  ) {
+    if (rows.segments.any((s) => s.state == SegmentState.writing)) {
+      return 'This activity is still recording.';
+    }
+    final verified =
+        jobs
+            .where(
+              (j) =>
+                  _covers(j, a.id) &&
+                  j.verificationLevel == VerificationLevel.checksum,
+            )
+            .toList()
+          ..sort(
+            (x, y) => (y.completedAt ?? y.updatedAt).compareTo(
+              x.completedAt ?? x.updatedAt,
+            ),
+          );
+    if (verified.isEmpty) {
+      return 'Needs a verified export first. Export as a folder: folder '
+          'exports are checked file by file.';
+    }
+    final needsPrivate = a.isPrivate || rows.bookmarks.any(isPrivateThought);
+    final changed = rows.lastChange(a);
+    String? reason;
+    for (final j in verified) {
+      final scope = j.scope;
+      final audioMode = scope['audio_mode'];
+      final String? why;
+      if (scope['content'] != ExportContent.everything.key) {
+        why =
+            'The verified export does not hold everything. Export again '
+            'with "Everything".';
+      } else if (audioMode != ExportAudioMode.original.key &&
+          audioMode != ExportAudioMode.originalWithCuts.key) {
+        why =
+            'The verified export has trimmed audio only. Export again '
+            'with the original recordings.';
+      } else if (needsPrivate && scope['include_private'] != true) {
+        why =
+            'The verified export left out private items. Export again '
+            'with "Include private items".';
+      } else if ((j.completedAt ?? j.updatedAt).isBefore(changed)) {
+        why =
+            'This activity changed after the last verified export. '
+            'Export it again first.';
+      } else {
+        return null;
+      }
+      reason ??= why;
+    }
+    return reason;
+  }
+
+  // ---------------------------------------------------------------------
+  // Helpers.
+
+  Future<_ActivityRows> _rows(Activity a) async => _ActivityRows(
+    segments: await media.segmentsFor(a.id),
+    photos: await media.photosFor(a.id),
+    bookmarks: await media.bookmarksFor(a.id),
+  );
+
+  Future<FreeSpace?> _space(String path) async {
     try {
       return await freeSpaceProbe.query(path);
     } on Object {
@@ -658,85 +571,84 @@ class StorageManagerService {
     }
   }
 
-  ExportStatus _determineConferenceExportStatus(List<ExportJob> completedJobs) {
-    if (completedJobs.isEmpty) return ExportStatus.notExported;
-
-    final confJobs = completedJobs.where((j) {
-      final kind = j.scope['kind'];
-      return kind == 'conference' || kind == null;
-    }).toList();
-
-    return _rankExportJobs(confJobs);
-  }
-
-  ExportStatus _determineActivityExportStatus(
-    List<ExportJob> completedJobs,
-    String activityId,
-  ) {
-    if (completedJobs.isEmpty) return ExportStatus.notExported;
-
-    final relevantJobs = completedJobs.where((j) {
-      final kind = j.scope['kind'];
-      if (kind == 'conference' || kind == null) return true;
-      if (kind == 'activities') {
-        final ids = j.scope['activity_ids'] as List?;
-        return ids?.contains(activityId) == true;
-      }
-      return false;
-    }).toList();
-
-    return _rankExportJobs(relevantJobs);
-  }
-
-  ExportStatus _rankExportJobs(List<ExportJob> jobs) {
-    if (jobs.isEmpty) return ExportStatus.notExported;
-
-    var hasChecksum = false;
-    var hasCloud = false;
-    var hasLocal = false;
-
-    for (final j in jobs) {
-      if (j.verificationLevel == VerificationLevel.checksum) {
-        hasChecksum = true;
-      } else if (j.destination == ExportDestination.googleDrive ||
-          j.destination == ExportDestination.onedrive) {
-        hasCloud = true;
-      } else if (j.destination == ExportDestination.local) {
-        hasLocal = true;
-      }
-    }
-
-    if (hasChecksum) return ExportStatus.verified;
-    if (hasCloud) return ExportStatus.uploaded;
-    if (hasLocal) return ExportStatus.exportedLocally;
-    return ExportStatus.notExported;
-  }
-
-  int _directoryFileSize(Directory dir) {
-    if (!dir.existsSync()) return 0;
-    var total = 0;
+  /// Files under [folder] (relative, POSIX) of [base], with sizes, keyed
+  /// by the path relative to [base].
+  static Map<String, int> _listFiles(Directory base, String folder) {
+    final dir = Directory(p.joinAll([base.path, ...p.posix.split(folder)]));
+    final out = <String, int>{};
+    if (!dir.existsSync()) return out;
     try {
-      for (final f in dir.listSync(recursive: true, followLinks: false)) {
-        if (f is File) {
-          total += f.lengthSync();
+      for (final e in dir.listSync(recursive: true, followLinks: false)) {
+        if (e is! File) continue;
+        try {
+          final rel = p.posix.joinAll(
+            p.split(p.relative(e.path, from: base.path)),
+          );
+          out[rel] = e.lengthSync();
+        } on FileSystemException {
+          // Gone or locked; not counted.
         }
       }
     } on FileSystemException {
-      // Ignored.
+      // Folder unreadable; count what was listed.
     }
-    return total;
+    return out;
   }
 
-  int _directoryFileCount(Directory dir) {
-    if (!dir.existsSync()) return 0;
-    var count = 0;
+  /// Removes empty folders under [dir], deepest first, and [dir] itself
+  /// unless [keepTop]. A folder with any file in it stays.
+  static void _removeEmptyFolders(Directory dir, {bool keepTop = false}) {
+    if (!dir.existsSync()) return;
     try {
-      for (final f in dir.listSync(recursive: true, followLinks: false)) {
-        if (f is File) count++;
+      final folders =
+          dir
+              .listSync(recursive: true, followLinks: false)
+              .whereType<Directory>()
+              .toList()
+            ..sort((a, b) => b.path.length.compareTo(a.path.length));
+      for (final f in [...folders, if (!keepTop) dir]) {
+        if (f.listSync().isEmpty) f.deleteSync();
       }
     } on FileSystemException {
-      // Ignored.
+      // Left in place.
     }
-    return count;
   }
+}
+
+class _ActivityRows {
+  _ActivityRows({
+    required this.segments,
+    required this.photos,
+    required this.bookmarks,
+  });
+
+  final List<RecordingSegment> segments;
+  final List<Photo> photos;
+  final List<Bookmark> bookmarks;
+
+  DateTime lastChange(Activity a) {
+    var last = a.updatedAt;
+    for (final t in [
+      ...segments.map((s) => s.updatedAt),
+      ...photos.map((ph) => ph.updatedAt),
+      ...bookmarks.map((b) => b.updatedAt),
+    ]) {
+      if (t.isAfter(last)) last = t;
+    }
+    return last;
+  }
+}
+
+class _DeletePlan {
+  _DeletePlan({
+    required this.activities,
+    required this.files,
+    required this.preview,
+  });
+
+  final List<Activity> activities;
+
+  /// Relative path to the ids of the target activities that name it.
+  final Map<String, Set<String>> files;
+  final DeleteLocalPreview preview;
 }

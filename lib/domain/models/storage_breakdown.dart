@@ -1,92 +1,59 @@
 import 'enums.dart';
 
-/// Categorised storage sizes in bytes (FR-STO-05) [P1-20].
+/// Bytes on disk by kind (FR-STO-05) [P1-20].
 class StorageKindSizes {
   const StorageKindSizes({
     this.audioBytes = 0,
     this.photoBytes = 0,
     this.thumbnailBytes = 0,
-    this.transcriptBytes = 0,
-    this.temporaryExportBytes = 0,
-    this.modelBytes = 0,
+    this.waveformBytes = 0,
     this.keptOriginalBytes = 0,
-    this.derivedBytes = 0,
+    this.recoveryBytes = 0,
   });
 
-  /// Audio recordings (deduplicated across segments).
+  /// Recordings named by segment rows. A file two rows share (ADR-036) is
+  /// counted once per conference and once for the app.
   final int audioBytes;
 
-  /// High-resolution / compressed photos.
+  /// Photos named by photo rows.
   final int photoBytes;
 
-  /// Small photo thumbnails in `thumbs/` (derived).
+  /// Photo thumbnails in `thumbs/`.
   final int thumbnailBytes;
 
-  /// Transcripts in `transcripts/` or `transcript.md` (Phase 2).
-  final int transcriptBytes;
+  /// Waveform summaries in `waveforms/` (ADR-034). They are made while
+  /// recording and cannot be rebuilt, so only orphans are temporary.
+  final int waveformBytes;
 
-  /// Staging or temporary export archives (FR-STO-05).
-  final int temporaryExportBytes;
-
-  /// Offline speech and AI models (Phase 2).
-  final int modelBytes;
-
-  /// Audio recordings kept after permanent trim in `audio/originals/` (ADR-037).
+  /// Recordings a permanent trim replaced, in `audio/originals/` (ADR-037).
   final int keptOriginalBytes;
 
-  /// Waveform summaries and other derived temporary files (ADR-034).
-  final int derivedBytes;
+  /// `.partial` recordings and audio no row names, left for crash recovery
+  /// (FR-REC-08, ADR-038). Never cleared here.
+  final int recoveryBytes;
 
-  /// Total storage consumed across all kinds.
   int get totalBytes =>
       audioBytes +
       photoBytes +
       thumbnailBytes +
-      transcriptBytes +
-      temporaryExportBytes +
-      modelBytes +
+      waveformBytes +
       keptOriginalBytes +
-      derivedBytes;
+      recoveryBytes;
 
-  StorageKindSizes copyWith({
-    int? audioBytes,
-    int? photoBytes,
-    int? thumbnailBytes,
-    int? transcriptBytes,
-    int? temporaryExportBytes,
-    int? modelBytes,
-    int? keptOriginalBytes,
-    int? derivedBytes,
-  }) {
-    return StorageKindSizes(
-      audioBytes: audioBytes ?? this.audioBytes,
-      photoBytes: photoBytes ?? this.photoBytes,
-      thumbnailBytes: thumbnailBytes ?? this.thumbnailBytes,
-      transcriptBytes: transcriptBytes ?? this.transcriptBytes,
-      temporaryExportBytes: temporaryExportBytes ?? this.temporaryExportBytes,
-      modelBytes: modelBytes ?? this.modelBytes,
-      keptOriginalBytes: keptOriginalBytes ?? this.keptOriginalBytes,
-      derivedBytes: derivedBytes ?? this.derivedBytes,
-    );
-  }
-
-  StorageKindSizes operator +(StorageKindSizes other) {
-    return StorageKindSizes(
-      audioBytes: audioBytes + other.audioBytes,
-      photoBytes: photoBytes + other.photoBytes,
-      thumbnailBytes: thumbnailBytes + other.thumbnailBytes,
-      transcriptBytes: transcriptBytes + other.transcriptBytes,
-      temporaryExportBytes: temporaryExportBytes + other.temporaryExportBytes,
-      modelBytes: modelBytes + other.modelBytes,
-      keptOriginalBytes: keptOriginalBytes + other.keptOriginalBytes,
-      derivedBytes: derivedBytes + other.derivedBytes,
-    );
-  }
+  StorageKindSizes operator +(StorageKindSizes other) => StorageKindSizes(
+    audioBytes: audioBytes + other.audioBytes,
+    photoBytes: photoBytes + other.photoBytes,
+    thumbnailBytes: thumbnailBytes + other.thumbnailBytes,
+    waveformBytes: waveformBytes + other.waveformBytes,
+    keptOriginalBytes: keptOriginalBytes + other.keptOriginalBytes,
+    recoveryBytes: recoveryBytes + other.recoveryBytes,
+  );
 
   static const zero = StorageKindSizes();
 }
 
-/// Export state of a conference or activity (FR-STO-05).
+/// Export state of a conference or activity, from `export_jobs`
+/// (FR-STO-05) [P1-20]. Ordered from least to most.
 enum ExportStatus implements KeyedEnum {
   notExported('not_exported', 'Not exported'),
   exportedLocally('exported_locally', 'Exported locally'),
@@ -99,11 +66,12 @@ enum ExportStatus implements KeyedEnum {
   final String key;
   final String label;
 
-  /// True if this item has reached verified integrity (checksum verified).
+  /// A completed export whose files were checked against
+  /// `checksums.sha256` (ADR-040).
   bool get isVerified => this == ExportStatus.verified;
 }
 
-/// Storage breakdown for a single activity (FR-STO-05) [P1-20].
+/// One activity (FR-STO-05) [P1-20].
 class ActivityStorageBreakdown {
   const ActivityStorageBreakdown({
     required this.activityId,
@@ -114,21 +82,31 @@ class ActivityStorageBreakdown {
     this.segmentCount = 0,
     this.photoCount = 0,
     this.keptOriginalsCount = 0,
+    this.deleteBlockedReason,
   });
 
   final String activityId;
   final String activityTitle;
   final String activityTypeLabel;
   final ExportStatus exportStatus;
+
+  /// Every file this activity's rows name, so a shared file shows in both
+  /// parts of a split.
   final StorageKindSizes sizes;
   final int segmentCount;
   final int photoCount;
   final int keptOriginalsCount;
 
+  /// Why "Delete local copies" is not offered, or null when it is
+  /// (FR-STO-06, ADR-047).
+  final String? deleteBlockedReason;
+
+  bool get canDeleteLocalCopies => deleteBlockedReason == null;
+
   int get totalBytes => sizes.totalBytes;
 }
 
-/// Storage breakdown for a conference, including its activities (FR-STO-05) [P1-20].
+/// One conference with its activities (FR-STO-05) [P1-20].
 class ConferenceStorageBreakdown {
   const ConferenceStorageBreakdown({
     required this.conferenceId,
@@ -137,53 +115,78 @@ class ConferenceStorageBreakdown {
     required this.exportStatus,
     required this.sizes,
     required this.activities,
+    this.deleteBlockedReason,
   });
 
   final String conferenceId;
   final String conferenceName;
   final bool isArchived;
   final ExportStatus exportStatus;
+
+  /// Files counted once, including files no row names.
   final StorageKindSizes sizes;
   final List<ActivityStorageBreakdown> activities;
+  final String? deleteBlockedReason;
+
+  bool get canDeleteLocalCopies => deleteBlockedReason == null;
 
   int get totalBytes => sizes.totalBytes;
 }
 
-/// Comprehensive app-wide storage breakdown (FR-STO-05) [P1-20].
+/// The whole app (FR-STO-05) [P1-20].
 class AppStorageBreakdown {
   const AppStorageBreakdown({
-    required this.totalDeviceFreeBytes,
-    required this.totalDeviceCapacityBytes,
-    required this.appTotalBytes,
-    required this.overallSizes,
+    required this.freeBytes,
+    required this.capacityBytes,
+    required this.sizes,
     required this.conferences,
-    required this.safeTemporaryBytes,
-    required this.keptOriginalsTotalBytes,
-    required this.keptOriginalsCount,
+    required this.temporaryExportBytes,
+    required this.orphanWaveformBytes,
+    required this.keptOriginals,
   });
 
-  final int? totalDeviceFreeBytes;
-  final int? totalDeviceCapacityBytes;
-  final int appTotalBytes;
-  final StorageKindSizes overallSizes;
-  final List<ConferenceStorageBreakdown> conferences;
-  final int safeTemporaryBytes;
-  final int keptOriginalsTotalBytes;
-  final int keptOriginalsCount;
+  final int? freeBytes;
+  final int? capacityBytes;
 
-  static const empty = AppStorageBreakdown(
-    totalDeviceFreeBytes: null,
-    totalDeviceCapacityBytes: null,
-    appTotalBytes: 0,
-    overallSizes: StorageKindSizes.zero,
-    conferences: [],
-    safeTemporaryBytes: 0,
-    keptOriginalsTotalBytes: 0,
-    keptOriginalsCount: 0,
-  );
+  /// Every conference, counted once.
+  final StorageKindSizes sizes;
+  final List<ConferenceStorageBreakdown> conferences;
+
+  /// Leftover export staging in `exports-temp/` (ADR-040).
+  final int temporaryExportBytes;
+
+  /// Waveform summaries for segments that no longer exist.
+  final int orphanWaveformBytes;
+
+  /// Files in `audio/originals/` that no row names (ADR-037).
+  final List<KeptOriginalFile> keptOriginals;
+
+  /// What "Clear safe temporary files" would free.
+  int get safeTemporaryBytes => temporaryExportBytes + orphanWaveformBytes;
+
+  int get keptOriginalBytes => keptOriginals.fold(0, (n, o) => n + o.bytes);
+
+  int get totalBytes => sizes.totalBytes + temporaryExportBytes;
 }
 
-/// Result of clearing safe temporary files (FR-STO-06) [P1-20].
+/// A recording kept after a permanent trim (ADR-037) [P1-20].
+class KeptOriginalFile {
+  const KeptOriginalFile({
+    required this.relativePath,
+    required this.bytes,
+    required this.conferenceName,
+    required this.activityTitle,
+  });
+
+  final String relativePath;
+  final int bytes;
+  final String conferenceName;
+
+  /// Null when the activity no longer exists.
+  final String? activityTitle;
+}
+
+/// Result of a cleanup (FR-STO-06) [P1-20].
 class SafeCleanupResult {
   const SafeCleanupResult({
     required this.filesDeleted,
@@ -194,65 +197,76 @@ class SafeCleanupResult {
   final int bytesFreed;
 }
 
-/// Preview of a "Delete local copies" action (FR-STO-06, FR-STO-07) [P1-20].
+/// What "Delete local copies" would remove (FR-STO-06) [P1-20].
 class DeleteLocalPreview {
   const DeleteLocalPreview({
     required this.conferenceId,
     required this.conferenceName,
-    this.activityId,
-    this.activityTitle,
-    required this.keepLightweightIndex,
-    required this.audioFilesCount,
+    required this.activityId,
+    required this.activityTitles,
+    required this.audioFiles,
     required this.audioBytes,
-    required this.photoFilesCount,
+    required this.photoFiles,
     required this.photoBytes,
-    required this.keptOriginalsCount,
-    required this.keptOriginalsBytes,
-    required this.derivedFilesCount,
-    required this.derivedBytes,
-    required this.sharedFilesPreservedCount,
-    required this.totalFilesToDelete,
-    required this.totalBytesToFree,
+    required this.otherFiles,
+    required this.otherBytes,
+    required this.sharedFilesKept,
+    required this.recoveryFilesKept,
+    required this.bookmarkCount,
   });
 
   final String conferenceId;
   final String conferenceName;
+
+  /// Null when the whole conference is deleted.
   final String? activityId;
-  final String? activityTitle;
-  final bool keepLightweightIndex;
-  final int audioFilesCount;
+  final List<String> activityTitles;
+  final int audioFiles;
   final int audioBytes;
-  final int photoFilesCount;
+
+  /// Photos and their thumbnails.
+  final int photoFiles;
   final int photoBytes;
-  final int keptOriginalsCount;
-  final int keptOriginalsBytes;
-  final int derivedFilesCount;
-  final int derivedBytes;
-  final int sharedFilesPreservedCount;
-  final int totalFilesToDelete;
-  final int totalBytesToFree;
+
+  /// Kept originals and waveform summaries.
+  final int otherFiles;
+  final int otherBytes;
+
+  /// Files another activity still names (ADR-036); left in place.
+  final int sharedFilesKept;
+
+  /// `.partial` and unlinked recordings left for crash recovery (ADR-038).
+  final int recoveryFilesKept;
+
+  /// Bookmarks and notes removed with the activities.
+  final int bookmarkCount;
+
+  int get totalFiles => audioFiles + photoFiles + otherFiles;
+  int get totalBytes => audioBytes + photoBytes + otherBytes;
 }
 
-/// Result of executing a "Delete local copies" action (FR-STO-06, FR-STO-07) [P1-20].
+/// Result of "Delete local copies" (FR-STO-06) [P1-20].
 class DeleteLocalResult {
   const DeleteLocalResult({
     required this.filesDeleted,
     required this.bytesFreed,
-    required this.sharedFilesPreserved,
-    required this.keptIndex,
+    required this.activitiesDeleted,
+    required this.failedFiles,
   });
 
   final int filesDeleted;
   final int bytesFreed;
-  final int sharedFilesPreserved;
-  final bool keptIndex;
+  final int activitiesDeleted;
+
+  /// Files that could not be deleted (for example open in another app).
+  /// Their activities and rows are kept so nothing is left unnamed.
+  final int failedFiles;
 }
 
-/// Exceptions thrown during storage operations.
+/// A refusal; nothing changed. The message is plain UK English.
 class StorageManagerException implements Exception {
   const StorageManagerException(this.message);
 
-  /// Plain UK English message ready for display.
   final String message;
 
   @override

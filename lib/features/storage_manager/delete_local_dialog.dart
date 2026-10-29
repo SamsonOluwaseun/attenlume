@@ -5,198 +5,122 @@ import '../../domain/models/storage_breakdown.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 
-/// Confirmation dialog with preview for deleting local copies of recorded media
-/// after verified export (FR-STO-06, FR-STO-07, US-15) [P1-20].
-class DeleteLocalDialog extends StatefulWidget {
-  const DeleteLocalDialog({
-    super.key,
-    required this.preview,
-    required this.onConfirm,
-  });
+/// Step 1 of "Delete local copies": the preview of what goes and what
+/// stays (FR-STO-06, ADR-047) [P1-20]. Continue pops `true`.
+class DeleteLocalDialog extends StatelessWidget {
+  const DeleteLocalDialog({super.key, required this.preview});
 
   final DeleteLocalPreview preview;
-  final Future<void> Function(bool keepLightweightIndex) onConfirm;
-
-  @override
-  State<DeleteLocalDialog> createState() => _DeleteLocalDialogState();
-}
-
-class _DeleteLocalDialogState extends State<DeleteLocalDialog> {
-  late bool _keepIndex;
-  bool _isDeleting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _keepIndex = widget.preview.keepLightweightIndex;
-  }
-
-  Future<void> _handleConfirm() async {
-    setState(() => _isDeleting = true);
-    try {
-      await widget.onConfirm(_keepIndex);
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final p = widget.preview;
-    final isActivity = p.activityId != null;
-    final targetName = isActivity
-        ? '${p.activityTitle ?? 'Activity'} (${p.conferenceName})'
-        : p.conferenceName;
+    final p = preview;
+    final what = p.activityId == null
+        ? 'the conference "${p.conferenceName}" and its '
+              '${p.activityTitles.length} '
+              '${p.activityTitles.length == 1 ? 'activity' : 'activities'}'
+        : 'the activity "${p.activityTitles.single}"';
+
+    Widget row(String label, int files, int bytes) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          Text(
+            '$files ${files == 1 ? 'file' : 'files'}, '
+            '${formatStorageBytes(bytes)}',
+          ),
+        ],
+      ),
+    );
 
     return AlertDialog(
       title: const Text('Delete local copies'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'A verified backup has been confirmed. You can now safely free storage on this device for:\n$targetName',
-              style: theme.textTheme.bodyMedium,
+              'A verified export holds everything below. This removes $what '
+              'from this device, with its notes and bookmarks '
+              '(${p.bookmarkCount}). Your export is not changed.',
             ),
-            const SizedBox(height: TokenSpace.space4),
-
-            // Preview card
-            Container(
-              padding: const EdgeInsets.all(TokenSpace.space3),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.5,
-                ),
-                borderRadius: BorderRadius.circular(TokenRadius.radiusMd),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: TokenSpace.space3),
+            Text('Files to delete:', style: theme.textTheme.titleSmall),
+            const SizedBox(height: TokenSpace.space1),
+            row('Audio recordings', p.audioFiles, p.audioBytes),
+            row('Photos and thumbnails', p.photoFiles, p.photoBytes),
+            row('Kept originals and waveforms', p.otherFiles, p.otherBytes),
+            const Divider(),
+            row('Total', p.totalFiles, p.totalBytes),
+            if (p.sharedFilesKept > 0) ...[
+              const SizedBox(height: TokenSpace.space2),
+              Text(
+                '${p.sharedFilesKept} '
+                '${p.sharedFilesKept == 1 ? 'file stays' : 'files stay'} '
+                'because another activity still uses '
+                '${p.sharedFilesKept == 1 ? 'it' : 'them'}.',
+                key: const Key('delete-local-shared-note'),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Files to delete:',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: TokenSpace.space2),
-                  if (p.audioFilesCount > 0)
-                    _itemRow(
-                      'Audio recordings',
-                      '${p.audioFilesCount} files • ${formatStorageBytes(p.audioBytes)}',
-                    ),
-                  if (p.keptOriginalsCount > 0)
-                    _itemRow(
-                      'Kept originals',
-                      '${p.keptOriginalsCount} files • ${formatStorageBytes(p.keptOriginalsBytes)}',
-                    ),
-                  if (p.photoFilesCount > 0)
-                    _itemRow(
-                      'Photos',
-                      '${p.photoFilesCount} files • ${formatStorageBytes(p.photoBytes)}',
-                    ),
-                  if (p.derivedFilesCount > 0)
-                    _itemRow(
-                      'Waveforms & derived',
-                      '${p.derivedFilesCount} files • ${formatStorageBytes(p.derivedBytes)}',
-                    ),
-                  if (p.sharedFilesPreservedCount > 0) ...[
-                    const Divider(height: TokenSpace.space3),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: Colors.blueGrey,
-                        ),
-                        const SizedBox(width: TokenSpace.space2),
-                        Expanded(
-                          child: Text(
-                            '${p.sharedFilesPreservedCount} shared audio file(s) preserved (used by other sessions).',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const Divider(height: TokenSpace.space3),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total space to free:',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        formatStorageBytes(p.totalBytesToFree),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+            ],
+            if (p.recoveryFilesKept > 0) ...[
+              const SizedBox(height: TokenSpace.space2),
+              Text(
+                '${p.recoveryFilesKept} unfinished or unlinked '
+                '${p.recoveryFilesKept == 1 ? 'recording stays' : 'recordings stay'} '
+                'for recovery.',
               ),
-            ),
-
-            const SizedBox(height: TokenSpace.space4),
-
-            // Lightweight archived index checkbox (FR-STO-07)
-            CheckboxListTile(
-              key: const Key('keep-lightweight-index-checkbox'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Keep lightweight archived index'),
-              subtitle: const Text(
-                'Retain notes, bookmarks and small thumbnails so you can browse sessions offline without keeping large audio files.',
-              ),
-              value: _keepIndex,
-              onChanged: _isDeleting
-                  ? null
-                  : (val) => setState(() => _keepIndex = val ?? false),
-            ),
+            ],
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
         AttenlumeButton(
-          key: const Key('confirm-delete-local-button'),
-          label: _isDeleting ? 'Deleting…' : 'Delete local copies',
-          variant: AttenlumeButtonVariant.danger,
-          onPressed: _isDeleting ? null : _handleConfirm,
+          key: const Key('continue-delete-local-button'),
+          label: 'Continue',
+          variant: AttenlumeButtonVariant.secondary,
+          onPressed: () => Navigator.of(context).pop(true),
         ),
       ],
     );
   }
+}
 
-  Widget _itemRow(String label, String detail) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 13)),
-          Text(
-            detail,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          ),
-        ],
+/// Step 2: the separate confirmation (FR-STO-06). Delete pops `true`.
+class DeleteLocalConfirmDialog extends StatelessWidget {
+  const DeleteLocalConfirmDialog({super.key, required this.preview});
+
+  final DeleteLocalPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Delete for good?'),
+      content: Text(
+        'This deletes ${preview.totalFiles} '
+        '${preview.totalFiles == 1 ? 'file' : 'files'} '
+        '(${formatStorageBytes(preview.totalBytes)}) and '
+        '${preview.activityTitles.length == 1 ? 'the activity' : 'the activities'} '
+        'from this device. It cannot be undone.',
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        AttenlumeButton(
+          key: const Key('confirm-delete-local-button'),
+          label: 'Delete',
+          variant: AttenlumeButtonVariant.danger,
+          onPressed: () => Navigator.of(context).pop(true),
+        ),
+      ],
     );
   }
 }
