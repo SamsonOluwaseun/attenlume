@@ -121,7 +121,18 @@ class ActivityCard extends StatelessWidget {
     ];
     final metadataText = metadataParts.join(' · ');
 
-    final semanticLabel = '$title, ${status.label}, $duration';
+    // Everything the card shows, in reading order (NFR-09).
+    final semanticLabel = [
+      title,
+      typeLabel,
+      if (isPrivate) 'Private',
+      status.label,
+      metadataText,
+      if (photoCount > 0) '$photoCount ${photoCount == 1 ? 'photo' : 'photos'}',
+      if (bookmarkCount > 0)
+        '$bookmarkCount ${bookmarkCount == 1 ? 'bookmark' : 'bookmarks'}',
+      profile.label,
+    ].join(', ');
 
     return Semantics(
       button: true,
@@ -154,49 +165,66 @@ class ActivityCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Row 1: Type label + optional Private lock + StatusPill
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                // Row 1: Type label + optional Private lock + StatusPill.
+                // Wraps instead of overflowing at large text (NFR-09).
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: TokenSpace.space2,
+                  runSpacing: TokenSpace.space1,
                   children: [
-                    Icon(
-                      activityTypeIconData(typeIcon),
-                      size: 16,
-                      color: inkMuted,
-                    ),
-                    const SizedBox(width: TokenSpace.space1),
-                    Text(
-                      typeLabel,
-                      style: TextStyle(
-                        fontFamily: 'Montserrat',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: inkMuted,
-                      ),
-                    ),
-                    if (isPrivate) ...[
-                      const SizedBox(width: TokenSpace.space2),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.lock_outline_rounded,
-                            size: 13,
-                            color: inkMuted,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            'Private',
-                            style: TextStyle(
-                              fontFamily: 'Montserrat',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: TokenSpace.space2,
+                      runSpacing: TokenSpace.space1,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              activityTypeIconData(typeIcon),
+                              size: 16,
                               color: inkMuted,
                             ),
+                            const SizedBox(width: TokenSpace.space1),
+                            Flexible(
+                              child: Text(
+                                typeLabel,
+                                style: TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: inkMuted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (isPrivate)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.lock_outline_rounded,
+                                size: 13,
+                                color: inkMuted,
+                              ),
+                              const SizedBox(width: 2),
+                              Flexible(
+                                child: Text(
+                                  'Private',
+                                  style: TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: inkMuted,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
-                    const Spacer(),
+                      ],
+                    ),
                     StatusPill(status: status),
                   ],
                 ),
@@ -232,57 +260,63 @@ class ActivityCard extends StatelessWidget {
 
                 const SizedBox(height: TokenSpace.space3),
 
-                // Row 4: Counts (camera 12, bookmark 4) and recording profile
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                // Row 4: Counts (camera 12, bookmark 4) and recording profile.
+                // Wraps instead of overflowing at large text (NFR-09).
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: TokenSpace.space3,
+                  runSpacing: TokenSpace.space1,
                   children: [
-                    if (photoCount > 0) ...[
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.camera_alt_outlined,
-                            size: 15,
-                            color: inkMuted,
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: TokenSpace.space3,
+                      runSpacing: TokenSpace.space1,
+                      children: [
+                        if (photoCount > 0)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.camera_alt_outlined,
+                                size: 15,
+                                color: inkMuted,
+                              ),
+                              const SizedBox(width: TokenSpace.space1),
+                              Text(
+                                '$photoCount',
+                                style: TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: inkMuted,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: TokenSpace.space1),
-                          Text(
-                            '$photoCount',
-                            style: TextStyle(
-                              fontFamily: 'Montserrat',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: inkMuted,
-                            ),
+                        if (bookmarkCount > 0)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.bookmark_outline_rounded,
+                                size: 15,
+                                color: inkMuted,
+                              ),
+                              const SizedBox(width: TokenSpace.space1),
+                              Text(
+                                '$bookmarkCount',
+                                style: TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: inkMuted,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(width: TokenSpace.space3),
-                    ],
-                    if (bookmarkCount > 0) ...[
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.bookmark_outline_rounded,
-                            size: 15,
-                            color: inkMuted,
-                          ),
-                          const SizedBox(width: TokenSpace.space1),
-                          Text(
-                            '$bookmarkCount',
-                            style: TextStyle(
-                              fontFamily: 'Montserrat',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: inkMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: TokenSpace.space3),
-                    ],
-                    const Spacer(),
+                      ],
+                    ),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         vertical: 2,

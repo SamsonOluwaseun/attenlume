@@ -235,7 +235,9 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header Row: Type and Status
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Icon(
                     activityTypeIconData(_summary.type.icon),
@@ -250,7 +252,7 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Spacer(),
+
                   StatusPill(status: _summary.statusPillStatus),
                   const SizedBox(width: TokenSpace.space2),
                   IconButton(
@@ -661,12 +663,16 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
       children: [
         Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: TokenSpace.space2),
-        Text(label, style: theme.textTheme.bodyMedium),
-        const Spacer(),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
+        // Both sides wrap at large text instead of overflowing (NFR-09).
+        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+        const SizedBox(width: TokenSpace.space2),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

@@ -50,15 +50,20 @@ class ActivityNotesSection extends ConsumerWidget {
       key: const Key('activity-notes-section'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(
-              'Notes',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
+            Semantics(
+              header: true,
+              child: Text(
+                'Notes',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            const Spacer(),
+
             TextButton.icon(
               key: const Key('activity-notes-edit-button'),
               onPressed: () => _edit(context, ref),

@@ -201,7 +201,7 @@ class AttenlumeButton extends StatelessWidget {
 
   Widget _buildContent(BuildContext context, TextStyle textStyle) {
     if (leading == null) {
-      return Text(label, style: textStyle);
+      return Text(label, style: textStyle, textAlign: TextAlign.center);
     }
     return Row(
       mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
@@ -209,7 +209,10 @@ class AttenlumeButton extends StatelessWidget {
       children: [
         leading!,
         const SizedBox(width: TokenSpace.space2),
-        Text(label, style: textStyle),
+        // Wraps at large text instead of overflowing (NFR-09).
+        Flexible(
+          child: Text(label, style: textStyle, textAlign: TextAlign.center),
+        ),
       ],
     );
   }

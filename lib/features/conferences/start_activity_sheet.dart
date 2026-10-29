@@ -148,15 +148,20 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(
-                  'Start activity',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Start activity',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-                const Spacer(),
+
                 IconButton(
                   icon: const Icon(Icons.close),
                   tooltip: 'Cancel',
@@ -176,16 +181,21 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
               textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: TokenSpace.space4),
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(
-                  'Select type',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurfaceVariant,
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Select type',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-                const Spacer(),
+
                 TextButton.icon(
                   key: const Key('add-custom-type-chip'),
                   icon: const Icon(Icons.add_rounded, size: 16),

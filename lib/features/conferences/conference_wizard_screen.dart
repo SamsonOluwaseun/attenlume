@@ -518,6 +518,8 @@ class _ConferenceWizardScreenState
                     const SizedBox(height: TokenSpace.space3),
                     DropdownButtonFormField<String>(
                       key: const Key('timezone-dropdown'),
+                      // Long zone names shorten instead of overflowing.
+                      isExpanded: true,
                       initialValue: availableTzs.contains(_timezone)
                           ? _timezone
                           : availableTzs.first,
@@ -757,13 +759,15 @@ class _ConferenceWizardScreenState
                             child: RadioListTile<RecordingProfile>(
                               key: Key('profile-tile-${profile.key}'),
                               value: profile,
-                              title: Row(
+                              // Wraps at large text (NFR-09).
+                              title: Wrap(
+                                spacing: TokenSpace.space2,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Text(
                                     profile.label,
                                     style: theme.textTheme.titleMedium,
                                   ),
-                                  const SizedBox(width: TokenSpace.space2),
                                   Text(
                                     profile.mbPerHourLabel,
                                     style: theme.textTheme.bodySmall?.copyWith(

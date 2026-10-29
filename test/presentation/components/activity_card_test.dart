@@ -70,7 +70,10 @@ void main() {
         matchesSemantics(
           isButton: true,
           hasTapAction: true,
-          label: 'Data Mesh in Practice, Saved, 47 min',
+          // NFR-09: the label reads everything the card shows.
+          label:
+              'Data Mesh in Practice, Keynote, Saved, '
+              '09:30 · Hall A · 47 min, 12 photos, 4 bookmarks, Balanced',
         ),
       );
     });
