@@ -405,9 +405,14 @@ class StorageManagerService {
       }
       remove(ph.filePath);
     }
-    for (final sg in segments) {
-      if (failedPaths.contains(waveOf(sg))) continue;
-      remove(sg.filePath);
+    // A file two segment rows share (ADR-036) goes only if no row naming
+    // it left a derived file behind; otherwise every row keeps it.
+    final keepAudio = {
+      for (final sg in segments)
+        if (failedPaths.contains(waveOf(sg))) sg.filePath,
+    };
+    for (final path in {for (final sg in segments) sg.filePath}) {
+      if (!keepAudio.contains(path)) remove(path);
     }
     // A planned original skipped above still exists, so its activity
     // stays.

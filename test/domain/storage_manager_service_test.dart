@@ -984,5 +984,34 @@ void main() {
         expect(await t.conferences.get(conf.id), isNull);
       });
     }
+
+    test('FR-STO-06 ADR-036 a locked waveform on one side of a split keeps '
+        'the shared recording for both sides, and a retry finishes', () async {
+      final conf = await t.conference();
+      final part1 = await t.activity(conf.id, title: 'Panel');
+      final part2 = await t.activity(conf.id, title: 'Panel (Part 2)');
+      final shared = MediaPaths.segment(conf.id, part1.id, 1);
+      await segment(part1.id, shared, 8000);
+      final seg2 = await segment(part2.id, shared, 8000);
+      final wave2 = write(MediaPaths.waveform(conf.id, part2.id, seg2), 100);
+      await exported(conf.id);
+      locked.add(wave2.path);
+
+      var res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.failedFiles, 1);
+      expect(res.activitiesDeleted, 0);
+      final audio = MediaPaths.resolve(root, shared);
+      expect(audio.existsSync(), isTrue);
+      expect((await t.media.segmentsFor(part1.id)).single.filePath, shared);
+      expect((await t.media.segmentsFor(part2.id)).single.filePath, shared);
+
+      locked.clear();
+      res = await service.deleteLocalCopies(conferenceId: conf.id);
+      expect(res.failedFiles, 0);
+      expect(res.activitiesDeleted, 2);
+      expect(audio.existsSync(), isFalse);
+      expect(wave2.existsSync(), isFalse);
+      expect(await t.conferences.get(conf.id), isNull);
+    });
   });
 }
