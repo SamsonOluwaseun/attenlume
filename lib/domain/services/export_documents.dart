@@ -1,7 +1,7 @@
 /// Basic per-activity and conference documents written into an export
 /// (FR-EXP-01, ADR-040) [P1-21]. The full manifest, `activity.md`,
-/// `timeline.csv`, README and prompts are P1-22 and plug in through
-/// `ExportContributor`.
+/// `timeline.csv`, README and prompts are in `export_package.dart` (P1-22,
+/// ADR-046) and plug in through `ExportContributor`.
 library;
 
 import 'dart:convert';
@@ -14,9 +14,9 @@ import 'activity_title.dart';
 import 'cut_range_math.dart';
 import 'private_notes.dart';
 
-/// Version of the JSON written by this file. P1-22 raises it when it adds
-/// the full manifest fields.
-const exportSchemaVersion = 1;
+/// Version of the JSON in an export. 2 since P1-22 added the full
+/// `conference.json` manifest (ADR-046); `activity.json` is unchanged.
+const exportSchemaVersion = 2;
 
 const _json = JsonEncoder.withIndent('  ');
 

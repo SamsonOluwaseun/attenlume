@@ -24,6 +24,7 @@ import '../models/media.dart';
 import 'activity_title.dart';
 import 'cut_range_math.dart';
 import 'export_documents.dart';
+import 'export_package.dart';
 import 'permanent_trim_service.dart';
 import 'private_notes.dart';
 import 'review_timeline.dart';
@@ -140,6 +141,11 @@ class ExportedActivity {
     required this.cuts,
     required this.interruptions,
     required this.files,
+    this.notes = '',
+    this.notesFile,
+    this.bookmarksFile,
+    this.activityJsonFile,
+    this.cutsFile,
   });
 
   final Activity activity;
@@ -155,6 +161,18 @@ class ExportedActivity {
   final List<CutRange> cuts;
   final List<Interruption> interruptions;
   final ActivityExportFiles files;
+
+  /// The notes as exported: private reflections already removed unless
+  /// private items are included (FR-EXP-10). Empty when the export has no
+  /// text or the activity has no notes.
+  final String notes;
+
+  /// Generated files in the activity folder, relative to it, or null when
+  /// not written.
+  final String? notesFile;
+  final String? bookmarksFile;
+  final String? activityJsonFile;
+  final String? cutsFile;
 }
 
 /// What contributors see when adding files.
@@ -190,7 +208,8 @@ class ExportDocument {
 
 /// Extension point for generated files (ADR-040). P1-22 adds the full
 /// manifest, `timeline.csv`, `README_START_HERE.md`, `analysis_prompt.md`,
-/// `prompts/` and `activity.md` by implementing this.
+/// `prompts/` and `activity.md` through `ExportPackageContributor`
+/// (`export_package.dart`, ADR-046).
 abstract class ExportContributor {
   const ExportContributor();
 
@@ -205,7 +224,9 @@ abstract class ExportContributor {
   ) => const [];
 }
 
-/// The basic `conference.json` this task writes; P1-22 replaces it.
+/// The basic `conference.json` written by P1-21. The app now uses
+/// `ExportPackageContributor` (ADR-046); this stays for tests and as the
+/// smallest contributor.
 class BasicConferenceJsonContributor extends ExportContributor {
   const BasicConferenceJsonContributor();
 
@@ -244,6 +265,7 @@ class ExportPlan {
     required this.privateNotesExcluded,
     required this.segmentsSkipped,
     required this.tempBytes,
+    this.analysisPrompt,
   });
 
   final ExportRequest request;
@@ -261,6 +283,10 @@ class ExportPlan {
 
   /// Scratch space a ZIP with trimmed copies needs while writing.
   final int tempBytes;
+
+  /// The text of `analysis_prompt.md` when a contributor writes one, for
+  /// "Copy AI prompt" (FR-EXP-08).
+  final String? analysisPrompt;
 
   /// Media files (audio and photos) in the export.
   int get mediaFileCount =>
@@ -310,6 +336,7 @@ class ExportOutcome {
     required this.fileCount,
     required this.bytes,
     required this.verification,
+    this.analysisPrompt,
   });
 
   final String jobId;
@@ -321,6 +348,10 @@ class ExportOutcome {
   final int fileCount;
   final int bytes;
   final VerificationLevel verification;
+
+  /// The filled-in `analysis_prompt.md` written into this export, for
+  /// "Copy AI prompt" (FR-EXP-08). Null when no prompt was written.
+  final String? analysisPrompt;
 }
 
 /// Plain UK English refusals, ready to show. Nothing was written.
@@ -358,7 +389,7 @@ class ExportService {
     this.freeSpace = const UnknownFreeSpaceProbe(),
     this.reserveBytes = defaultExportReserveBytes,
     this.writer = writeExportInBackground,
-    this.contributors = const [BasicConferenceJsonContributor()],
+    this.contributors = const [ExportPackageContributor()],
     this.clock = systemUtcClock,
   });
 
@@ -476,6 +507,7 @@ class ExportService {
       final segmentNotes = <String, String>{};
       final photoFiles = <String, String>{};
       final trimmedKeep = <String, List<TimeRange>>{};
+      String? cutsFile;
 
       // Audio (FR-EXP-03). A file_path two rows share (ADR-036) goes in
       // once per activity.
@@ -575,12 +607,9 @@ class ExportService {
                 ? null
                 : timeline.segments.first.segment.startUtc,
           );
-          activityEntries.add(
-            _text(
-              paths.file(folder, 'cuts.json'),
-              '${manifest.toPrettyJson()}\n',
-            ),
-          );
+          final cutsPath = paths.file(folder, 'cuts.json');
+          cutsFile = _inFolder(cutsPath, folder);
+          activityEntries.add(_text(cutsPath, '${manifest.toPrettyJson()}\n'));
         }
         if (request.includeKeptOriginals) {
           final dir = Directory(
@@ -629,27 +658,21 @@ class ExportService {
         }
       }
 
-      final item = ExportedActivity(
-        activity: a,
-        type: type,
+      final files = ActivityExportFiles(
         folder: folder,
-        segments: segments,
-        photos: photos,
-        bookmarks: bookmarks,
-        cuts: activeCuts,
-        interruptions: interruptions,
-        files: ActivityExportFiles(
-          folder: folder,
-          trimmedKeepRanges: trimmedKeep,
-          segmentFiles: segmentFiles,
-          segmentNotes: segmentNotes,
-          photoFiles: photoFiles,
-        ),
+        trimmedKeepRanges: trimmedKeep,
+        segmentFiles: segmentFiles,
+        segmentNotes: segmentNotes,
+        photoFiles: photoFiles,
       );
 
       // Text and metadata.
+      var notes = '';
+      String? notesFile;
+      String? bookmarksFile;
+      String? activityJsonFile;
       if (request.content.text) {
-        var notes = a.notesMd ?? '';
+        notes = a.notesMd ?? '';
         if (!request.includePrivate) {
           final (kept, removed) = stripPrivateReflections(notes);
           notes = kept;
@@ -657,9 +680,11 @@ class ExportService {
         }
         // Written after the activity's audio, so trimmed copies are
         // described by the files actually written (FR-EXP-06).
+        final jsonPath = paths.file(folder, 'activity.json');
+        activityJsonFile = _inFolder(jsonPath, folder);
         activityEntries.add(
           _activityJsonEntry(
-            paths.file(folder, 'activity.json'),
+            jsonPath,
             activity: a,
             type: type,
             timezone: tz,
@@ -669,27 +694,40 @@ class ExportService {
             bookmarks: bookmarks,
             cuts: activeCuts,
             interruptions: interruptions,
-            files: item.files,
+            files: files,
           ),
         );
         if (notes.trim().isNotEmpty ||
             (a.followUpText?.trim().isNotEmpty ?? false)) {
+          final notesPath = paths.file(folder, 'notes.md');
+          notesFile = _inFolder(notesPath, folder);
           activityEntries.add(
-            _text(
-              paths.file(folder, 'notes.md'),
-              buildNotesMarkdown(a, notes: notes),
-            ),
+            _text(notesPath, buildNotesMarkdown(a, notes: notes)),
           );
         }
         if (bookmarks.isNotEmpty) {
-          activityEntries.add(
-            _text(
-              paths.file(folder, 'bookmarks.csv'),
-              buildBookmarksCsv(bookmarks, tz),
-            ),
-          );
+          final csvPath = paths.file(folder, 'bookmarks.csv');
+          bookmarksFile = _inFolder(csvPath, folder);
+          activityEntries.add(_text(csvPath, buildBookmarksCsv(bookmarks, tz)));
         }
       }
+
+      final item = ExportedActivity(
+        activity: a,
+        type: type,
+        folder: folder,
+        segments: segments,
+        photos: photos,
+        bookmarks: bookmarks,
+        cuts: activeCuts,
+        interruptions: interruptions,
+        files: files,
+        notes: notes,
+        notesFile: notesFile,
+        bookmarksFile: bookmarksFile,
+        activityJsonFile: activityJsonFile,
+        cutsFile: cutsFile,
+      );
 
       if (activityEntries.isEmpty) continue;
       entries.addAll(activityEntries);
@@ -717,10 +755,12 @@ class ExportService {
         entries.insertAll(end, extra);
       }
     }
+    final rootDocs = [
+      for (final c in contributors) ...c.rootDocuments(context),
+    ];
     final rootEntries = [
-      for (final c in contributors)
-        for (final doc in c.rootDocuments(context))
-          _text(_docPath(paths, '', doc.path), doc.text),
+      for (final doc in rootDocs)
+        _text(_docPath(paths, '', doc.path), doc.text),
     ];
 
     return ExportPlan(
@@ -732,6 +772,10 @@ class ExportService {
       privateNotesExcluded: privateNotes,
       segmentsSkipped: skipped,
       tempBytes: tempBytes,
+      analysisPrompt: rootDocs
+          .where((d) => d.path == analysisPromptFileName)
+          .firstOrNull
+          ?.text,
     );
   }
 
@@ -879,6 +923,7 @@ class ExportService {
         fileCount: result.files.length,
         bytes: result.totalBytes,
         verification: verification,
+        analysisPrompt: plan.analysisPrompt,
       );
     } on ExportCancelledException {
       await jobs.cancel(job.id);

@@ -196,7 +196,8 @@ void main() {
         expect(plan.activityCount, 2);
         expect(plan.privateActivitiesExcluded, 1);
         final paths = pathsOf(plan);
-        expect(paths.first, 'conference.json');
+        expect(paths.first, 'README_START_HERE.md');
+        expect(paths, contains('conference.json'));
         expect(
           paths,
           containsAll([
@@ -252,7 +253,7 @@ void main() {
       final (id, _, _, _) = await conference();
       Future<List<String>> files(ExportContent c) async => pathsOf(
         await service.plan(ExportRequest(conferenceId: id, content: c)),
-      ).where((x) => x != 'conference.json').toList();
+      ).where((x) => x.startsWith('activities/')).toList();
 
       final audio = await files(ExportContent.audioOnly);
       expect(audio, everyElement(endsWith('.m4a')));
