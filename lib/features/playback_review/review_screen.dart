@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/activity.dart';
+import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../domain/models/media.dart';
 import '../../domain/services/activity_splitter.dart';
@@ -15,7 +18,11 @@ import '../../platform/audio_playback/audio_playback_engine.dart';
 import '../../platform/audio_playback/audioplayers_playback_engine.dart';
 import '../../platform/audio_trimmer/mp4_sample_trimmer.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_providers.dart';
+import '../photos/activity_photos_section.dart';
+import 'review_header.dart';
+import 'review_moments.dart';
 import 'review_player_controller.dart';
 import 'timeline_strip.dart';
 import 'trim_panel.dart';
@@ -51,6 +58,11 @@ final permanentTrimServiceProvider = Provider<PermanentTrimService>(
 /// Player, timeline and waveform for one activity (FR-REV-01 to 03)
 /// [P1-17], with non-destructive trims, cuts with undo and split at the
 /// playhead (FR-REV-04, FR-REV-05) [P1-18].
+///
+/// Laid out as the screens board's "Session review" (ADR-053) [P1-39]: hero
+/// photo, title, place, date and duration, the player, then tabs for
+/// Highlights (Key moments), Timeline (waveform, timeline and trims),
+/// Photos and Notes.
 class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({super.key, required this.activityId});
 
@@ -60,8 +72,27 @@ class ReviewScreen extends ConsumerStatefulWidget {
   ConsumerState<ReviewScreen> createState() => _ReviewScreenState();
 }
 
-class _ReviewScreenState extends ConsumerState<ReviewScreen> {
+/// The review screen's tabs, in order (ADR-053).
+enum ReviewTab {
+  highlights('Highlights'),
+  timeline('Timeline'),
+  photos('Photos'),
+  notes('Notes');
+
+  const ReviewTab(this.label);
+  final String label;
+}
+
+class _ReviewScreenState extends ConsumerState<ReviewScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(
+    length: ReviewTab.values.length,
+    vsync: this,
+  )..addListener(_onTab);
   Activity? _activity;
+  Conference? _conference;
+  List<Photo> _photos = const [];
+  Directory? _root;
   ReviewTimeline? _timeline;
   ReviewPlayerController? _player;
   WaveformPager? _pager;
@@ -81,18 +112,28 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         .get(widget.activityId);
     final media = ref.read(mediaAssetRepositoryProvider);
     final id = widget.activityId;
+    final photos = await media.photosFor(id);
     final timeline = ReviewTimeline.build(
       segments: await media.segmentsFor(id),
       interruptions: await media.interruptionsFor(id),
-      photos: await media.photosFor(id),
+      photos: photos,
       bookmarks: await media.bookmarksFor(id),
     );
     final cuts = await ref.read(cutRangeRepositoryProvider).activeFor(id);
+    final conference = activity == null
+        ? null
+        : await ref
+              .read(conferenceRepositoryProvider)
+              .get(activity.conferenceId);
     final mediaRoot = ref.read(mediaRootProvider);
+    final root = await mediaRoot();
     if (!mounted) return;
     final engine = ref.read(audioPlaybackEngineFactoryProvider)();
     setState(() {
       _activity = activity;
+      _conference = conference;
+      _photos = photos;
+      _root = root;
       _timeline = timeline;
       _cuts = cuts;
       _markedStartMs = null;
@@ -117,8 +158,38 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   @override
   void dispose() {
+    _tabs.dispose();
     _player?.dispose();
     super.dispose();
+  }
+
+  void _onTab() {
+    if (mounted) setState(() {});
+  }
+
+  /// Rereads the activity after its notes change.
+  Future<void> _reloadActivity() async {
+    final activity = await ref
+        .read(activityRepositoryProvider)
+        .get(widget.activityId);
+    if (mounted && activity != null) setState(() => _activity = activity);
+  }
+
+  /// Opens a photo to view it and edit its caption and label (FR-PHO-06).
+  Future<void> _openPhoto(Photo photo) async {
+    final root = _root;
+    if (root == null) return;
+    final updated = await PhotoDetailSheet.show(context, photo, root);
+    if (updated == null || !mounted) return;
+    final photos = await ref
+        .read(mediaAssetRepositoryProvider)
+        .photosFor(widget.activityId);
+    if (mounted) setState(() => _photos = photos);
+  }
+
+  void _showOnTimeline(int offsetMs) {
+    _player?.seekTo(offsetMs);
+    _tabs.animateTo(ReviewTab.timeline.index);
   }
 
   /// Trims need finished audio: not while a segment is still being written.
@@ -305,81 +376,264 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final player = _player;
     final timeline = _timeline;
     return Scaffold(
-      appBar: AppBar(title: Text(_activity?.title ?? 'Review')),
+      appBar: AppBar(title: const Text('Session review')),
       body: _loading || player == null || timeline == null
           ? const Center(child: CircularProgressIndicator())
           : ListenableBuilder(
               listenable: player,
-              builder: (context, _) => ListView(
-                padding: const EdgeInsets.all(TokenSpace.space4),
-                children: [
-                  if (!player.canPlay)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: TokenSpace.space3),
-                      child: Text(
-                        'No recording to play yet. Photos and bookmarks '
-                        'still show on the timeline.',
-                        key: const Key('review-no-audio'),
-                        style: theme.textTheme.bodyLarge,
-                      ),
+              builder: (context, _) => LayoutBuilder(
+                builder: (context, constraints) {
+                  // Content up to 720 dp wide, centred on tablets and
+                  // Windows (DESIGN_GUIDE layout).
+                  final side =
+                      constraints.maxWidth > 720 + TokenSpace.space5 * 2
+                      ? (constraints.maxWidth - 720) / 2
+                      : TokenSpace.space4;
+                  return ListView(
+                    key: const Key('review-scroll'),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: side,
+                      vertical: TokenSpace.space4,
                     ),
-                  if (_pager case final pager?)
-                    WaveformView(
-                      pager: pager,
-                      positionMs: player.positionMs,
-                      onSeek: player.seekTo,
-                    ),
-                  const SizedBox(height: TokenSpace.space4),
-                  TimelineStrip(
-                    timeline: timeline,
-                    positionMs: player.positionMs,
-                    onSeek: player.seekTo,
-                    cuts: player.cuts,
-                  ),
-                  const SizedBox(height: TokenSpace.space2),
-                  _PositionRow(timeline: timeline, player: player),
-                  const SizedBox(height: TokenSpace.space3),
-                  _Controls(player: player),
-                  const SizedBox(height: TokenSpace.space5),
-                  TrimPanel(
-                    positionMs: player.positionMs,
-                    audioEndMs: timeline.audioEndMs,
-                    cuts: _cuts,
-                    enabled: _editable,
-                    markedStartMs: _markedStartMs,
-                    onTrimStart: () =>
-                        _addCut(0, player.positionMs, 'Trim start'),
-                    onTrimEnd: () => _addCut(
-                      player.positionMs,
-                      timeline.audioEndMs,
-                      'Trim end',
-                    ),
-                    onMarkCut: () => _markCut(player.positionMs),
-                    onCancelMark: () => setState(() => _markedStartMs = null),
-                    onSplit: () => _split(player.positionMs),
-                    onRemoveCut: _removeCut,
-                    onSeek: player.seekTo,
-                    onApplyPermanently: _applyPermanently,
-                  ),
-                  if (player.error case final error?) ...[
-                    const SizedBox(height: TokenSpace.space3),
-                    Text(
-                      error,
-                      key: const Key('review-error'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: TokenSpace.space5),
-                  _KeyMoments(timeline: timeline, player: player),
-                ],
+                    children: [
+                      ..._header(timeline),
+                      const SizedBox(height: TokenSpace.space4),
+                      _PlayerCard(timeline: timeline, player: player),
+                      const SizedBox(height: TokenSpace.space4),
+                      _ReviewTabBar(controller: _tabs),
+                      const SizedBox(height: TokenSpace.space4),
+                      _tabBody(timeline, player),
+                    ],
+                  );
+                },
               ),
             ),
+    );
+  }
+
+  List<Widget> _header(ReviewTimeline timeline) {
+    final activity = _activity;
+    final conference = _conference;
+    final place = [
+      if (activity?.room case final room? when room.trim().isNotEmpty)
+        room.trim(),
+      ?conference?.name,
+    ].join(' · ');
+    final started =
+        activity?.actualStart ??
+        (timeline.segments.isEmpty
+            ? null
+            : timeline.segments.first.segment.startUtc) ??
+        activity?.plannedStart;
+    return [
+      ReviewHero(photo: reviewHeroPhoto(_photos), root: _root),
+      const SizedBox(height: TokenSpace.space4),
+      ReviewHeader(
+        title: activity?.title ?? '',
+        place: place,
+        date: started == null
+            ? null
+            : reviewDate(started, conference?.timezone ?? 'UTC'),
+        durationMs: timeline.audioDurationMs,
+      ),
+    ];
+  }
+
+  Widget _tabBody(ReviewTimeline timeline, ReviewPlayerController player) {
+    return switch (ReviewTab.values[_tabs.index]) {
+      ReviewTab.highlights => ReviewHighlights(
+        key: const Key('review-tab-highlights'),
+        moments: keyMoments(timeline, _photos),
+        root: _root,
+        canPlay: player.canPlay,
+        onSeek: player.seekTo,
+        onShowOnTimeline: _showOnTimeline,
+        onOpenPhoto: _openPhoto,
+      ),
+      ReviewTab.timeline => Column(
+        key: const Key('review-tab-timeline'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_pager case final pager?) ...[
+            WaveformView(
+              pager: pager,
+              positionMs: player.positionMs,
+              onSeek: player.seekTo,
+            ),
+            const SizedBox(height: TokenSpace.space4),
+          ],
+          TimelineStrip(
+            timeline: timeline,
+            positionMs: player.positionMs,
+            onSeek: player.seekTo,
+            cuts: player.cuts,
+          ),
+          const SizedBox(height: TokenSpace.space5),
+          TrimPanel(
+            positionMs: player.positionMs,
+            audioEndMs: timeline.audioEndMs,
+            cuts: _cuts,
+            enabled: _editable,
+            markedStartMs: _markedStartMs,
+            onTrimStart: () => _addCut(0, player.positionMs, 'Trim start'),
+            onTrimEnd: () =>
+                _addCut(player.positionMs, timeline.audioEndMs, 'Trim end'),
+            onMarkCut: () => _markCut(player.positionMs),
+            onCancelMark: () => setState(() => _markedStartMs = null),
+            onSplit: () => _split(player.positionMs),
+            onRemoveCut: _removeCut,
+            onSeek: player.seekTo,
+            onApplyPermanently: _applyPermanently,
+          ),
+        ],
+      ),
+      ReviewTab.photos => ReviewPhotos(
+        key: const Key('review-tab-photos'),
+        photos: _photos,
+        offsets: {
+          for (final m in timeline.markers)
+            if (m.kind == TimelineMarkerKind.photo) m.id: m.offsetMs,
+        },
+        root: _root,
+        canPlay: player.canPlay,
+        onSeek: player.seekTo,
+        onOpenPhoto: _openPhoto,
+      ),
+      ReviewTab.notes => ActivityNotesSection(
+        key: const Key('review-tab-notes'),
+        activityId: widget.activityId,
+        notesMd: _activity?.notesMd,
+        onChanged: _reloadActivity,
+      ),
+    };
+  }
+}
+
+/// Highlights, Timeline, Photos and Notes as pills: the selected one on
+/// brand-tint with ink text (DESIGN_GUIDE tokens) [P1-39].
+class _ReviewTabBar extends StatelessWidget {
+  const _ReviewTabBar({required this.controller});
+
+  final TabController controller;
+
+  static const _padding = TokenSpace.space2;
+
+  /// True when every label fits in an equal share of [width].
+  static bool _fits(BuildContext context, TextStyle? style, double width) {
+    final share = width / ReviewTab.values.length - _padding * 2;
+    final scaler = MediaQuery.textScalerOf(context);
+    for (final tab in ReviewTab.values) {
+      final painter = TextPainter(
+        text: TextSpan(text: tab.label, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final w = painter.width;
+      painter.dispose();
+      if (w > share) return false;
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Equal pills across the width, as on the board; scrolls sideways
+        // only when large text no longer fits (NFR-09).
+        final scrollable = !_fits(
+          context,
+          theme.textTheme.labelLarge,
+          constraints.maxWidth,
+        );
+        return _bar(scheme, theme, scrollable: scrollable);
+      },
+    );
+  }
+
+  Widget _bar(ColorScheme scheme, ThemeData theme, {required bool scrollable}) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(TokenRadius.radiusPill),
+      ),
+      child: TabBar(
+        key: const Key('review-tabs'),
+        controller: controller,
+        isScrollable: scrollable,
+        tabAlignment: scrollable ? TabAlignment.start : TabAlignment.fill,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(TokenRadius.radiusPill),
+        ),
+        labelColor: scheme.onPrimaryContainer,
+        unselectedLabelColor: scheme.onSurface,
+        labelStyle: theme.textTheme.labelLarge,
+        unselectedLabelStyle: theme.textTheme.labelLarge,
+        labelPadding: const EdgeInsets.symmetric(horizontal: _padding),
+        tabs: [
+          for (final tab in ReviewTab.values)
+            Tab(
+              key: Key('review-tab-${tab.name}-button'),
+              height: TokenSize.tapMin,
+              text: tab.label,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Play controls, position and any playback error, on every tab.
+class _PlayerCard extends StatelessWidget {
+  const _PlayerCard({required this.timeline, required this.player});
+
+  final ReviewTimeline timeline;
+  final ReviewPlayerController player;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(TokenSpace.space3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!player.canPlay)
+              Padding(
+                padding: const EdgeInsets.only(bottom: TokenSpace.space3),
+                child: Text(
+                  'No recording to play yet. Photos and bookmarks '
+                  'still show on the timeline.',
+                  key: const Key('review-no-audio'),
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ),
+            _Controls(player: player),
+            const SizedBox(height: TokenSpace.space2),
+            _PositionRow(timeline: timeline, player: player),
+            if (player.error case final error?) ...[
+              const SizedBox(height: TokenSpace.space3),
+              Text(
+                error,
+                key: const Key('review-error'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -414,13 +668,14 @@ class _PositionRow extends StatelessWidget {
     );
     if (player.cuts.isEmpty) return row;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         row,
         Text(
           '${formatDuration(Duration(milliseconds: player.keptAudioMs))}'
           ' after cuts',
           key: const Key('review-kept'),
+          textAlign: TextAlign.end,
           style: style,
         ),
       ],
@@ -575,8 +830,10 @@ class _Controls extends StatelessWidget {
     final speedText = speed == speed.roundToDouble()
         ? '${speed.toInt()}×'
         : '$speed×';
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    // Wraps at large text instead of overflowing (NFR-09).
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         IconButton(
           key: const Key('review-skip-back'),
@@ -621,62 +878,6 @@ class _Controls extends StatelessWidget {
             child: Text(speedText, style: theme.textTheme.labelLarge),
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// Bookmarks and photos in time order; tapping one plays from there.
-class _KeyMoments extends StatelessWidget {
-  const _KeyMoments({required this.timeline, required this.player});
-
-  final ReviewTimeline timeline;
-  final ReviewPlayerController player;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final moments = timeline.markers
-        .where((m) => m.kind != TimelineMarkerKind.interruption)
-        .toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Key moments',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        if (moments.isEmpty)
-          Text(
-            'No bookmarks or photos in this activity.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        for (final m in moments)
-          ListTile(
-            key: Key('review-moment-${m.id}'),
-            contentPadding: EdgeInsets.zero,
-            minTileHeight: TokenSize.tapMin,
-            leading: Icon(
-              m.kind == TimelineMarkerKind.photo
-                  ? Icons.photo_camera_outlined
-                  : Icons.bookmark_rounded,
-            ),
-            title: Text(
-              m.label ??
-                  (m.kind == TimelineMarkerKind.photo ? 'Photo' : 'Bookmark'),
-            ),
-            trailing: Text(
-              formatOffset(m.offsetMs),
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-            onTap: player.canPlay ? () => player.seekTo(m.offsetMs) : null,
-          ),
       ],
     );
   }

@@ -5,7 +5,6 @@ import 'package:attenlume/features/export/export_providers.dart';
 import 'package:attenlume/features/export/export_sheet.dart';
 import 'package:attenlume/features/export/import_export_screen.dart';
 import 'package:attenlume/features/guide/quick_guide_screen.dart';
-import 'package:attenlume/features/playback_review/review_screen.dart';
 import 'package:attenlume/features/privacy/privacy_screen.dart';
 import 'package:attenlume/features/privacy/sensitive_export_warning.dart';
 import 'package:attenlume/features/settings/settings_screen.dart';
@@ -34,8 +33,9 @@ class _Destinations implements ExportDestinations {
 
 typedef Screen = Widget Function(SampleConference s);
 
-/// NFR-09 accessibility of the activity editor, review, export, import, Storage Manager,
-/// Settings, Privacy and app lock, and the quick guide [P1-26].
+/// NFR-09 accessibility of the activity editor, export, import, Storage Manager,
+/// Settings, Privacy and app lock, and the quick guide [P1-26]. The review
+/// screen has its own file, one test per tab (nfr09_review_test.dart).
 void main() {
   List<Override> extra(A11yHarness h) => [
     exportServiceProvider.overrideWithValue(
@@ -55,7 +55,6 @@ void main() {
   ];
 
   final screens = <String, Screen>{
-    'review': (s) => ReviewScreen(activityId: s.keynote.id),
     'activity editor': (s) => ActivityEditorScreen(activityId: s.keynote.id),
     'export sheet': (s) =>
         Scaffold(body: ExportSheet(conferenceId: s.conference.id)),
@@ -85,7 +84,7 @@ void main() {
     return h;
   }
 
-  group('NFR-09 review, export, storage and settings screens', () {
+  group('NFR-09 editor, export, storage and settings screens', () {
     screens.forEach((name, screen) {
       for (final (themeName, theme) in [
         ('light', AppTheme.light()),

@@ -63,6 +63,14 @@ void main() {
     }
   }
 
+  /// Opens one of the review tabs (ADR-053) [P1-39].
+  Future<void> showTab(WidgetTester tester, String name) async {
+    final tab = find.byKey(Key('review-tab-$name-button'));
+    await tester.ensureVisible(tab);
+    await tester.tap(tab);
+    await settle(tester);
+  }
+
   group('FR-REV-01 to 03 review screen [P1-17]', () {
     testWidgets('FR-REV-02 shows segments, gaps, interruptions, photos and '
         'bookmarks on the timeline', (tester) async {
@@ -73,6 +81,11 @@ void main() {
       await settle(tester);
 
       expect(find.text('Data Mesh in Practice'), findsOneWidget);
+      expect(find.text('17 min recorded'), findsOneWidget);
+      expect(find.text('Key slide'), findsOneWidget);
+      expect(find.text('15:00'), findsOneWidget);
+
+      await showTab(tester, 'timeline');
       expect(
         find.bySemanticsLabel(
           'Timeline: 2 segments, 1 gap, 1 bookmark, 1 photo, 1 interruption, '
@@ -90,9 +103,6 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('17 min recorded'), findsOneWidget);
-      expect(find.text('Key slide'), findsOneWidget);
-      expect(find.text('15:00'), findsOneWidget);
     });
 
     testWidgets('FR-REV-01 play, pause, skip, speed and jump to a key moment', (
@@ -155,6 +165,7 @@ void main() {
         subject(tester, ReviewScreen(activityId: sample!.keynote.id)),
       );
       await settle(tester);
+      await showTab(tester, 'timeline');
 
       expect(find.text('0:00 to 2:00'), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('page 1 of 10')), findsOneWidget);
@@ -163,8 +174,10 @@ void main() {
       expect(find.text('2:00 to 4:00'), findsOneWidget);
 
       // Jumping the playhead to 15:00 follows it to page 8.
+      await showTab(tester, 'highlights');
       await tester.tap(find.text('Key slide'));
       await settle(tester);
+      await showTab(tester, 'timeline');
       expect(find.text('14:00 to 16:00'), findsOneWidget);
     });
 
@@ -219,14 +232,17 @@ void main() {
   });
 
   group('FR-REV-04 and FR-REV-05 trim and split [P1-18]', () {
+    // Trim controls live on the Timeline tab (ADR-053).
     Future<void> tapKey(WidgetTester tester, String key) async {
       final finder = find.byKey(Key(key));
+      if (finder.evaluate().isEmpty) await showTab(tester, 'timeline');
       await tester.ensureVisible(finder);
       await tester.tap(finder);
       await settle(tester);
     }
 
     Future<void> seekToKeySlide(WidgetTester tester) async {
+      await showTab(tester, 'highlights');
       await tester.ensureVisible(find.text('Key slide'));
       await tester.tap(find.text('Key slide'));
       await settle(tester);
@@ -238,6 +254,7 @@ void main() {
         subject(tester, ReviewScreen(activityId: sample!.keynote.id)),
       );
       await settle(tester);
+      await showTab(tester, 'timeline');
       return sample;
     }
 
@@ -278,8 +295,9 @@ void main() {
       await tapKey(tester, 'trim-mark-cut');
       expect(find.byKey(const Key('trim-marking-hint')), findsOneWidget);
       expect(find.text('End cut here'), findsOneWidget);
-      await tester.ensureVisible(find.byIcon(Icons.photo_camera_outlined));
-      await tester.tap(find.byIcon(Icons.photo_camera_outlined));
+      await showTab(tester, 'highlights');
+      await tester.ensureVisible(find.text('Photo'));
+      await tester.tap(find.text('Photo'));
       await settle(tester);
       await tapKey(tester, 'trim-mark-cut');
       expect(find.text('14:00 to 15:00'), findsOneWidget);
@@ -327,6 +345,7 @@ void main() {
       );
       expect(bookmarks!.single.label, 'Key slide');
       // The screen reloads the first part: the bookmark has gone from it.
+      await showTab(tester, 'highlights');
       expect(find.text('Key slide'), findsNothing);
     });
 
@@ -342,6 +361,7 @@ void main() {
         () => t.activities.listForConference(sample.conference.id),
       );
       expect(activities, hasLength(3));
+      await showTab(tester, 'highlights');
       expect(find.text('Key slide'), findsOneWidget);
     });
   });
