@@ -8,6 +8,8 @@ build/
 .idea/
 .vscode/
 coverage/
+__pycache__/
+*.pyc
 
 # Android
 android/.gradle/
