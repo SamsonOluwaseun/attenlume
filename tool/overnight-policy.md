@@ -30,6 +30,25 @@ on this task and reuse existing work. Do not invoke any other agents.
 - Finish with concrete changes, commit hash, tests actually run, platform limits
   and remaining work. No request for human input while the owner is asleep.
 
+## Failure reporting (owner instruction, ADR-062)
+
+- On any failed run, permission/auth/quota error, timeout, failed check or blocked
+  review, report the failure immediately to the coordinating lead. Include task,
+  failed step, exact blocker, preserved branch/log location and whether user action
+  is needed. Do not keep working silently or wait for a morning status request.
+- A review that could not read source is REVIEW_BLOCKED, not a finding that the
+  code needs changes. Preserve its tested candidate for a resumed review.
+- During an active chat the lead must post the failure here promptly, even if a
+  fallback is available. Never infer that the owner is offline or uninterested.
+- A detached worker cannot itself post into the existing chat with this runner.
+  Reports/logs are not delivered alerts. Before detached execution, the lead must
+  verify an authorised delivery route end-to-end. No such route is implemented
+  in the current supervisor: use attended monitoring until it is available.
+- If alert delivery fails, surface that failure to the lead and pause dependent
+  work. Do not silently change channels, buy services or claim a notification
+  was sent without acknowledgement. Email/Slack or desktop alerts are not this
+  chat and require the owner's agreement if proposed as an alternative.
+
 The approved transcription design (ADR-056) is documentation only tonight.
 Do not implement speech models, payments, subscriptions, cloud features or
 unrequested product changes. Leave real-device/signing decisions for the owner.

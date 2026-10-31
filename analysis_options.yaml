@@ -9,6 +9,8 @@ analyzer:
     - android/**
     - ios/**
     - windows/**
+    # Overnight evidence contains copies of source/tests, not project code.
+    - tool/logs/**
     - "**/*.g.dart"
     - test/**/generated/**
   language:

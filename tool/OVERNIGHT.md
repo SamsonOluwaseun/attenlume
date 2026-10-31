@@ -1,5 +1,54 @@
 # Overnight relay (P1-45)
 
+**Current readiness: blocked for unattended use** (31 October 2026, ADR-062).
+The first run stopped at 00:55 with no integrations. Codex's sandbox could not
+update ACLs on the additional session-log write root, and a fallback setup
+overwrote an already tracked/mapped PDF. Tests/builds passed on two preserved
+candidates, but peer reviews could not execute. No same-chat alert transport
+exists in this runner. The instructions below describe the intended workflow,
+not proof that the system is ready to run unattended again.
+
+## Required recovery before the next detached run
+
+1. Remove the unnecessary session-log `--add-dir` permission request from Codex
+   tool access, or make a narrowly scoped folder-access repair if still needed.
+   The parent CLI/supervisor can write final outputs without giving shell tools
+   that additional root. Verify this with actual worktree execution; do not
+   disable the sandbox or grant broad administrator/Everyone permissions.
+2. Restore only ignored development documents to a new worktree. Do not recopy
+   already checked-out user-guide PDFs or tracked source. Test with a mapped/
+   locked existing PDF and preserve both source and candidate branches.
+3. Distinguish infrastructure-blocked review from code findings, pass findings
+   back to the preserved candidate for bounded repair, and resume its checks.
+   Do not retry from an untouched main branch as if earlier work did not exist.
+4. Test the whole builder/check/reviewer path in the actual worktree. Test alert
+   delivery with an intentional failure while the owner is present. A scratch
+   commit and writing a report do not prove these paths work.
+5. Only then review preserved P1-39a `90a13c3` and P1-28 `d5c06fd`, integrate
+   approved changes, export the Mac pack and proceed to their dependent tasks.
+
+These are reviewed recovery steps, not fixes implemented by P1-46. Only static
+analysis's diagnostic-folder exclusion was fixed in that task.
+
+## Immediate failure notifications
+
+Owner request: every failed run must be reported here without waiting to be asked.
+While the lead is active in chat, post the task/agent, failed step, cause, impact,
+preserved work and next action immediately. An available fallback does not remove
+this requirement. Ask only for missing permissions or choices actually needed.
+
+Detached processes currently have no connection into this existing chat. An
+instruction file cannot add that capability. Do not promise unsolicited chat
+messages, and do not declare an unattended run ready, until an authorised delivery
+mechanism has been connected and its receipt tested. Logs, an outbox file or a
+report are not evidence of delivery. Until then use attended monitoring. Do not
+substitute another channel without agreement. Delivery failure must itself be
+visible and prevent silent continuation of dependent work.
+
+Record failed and partial work as such. The original runner's `finished` status
+means its queue ended, not that tasks passed or merged. Preserve the original
+session report and attach an audit rather than rewriting its historical evidence.
+
 Owner-authorised on 31 October 2026. Claude is excluded. Codex and Antigravity
 operate sequentially in isolated task worktrees. The other provider reviews each
 candidate after deterministic checks. No merge after failed checks, empty/error
