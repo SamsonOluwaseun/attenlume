@@ -11,6 +11,7 @@ import '../export/import_export_screen.dart';
 import '../settings/settings_screen.dart';
 import '../storage_manager/storage_manager_screen.dart';
 import 'conference_card.dart';
+import 'conference_dashboard.dart';
 import 'conference_home_screen.dart';
 import 'conference_wizard_screen.dart';
 
@@ -39,6 +40,7 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
   late final TabController _tabController;
   final _searchController = TextEditingController();
   String _query = '';
+  String? _selectedConferenceId;
 
   @override
   void initState() {
@@ -292,6 +294,48 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
       );
     }
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        final selected = shown.firstWhere(
+          (conference) => conference.id == _selectedConferenceId,
+          orElse: () => shown.first,
+        );
+        final list = _conferenceCards(
+          shown,
+          info,
+          listKey,
+          wide: wide,
+          selectedId: selected.id,
+        );
+        if (!wide) return list;
+        return Row(
+          key: const Key('conference-overview-layout'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(width: 360, child: list),
+            const VerticalDivider(width: 1),
+            Expanded(
+              child: ConferenceDashboard(
+                key: ValueKey(selected.id),
+                conference: selected,
+                onOpenConference: () => _openConference(selected.id),
+                onChanged: _reload,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _conferenceCards(
+    List<Conference> shown,
+    Map<String, ConferenceCardInfo> info,
+    Key listKey, {
+    required bool wide,
+    required String selectedId,
+  }) {
     return ListView.builder(
       key: listKey,
       // Room under the last card for the floating "New conference" button.
@@ -311,7 +355,14 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
               key: Key('conference-card-${conf.id}'),
               conference: conf,
               info: info[conf.id] ?? ConferenceCardInfo.empty,
-              onTap: () => _openConference(conf.id),
+              selected: wide && conf.id == selectedId,
+              onTap: () {
+                if (wide) {
+                  setState(() => _selectedConferenceId = conf.id);
+                } else {
+                  _openConference(conf.id);
+                }
+              },
             ),
           ),
         );

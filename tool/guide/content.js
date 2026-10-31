@@ -85,6 +85,7 @@ module.exports = {
           images: ['09-activities', '10-activity-details'],
           points: [
             'Every activity appears on the conference page with its length, photos and bookmarks.',
+            'On a wide tablet or Windows window, select a conference to see its overview beside the list: activities, photos, bookmarks and storage used. Search activities by title, speaker or room. Open conference gives you the full start and edit controls.',
             'Tap one to see its notes, bookmarks and photos.',
             'Import photos adds pictures from your gallery taken during the session.',
           ],
