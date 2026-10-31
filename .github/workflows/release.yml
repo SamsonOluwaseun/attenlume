@@ -1,0 +1,254 @@
+# GitHub Actions release pipeline for Attenlume [P1-28, BUILD_GUIDE 14, ADR-061].
+#
+# Builds release artefacts for Android and Windows, computes SHA-256 checksums,
+# and prepares a draft GitHub Release.
+#
+# Constraints & Guarantees:
+# - Triggered explicitly via manual workflow_dispatch only.
+# - No automatic public release on ordinary push or tag.
+# - Always creates a draft release (--draft) requiring manual owner review and publish.
+# - Preserves canonical download asset names:
+#     attenlume-android.apk
+#     attenlume-windows-setup.exe
+#     SHA256SUMS.txt
+# - Requires every Android signing secret; fails closed when any are absent.
+# - Remote execution, signing and release upload remain unverified owner steps.
+
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.1.5). Leave empty to use version from pubspec.yaml'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark release as pre-release'
+        required: true
+        type: boolean
+        default: false
+      title:
+        description: 'Release title override (defaults to "Attenlume <version>")'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.47.8
+
+jobs:
+  build-android:
+    name: Build Android Release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Configure Android release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for required in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Required Android signing configuration is missing: $required"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/attenlume-release.jks
+          test -s android/app/attenlume-release.jks
+          printf '%s\n' 'storeFile=attenlume-release.jks' "storePassword=$STORE_PASSWORD" \
+            "keyAlias=$KEY_ALIAS" "keyPassword=$KEY_PASSWORD" > android/key.properties
+
+      - name: Build universal release APK
+        run: flutter build apk --release
+
+      - name: Stage Android release asset
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/attenlume-android.apk
+
+      - name: Upload Android release artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: attenlume-android-apk
+          path: dist/attenlume-android.apk
+          retention-days: 1
+
+  build-windows:
+    name: Build Windows Release Installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          powershell -File tool/build_windows_installer.ps1 -OutDir dist
+          if (-not (Test-Path dist/attenlume-windows-setup.exe)) {
+            throw "Expected dist/attenlume-windows-setup.exe was not created."
+          }
+
+      - name: Optional Windows code signing (ADR-044 / P1-42 placeholder)
+        shell: pwsh
+        run: |
+          Write-Host "Windows binary signing is unconfigured / unsigned per ADR-044."
+          Write-Host "When signing credentials (e.g. Azure Trusted Signing or certificate) are provisioned,"
+          Write-Host "add signing command here."
+
+      - name: Upload Windows release artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: attenlume-windows-setup
+          path: dist/attenlume-windows-setup.exe
+          retention-days: 1
+
+  draft-release:
+    name: Prepare Draft Release and Checksums
+    needs: [build-android, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create staging directory
+        run: mkdir -p release-assets
+
+      - name: Download Android artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: attenlume-android-apk
+          path: release-assets
+
+      - name: Download Windows artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: attenlume-windows-setup
+          path: release-assets
+
+      - name: Compute SHA-256 Checksums
+        working-directory: release-assets
+        run: |
+          sha256sum attenlume-android.apk attenlume-windows-setup.exe > SHA256SUMS.txt
+          echo "Generated SHA256SUMS.txt:"
+          cat SHA256SUMS.txt
+          echo "Verifying SHA256SUMS.txt:"
+          sha256sum -c SHA256SUMS.txt
+
+      - name: Verify complete canonical release manifest
+        run: python tool/verify_release_assets.py verify release-assets
+
+      - name: Determine version and release metadata
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+          INPUT_TITLE: ${{ inputs.title }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | sed -E 's/version:[[:space:]]*([^+[:space:]]+).*/\1/')
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="v${VERSION}"
+          fi
+          if [ -n "$INPUT_TITLE" ]; then
+            TITLE="$INPUT_TITLE"
+          else
+            TITLE="Attenlume ${VERSION}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$ ]]; then
+            echo "::error::Invalid release tag; expected vMAJOR.MINOR.PATCH with optional prerelease"
+            exit 1
+          fi
+          if [[ "$TITLE" == *$'\n'* || "$TITLE" == *$'\r'* ]]; then
+            echo "::error::Release title must be a single line"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+
+      - name: Compose Release Notes
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          cat > release-notes.md <<EOF
+          ## Attenlume ${RELEASE_VERSION}
+
+          ### Downloads
+
+          | Platform | File | Description |
+          |---|---|---|
+          | Android | [attenlume-android.apk](https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/attenlume-android.apk) | Universal release APK for Android 8.0+ |
+          | Windows | [attenlume-windows-setup.exe](https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/attenlume-windows-setup.exe) | Per-user installer for Windows 10/11 x64 |
+          | Checksums | [SHA256SUMS.txt](https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/SHA256SUMS.txt) | SHA-256 checksums for release verification |
+
+          ### SHA-256 Checksums
+
+          \`\`\`
+          $(cat release-assets/SHA256SUMS.txt)
+          \`\`\`
+
+          ### Platform Notes
+
+          - **Windows:** The installer is currently unsigned for Microsoft SmartScreen (ADR-044). Click **More info** then **Run anyway** if prompted.
+          - **Android:** Sideloading the APK will prompt for permission to install apps from this source (ADR-027).
+          - **Verification:** Device verification status should be reviewed by the owner before final publication.
+          EOF
+
+      - name: Create GitHub Draft Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.meta.outputs.title }}
+          RELEASE_TARGET: ${{ github.sha }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release-assets/attenlume-android.apk \
+            release-assets/attenlume-windows-setup.exe \
+            release-assets/SHA256SUMS.txt \
+            --target "$RELEASE_TARGET" \
+            --title "$RELEASE_TITLE" \
+            --notes-file release-notes.md \
+            --draft \
+            --prerelease="$RELEASE_PRERELEASE"
