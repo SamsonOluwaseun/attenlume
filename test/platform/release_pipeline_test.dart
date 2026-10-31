@@ -19,10 +19,11 @@ void main() {
 
         // Explicit workflow_dispatch trigger
         expect(content, contains('workflow_dispatch:'));
-        expect(content, contains('draft:'));
+        expect(content, contains('--draft'));
+        expect(content, isNot(contains('inputs.draft')));
         expect(
           content,
-          contains('default: true'),
+          contains('--draft \\'),
           reason: 'draft releases must be default for safety',
         );
 
@@ -39,6 +40,28 @@ void main() {
         );
       },
     );
+
+    test('P1-28 shell bodies never interpolate Actions expressions', () {
+      final content = File(workflowPath).readAsStringSync();
+      var inRun = false;
+      for (final line in content.split('\n')) {
+        if (line.trimRight() == '        run: |') {
+          inRun = true;
+        } else if (line.trim().isNotEmpty && !line.startsWith('          ')) {
+          inRun = false;
+        }
+        if (inRun) {
+          expect(line, isNot(contains(r'${{')), reason: line);
+        }
+      }
+      expect(content, contains(r'gh release create "$RELEASE_TAG"'));
+      expect(content, contains(r'--title "$RELEASE_TITLE"'));
+      expect(
+        content,
+        contains('Required Android signing configuration is missing'),
+      );
+      expect(content, isNot(contains('fallback release APK')));
+    });
 
     test(
       'P1-28 preserves canonical download asset names matching README links',

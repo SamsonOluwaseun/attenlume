@@ -6,12 +6,12 @@
 # Constraints & Guarantees:
 # - Triggered explicitly via manual workflow_dispatch only.
 # - No automatic public release on ordinary push or tag.
-# - Default draft release (draft: true) requiring manual owner review and publish.
+# - Always creates a draft release (--draft) requiring manual owner review and publish.
 # - Preserves canonical download asset names:
 #     attenlume-android.apk
 #     attenlume-windows-setup.exe
 #     SHA256SUMS.txt
-# - Uses repository secret placeholders only; falls back safely when secrets absent.
+# - Requires every Android signing secret; fails closed when any are absent.
 # - Remote execution, signing and release upload remain unverified owner steps.
 
 name: release
@@ -23,11 +23,6 @@ on:
         description: 'Release tag (e.g. v0.1.5). Leave empty to use version from pubspec.yaml'
         required: false
         default: ''
-      draft:
-        description: 'Create as draft release (recommended: true until owner reviews)'
-        required: true
-        type: boolean
-        default: true
       prerelease:
         description: 'Mark release as pre-release'
         required: true
@@ -75,18 +70,18 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Configuring release signing key from repository secrets..."
-            echo "$KEYSTORE_BASE64" | base64 -d > android/app/attenlume-release.jks
-            cat > android/key.properties <<EOF
-          storeFile=attenlume-release.jks
-          storePassword=$STORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
-          else
-            echo "::warning::ANDROID_KEYSTORE_BASE64 secret not set. Building fallback release APK per ADR-027."
-          fi
+          set -euo pipefail
+          for required in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Required Android signing configuration is missing: $required"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/attenlume-release.jks
+          test -s android/app/attenlume-release.jks
+          printf '%s\n' 'storeFile=attenlume-release.jks' "storePassword=$STORE_PASSWORD" \
+            "keyAlias=$KEY_ALIAS" "keyPassword=$KEY_PASSWORD" > android/key.properties
 
       - name: Build universal release APK
         run: flutter build apk --release
@@ -177,36 +172,55 @@ jobs:
           echo "Verifying SHA256SUMS.txt:"
           sha256sum -c SHA256SUMS.txt
 
+      - name: Verify complete canonical release manifest
+        run: python tool/verify_release_assets.py verify release-assets
+
       - name: Determine version and release metadata
         id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+          INPUT_TITLE: ${{ inputs.title }}
         run: |
+          set -euo pipefail
           VERSION=$(grep '^version:' pubspec.yaml | head -1 | sed -E 's/version:[[:space:]]*([^+[:space:]]+).*/\1/')
-          if [ -n "${{ inputs.tag_name }}" ]; then
-            TAG="${{ inputs.tag_name }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
           else
             TAG="v${VERSION}"
           fi
-          if [ -n "${{ inputs.title }}" ]; then
-            TITLE="${{ inputs.title }}"
+          if [ -n "$INPUT_TITLE" ]; then
+            TITLE="$INPUT_TITLE"
           else
             TITLE="Attenlume ${VERSION}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$ ]]; then
+            echo "::error::Invalid release tag; expected vMAJOR.MINOR.PATCH with optional prerelease"
+            exit 1
+          fi
+          if [[ "$TITLE" == *$'\n'* || "$TITLE" == *$'\r'* ]]; then
+            echo "::error::Release title must be a single line"
+            exit 1
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
 
       - name: Compose Release Notes
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
         run: |
           cat > release-notes.md <<EOF
-          ## Attenlume ${{ steps.meta.outputs.version }}
+          ## Attenlume ${RELEASE_VERSION}
 
           ### Downloads
 
           | Platform | File | Description |
           |---|---|---|
-          | Android | [attenlume-android.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}/attenlume-android.apk) | Universal release APK for Android 8.0+ |
-          | Windows | [attenlume-windows-setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}/attenlume-windows-setup.exe) | Per-user installer for Windows 10/11 x64 |
-          | Checksums | [SHA256SUMS.txt](https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}/SHA256SUMS.txt) | SHA-256 checksums for release verification |
+          | Android | [attenlume-android.apk](https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/attenlume-android.apk) | Universal release APK for Android 8.0+ |
+          | Windows | [attenlume-windows-setup.exe](https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/attenlume-windows-setup.exe) | Per-user installer for Windows 10/11 x64 |
+          | Checksums | [SHA256SUMS.txt](https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/SHA256SUMS.txt) | SHA-256 checksums for release verification |
 
           ### SHA-256 Checksums
 
@@ -224,13 +238,17 @@ jobs:
       - name: Create GitHub Draft Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.meta.outputs.title }}
+          RELEASE_TARGET: ${{ github.sha }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          gh release create "${{ steps.meta.outputs.tag }}" \
+          gh release create "$RELEASE_TAG" \
             release-assets/attenlume-android.apk \
             release-assets/attenlume-windows-setup.exe \
             release-assets/SHA256SUMS.txt \
-            --target "${{ github.sha }}" \
-            --title "${{ steps.meta.outputs.title }}" \
+            --target "$RELEASE_TARGET" \
+            --title "$RELEASE_TITLE" \
             --notes-file release-notes.md \
-            --draft=${{ inputs.draft }} \
-            --prerelease=${{ inputs.prerelease }}
+            --draft \
+            --prerelease="$RELEASE_PRERELEASE"

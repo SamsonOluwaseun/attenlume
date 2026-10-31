@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 from pathlib import Path
 import sys
 
@@ -54,40 +55,49 @@ def verify_checksums_file(directory: Path) -> tuple[bool, list[str]]:
     Returns (all_ok, list_of_status_messages).
     """
     sums_file = directory / CHECKSUMS_FILENAME
-    if not sums_file.is_file():
-        return False, [f'Checksums file not found: {sums_file}']
-
-    all_ok = True
     messages: list[str] = []
-    lines = sums_file.read_text(encoding='utf-8').splitlines()
+    try:
+        lines = sums_file.read_text(encoding='utf-8').splitlines()
+    except (OSError, UnicodeError) as error:
+        return False, [f'Cannot read checksums file: {error}']
 
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith('#'):
+    seen: set[str] = set()
+    valid = True
+    for number, line in enumerate(lines, 1):
+        match = re.fullmatch(r'([0-9a-fA-F]{64}) [ *]([^\r\n]+)', line)
+        if not match:
+            messages.append(f'Line {number}: invalid SHA-256 manifest entry')
+            valid = False
             continue
-        parts = line.split(maxsplit=1)
-        if len(parts) != 2:
-            messages.append(f'Invalid format in line: {line}')
-            all_ok = False
+        expected_digest, filename = match.groups()
+        if filename not in CANONICAL_ASSETS:
+            messages.append(f'Line {number}: unexpected asset path: {filename!r}')
+            valid = False
             continue
-
-        expected_digest, filename = parts[0].strip(), parts[1].strip().lstrip('*')
+        if filename in seen:
+            messages.append(f'Line {number}: duplicate asset: {filename}')
+            valid = False
+            continue
+        seen.add(filename)
         target_file = directory / filename
-        if not target_file.is_file():
-            messages.append(f'{filename}: FAILED (file not found)')
-            all_ok = False
+        try:
+            if target_file.is_symlink() or target_file.resolve().parent != directory.resolve():
+                raise ValueError('asset must be a direct file within the release directory')
+            actual_digest = compute_sha256(target_file)
+        except (OSError, ValueError) as error:
+            messages.append(f'{filename}: FAILED ({error})')
+            valid = False
             continue
-
-        actual_digest = compute_sha256(target_file)
-        if actual_digest.lower() == expected_digest.lower():
+        if actual_digest == expected_digest.lower():
             messages.append(f'{filename}: OK')
         else:
-            messages.append(
-                f'{filename}: FAILED (checksum mismatch: expected {expected_digest}, got {actual_digest})'
-            )
-            all_ok = False
-
-    return all_ok, messages
+            messages.append(f'{filename}: FAILED (checksum mismatch)')
+            valid = False
+    for filename in CANONICAL_ASSETS:
+        if filename not in seen:
+            messages.append(f'Missing manifest entry: {filename}')
+            valid = False
+    return valid, messages
 
 
 def main(argv: list[str] | None = None) -> int:
