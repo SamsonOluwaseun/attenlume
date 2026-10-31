@@ -47,11 +47,13 @@ class ConferenceCard extends StatelessWidget {
     required this.conference,
     required this.info,
     required this.onTap,
+    this.selected = false,
   });
 
   final Conference conference;
   final ConferenceCardInfo info;
   final VoidCallback onTap;
+  final bool selected;
 
   static const coverSize = 72.0;
 
@@ -84,6 +86,7 @@ class ConferenceCard extends StatelessWidget {
     );
 
     return Semantics(
+      selected: selected ? true : null,
       button: true,
       label: [
         conference.name,
@@ -96,6 +99,12 @@ class ConferenceCard extends StatelessWidget {
       onTap: onTap,
       excludeSemantics: true,
       child: Card(
+        shape: selected
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(TokenRadius.radiusMd),
+                side: BorderSide(color: theme.colorScheme.primary, width: 2),
+              )
+            : null,
         margin: const EdgeInsets.only(bottom: TokenSpace.space3),
         child: InkWell(
           borderRadius: const BorderRadius.all(

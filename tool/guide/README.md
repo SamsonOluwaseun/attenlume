@@ -22,3 +22,19 @@ node build_html.js guide.html
 ```
 
 The deck uses Montserrat. Install it from `assets/fonts` to see it in PowerPoint; without it PowerPoint falls back to a similar font.
+## P1-39 desktop/tablet overview capture
+
+`assets/guide/desktop-overview.png` is a 1280 x 800 widget-rendered capture of
+the shared Flutter overview, using the real local fixture repositories and
+bundled Montserrat/Material icon fonts. It is not a Windows or iPad device pass.
+Phone guide screenshots are unchanged because phone navigation is unchanged.
+Regenerate the capture with:
+
+```powershell
+flutter test --no-pub --dart-define=CAPTURE_DESKTOP_GUIDE=true test/features/conferences/conference_dashboard_test.dart
+```
+
+The in-app guide now describes selecting a conference and searching its activities
+on wide windows. Rebuild the deck and PDF from `content.js` after integrating the
+parallel guide changes; the desktop capture has a landscape aspect ratio and
+must not be squeezed into an existing phone frame.
