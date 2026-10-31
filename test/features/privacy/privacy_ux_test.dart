@@ -421,11 +421,14 @@ void main() {
       }
     });
 
-    test('FR-PRI-03 the Android release manifest asks for no internet '
-        'access', () {
+    test('FR-PRI-03 P2-08 Android network permission is documented for '
+        'explicit model download', () {
       final manifest = File('android/app/src/main/AndroidManifest.xml')
           .readAsStringSync();
-      expect(manifest, isNot(contains('android.permission.INTERNET')));
+      expect(manifest, contains('android.permission.INTERNET'));
+      expect(manifest, contains('user-requested speech-model download only'));
+      expect(manifest, contains('no audio upload'));
+      expect(manifest, isNot(contains('usesCleartextTraffic="true"')));
       expect(manifest, isNot(contains('AD_ID')));
     });
 

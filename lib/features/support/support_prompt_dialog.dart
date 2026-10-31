@@ -19,13 +19,10 @@ Future<SupportPromptDecision?> showSupportPrompt(
 /// Features:
 /// - UK English phrasing with zero guilt or pressure.
 /// - Clarifies that user files are completely theirs whether they give or not.
-/// - Declarative suggested amounts (£2, £5, £10) without fake checkout enforcement.
+/// - Suggested amounts (£5, £10, £20 or Other), confirmed on PayPal.
 /// - Safe at 200% text scale in both light and dark themes.
 class SupportPromptDialog extends StatefulWidget {
-  const SupportPromptDialog({
-    super.key,
-    required this.kind,
-  });
+  const SupportPromptDialog({super.key, required this.kind});
 
   final SupportPromptKind kind;
 
@@ -63,7 +60,10 @@ class _SupportPromptDialogState extends State<SupportPromptDialog> {
 
     return AlertDialog(
       key: const Key('support-prompt-dialog'),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 16.0,
+        vertical: 24.0,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(TokenRadius.radiusLg)),
       ),
@@ -114,35 +114,43 @@ class _SupportPromptDialogState extends State<SupportPromptDialog> {
                           });
                         },
                       ),
+                    ChoiceChip(
+                      key: const Key('support-amount-other'),
+                      label: const Text('Other'),
+                      selected: _selectedAmount == null,
+                      onSelected: (_) => setState(() => _selectedAmount = null),
+                    ),
                   ],
                 ),
               ),
+              const SizedBox(height: TokenSpace.space2),
+              const Text('Choose or change your final amount on PayPal.'),
               const SizedBox(height: TokenSpace.space4),
               AttenlumeButton(
                 key: const Key('support-prompt-gift-now'),
                 label: 'Gift now',
                 leading: const Icon(Icons.open_in_new_rounded),
-                onPressed: () => Navigator.of(context).pop(
-                  SupportPromptDecision.giftNow(_selectedAmount),
-                ),
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop(SupportPromptDecision.giftNow(_selectedAmount)),
               ),
               const SizedBox(height: TokenSpace.space2),
               AttenlumeButton(
                 key: const Key('support-prompt-maybe-later'),
                 label: 'Maybe later',
                 variant: AttenlumeButtonVariant.secondary,
-                onPressed: () => Navigator.of(context).pop(
-                  const SupportPromptDecision.maybeLater(),
-                ),
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop(const SupportPromptDecision.maybeLater()),
               ),
               const SizedBox(height: TokenSpace.space2),
               AttenlumeButton(
                 key: const Key('support-prompt-dont-ask-again'),
                 label: 'Don’t ask again',
                 variant: AttenlumeButtonVariant.ghost,
-                onPressed: () => Navigator.of(context).pop(
-                  const SupportPromptDecision.dontAskAgain(),
-                ),
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop(const SupportPromptDecision.dontAskAgain()),
               ),
             ],
           ),

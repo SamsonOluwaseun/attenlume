@@ -15,6 +15,7 @@ import '../../domain/services/export_service.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../privacy/sensitive_export_warning.dart';
+import '../support/support_after_export.dart';
 import 'export_providers.dart';
 
 enum _Scope { conference, day, activities }
@@ -233,7 +234,11 @@ class _ExportSheetState extends ConsumerState<ExportSheet> {
       _outcomeFormat = outcome == null ? null : format;
       _error = error;
     });
-    if (outcome == null) unawaited(_check());
+    if (outcome == null) {
+      unawaited(_check());
+    } else {
+      unawaited(offerSupportAfterExport(ref, context));
+    }
   }
 
   @override

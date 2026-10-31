@@ -13,9 +13,9 @@ enum SupportPromptKind {
 ///
 /// Purely declarative: no checkout or fixed-amount enforcement (FR-SUP-01).
 enum SupportGiftAmount {
-  two(2, '£2'),
   five(5, '£5'),
-  ten(10, '£10');
+  ten(10, '£10'),
+  twenty(20, '£20');
 
   const SupportGiftAmount(this.pounds, this.label);
 
@@ -43,30 +43,27 @@ enum SupportPromptDecisionType {
 /// Represents the user's response to an optional support prompt (FR-SUP-01, FR-SUP-02).
 @immutable
 class SupportPromptDecision {
-  const SupportPromptDecision({
-    required this.type,
-    this.selectedAmount,
-  });
+  const SupportPromptDecision({required this.type, this.selectedAmount});
 
   const SupportPromptDecision.giftNow([SupportGiftAmount? amount])
-      : type = SupportPromptDecisionType.giftNow,
-        selectedAmount = amount;
+    : type = SupportPromptDecisionType.giftNow,
+      selectedAmount = amount;
 
   const SupportPromptDecision.maybeLater()
-      : type = SupportPromptDecisionType.maybeLater,
-        selectedAmount = null;
+    : type = SupportPromptDecisionType.maybeLater,
+      selectedAmount = null;
 
   const SupportPromptDecision.dontAskAgain()
-      : type = SupportPromptDecisionType.dontAskAgain,
-        selectedAmount = null;
+    : type = SupportPromptDecisionType.dontAskAgain,
+      selectedAmount = null;
 
   const SupportPromptDecision.declined()
-      : type = SupportPromptDecisionType.declined,
-        selectedAmount = null;
+    : type = SupportPromptDecisionType.declined,
+      selectedAmount = null;
 
   const SupportPromptDecision.dismissed()
-      : type = SupportPromptDecisionType.dismissed,
-        selectedAmount = null;
+    : type = SupportPromptDecisionType.dismissed,
+      selectedAmount = null;
 
   final SupportPromptDecisionType type;
   final SupportGiftAmount? selectedAmount;
@@ -82,9 +79,9 @@ class SupportPromptDecision {
   bool get paymentCompleted => false;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'type': type.name,
-        if (selectedAmount != null) 'selectedAmount': selectedAmount!.pounds,
-      };
+    'type': type.name,
+    if (selectedAmount != null) 'selectedAmount': selectedAmount!.pounds,
+  };
 
   factory SupportPromptDecision.fromJson(dynamic rawJson) {
     if (rawJson is! Map) {
@@ -95,10 +92,9 @@ class SupportPromptDecision {
     if (typeName is! String) {
       return const SupportPromptDecision.dismissed();
     }
-    final type = SupportPromptDecisionType.values.cast<SupportPromptDecisionType?>().firstWhere(
-          (v) => v?.name == typeName,
-          orElse: () => null,
-        );
+    final type = SupportPromptDecisionType.values
+        .cast<SupportPromptDecisionType?>()
+        .firstWhere((v) => v?.name == typeName, orElse: () => null);
     if (type == null) {
       return const SupportPromptDecision.dismissed();
     }
@@ -108,10 +104,7 @@ class SupportPromptDecision {
     if (amountRaw is int) {
       amount = SupportGiftAmount.fromPounds(amountRaw);
     }
-    return SupportPromptDecision(
-      type: type,
-      selectedAmount: amount,
-    );
+    return SupportPromptDecision(type: type, selectedAmount: amount);
   }
 
   @override
@@ -212,7 +205,9 @@ abstract final class PayPalUrlValidator {
   ];
 
   static final RegExp _handleRegExp = RegExp(r'^[a-zA-Z0-9_\-]+$');
-  static final RegExp _amountRegExp = RegExp(r'^[0-9]+(\.[0-9]{1,2})?([a-zA-Z]{3})?$');
+  static final RegExp _amountRegExp = RegExp(
+    r'^[0-9]+(\.[0-9]{1,2})?([a-zA-Z]{3})?$',
+  );
   static final RegExp _buttonIdRegExp = RegExp(r'^[a-zA-Z0-9_\-]+$');
 
   /// Validates whether [rawUrl] is a safe, public PayPal HTTPS URL matching
@@ -289,7 +284,9 @@ abstract final class PayPalUrlValidator {
         segments[0].toLowerCase() == 'ncp' &&
         segments[1].toLowerCase() == 'payment') {
       final paymentId = segments[2];
-      if (paymentId.isEmpty || !_buttonIdRegExp.hasMatch(paymentId)) return false;
+      if (paymentId.isEmpty || !_buttonIdRegExp.hasMatch(paymentId)) {
+        return false;
+      }
       return true;
     }
 
@@ -357,7 +354,10 @@ class SupportPromptState {
 
     // 2. Fresh state: promptCount == 0, initialPromptShown == false
     if (!initialPromptShown) {
-      if (reminderEligible || reminderShown || promptCount != 0 || giftClicked) {
+      if (reminderEligible ||
+          reminderShown ||
+          promptCount != 0 ||
+          giftClicked) {
         return false;
       }
       // A fresh state before first prompt must not have a recorded decision
@@ -376,7 +376,10 @@ class SupportPromptState {
       if (lastDecision?.type != SupportPromptDecisionType.maybeLater) {
         return false;
       }
-      if (reminderShown || dismissedPermanently || giftClicked || promptCount != 1) {
+      if (reminderShown ||
+          dismissedPermanently ||
+          giftClicked ||
+          promptCount != 1) {
         return false;
       }
     }
@@ -507,8 +510,7 @@ class SupportPromptState {
       initialPromptShown: initialPromptShown ?? this.initialPromptShown,
       reminderEligible: reminderEligible ?? this.reminderEligible,
       reminderShown: reminderShown ?? this.reminderShown,
-      dismissedPermanently:
-          dismissedPermanently ?? this.dismissedPermanently,
+      dismissedPermanently: dismissedPermanently ?? this.dismissedPermanently,
       giftClicked: giftClicked ?? this.giftClicked,
       promptCount: (promptCount ?? this.promptCount).clamp(0, 2),
       lastDecision: lastDecision ?? this.lastDecision,
@@ -516,14 +518,14 @@ class SupportPromptState {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'initialPromptShown': initialPromptShown,
-        'reminderEligible': reminderEligible,
-        'reminderShown': reminderShown,
-        'dismissedPermanently': dismissedPermanently,
-        'giftClicked': giftClicked,
-        'promptCount': promptCount,
-        if (lastDecision != null) 'lastDecision': lastDecision!.toJson(),
-      };
+    'initialPromptShown': initialPromptShown,
+    'reminderEligible': reminderEligible,
+    'reminderShown': reminderShown,
+    'dismissedPermanently': dismissedPermanently,
+    'giftClicked': giftClicked,
+    'promptCount': promptCount,
+    if (lastDecision != null) 'lastDecision': lastDecision!.toJson(),
+  };
 
   /// Parses state from JSON.
   ///
@@ -611,14 +613,14 @@ class SupportPromptState {
 
   @override
   int get hashCode => Object.hash(
-        initialPromptShown,
-        reminderEligible,
-        reminderShown,
-        dismissedPermanently,
-        giftClicked,
-        promptCount,
-        lastDecision,
-      );
+    initialPromptShown,
+    reminderEligible,
+    reminderShown,
+    dismissedPermanently,
+    giftClicked,
+    promptCount,
+    lastDecision,
+  );
 
   @override
   String toString() =>

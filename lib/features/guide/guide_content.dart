@@ -176,6 +176,15 @@ const quickGuide = QuickGuide(
           ],
         ),
         GuideStep(
+          title: 'Optional support',
+          images: ['22-support'],
+          points: [
+            'On eligible direct Android and Windows builds, an optional support prompt appears after your export is ready. Your files remain available whether you give or not.',
+            'Choose £5, £10, £20 or Other, then Gift now to open PayPal. Choose or change your final amount there.',
+            'Maybe later allows one reminder after a later export. Don’t ask again stops these prompts on this device.',
+          ],
+        ),
+        GuideStep(
           title: 'Moving to a new device',
           images: ['20-import'],
           points: [

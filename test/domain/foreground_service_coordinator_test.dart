@@ -30,10 +30,13 @@ void main() {
   late Activity keynote;
 
   Future<void> waitFor(bool Function() condition) async {
-    for (var i = 0; i < 50; i++) {
+    final deadline = Stopwatch()..start();
+    while (deadline.elapsed < const Duration(seconds: 5)) {
       if (condition()) return;
-      await pumpEventQueue();
+      // Native file finalisation needs real wall time under parallel test load.
+      await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+    fail('Foreground-service condition was not reached within five seconds.');
   }
 
   setUp(() async {

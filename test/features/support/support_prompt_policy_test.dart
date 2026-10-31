@@ -102,7 +102,8 @@ void main() {
             supportUrl: validPayPalUrl,
           ),
           isNull,
-          reason: 'Channel ${channel.name} must not show unreviewed payment prompt',
+          reason:
+              'Channel ${channel.name} must not show unreviewed payment prompt',
         );
       }
     });
@@ -123,7 +124,8 @@ void main() {
         expect(
           result,
           equals(SupportPromptKind.initial),
-          reason: 'Channel ${channel.name} should be eligible for initial prompt',
+          reason:
+              'Channel ${channel.name} should be eligible for initial prompt',
         );
       }
     });
@@ -260,24 +262,27 @@ void main() {
       );
     });
 
-    test('FR-SUP-02: no initial prompt allowed if reminder was already shown', () {
-      // Inconsistent state where initialPromptShown was false but reminderShown was true
-      const stateWithPriorReminder = SupportPromptState(
-        initialPromptShown: false,
-        reminderShown: true,
-        promptCount: 1,
-      );
-      expect(stateWithPriorReminder.canPromptAgain, isFalse);
-      expect(
-        defaultPolicy.shouldPrompt(
-          state: stateWithPriorReminder,
-          exportSucceeded: true,
-          isChannelEligible: true,
-          supportUrl: validPayPalUrl,
-        ),
-        isNull,
-      );
-    });
+    test(
+      'FR-SUP-02: no initial prompt allowed if reminder was already shown',
+      () {
+        // Inconsistent state where initialPromptShown was false but reminderShown was true
+        const stateWithPriorReminder = SupportPromptState(
+          initialPromptShown: false,
+          reminderShown: true,
+          promptCount: 1,
+        );
+        expect(stateWithPriorReminder.canPromptAgain, isFalse);
+        expect(
+          defaultPolicy.shouldPrompt(
+            state: stateWithPriorReminder,
+            exportSucceeded: true,
+            isChannelEligible: true,
+            supportUrl: validPayPalUrl,
+          ),
+          isNull,
+        );
+      },
+    );
   });
 
   group('SupportPromptState & Decision serialization & fail-closed validation', () {
@@ -291,7 +296,10 @@ void main() {
         SupportPromptKind.initial,
         const SupportPromptDecision.maybeLater(),
       );
-      expect(SupportPromptState.fromJson(maybeLater.toJson()), equals(maybeLater));
+      expect(
+        SupportPromptState.fromJson(maybeLater.toJson()),
+        equals(maybeLater),
+      );
 
       // Reminder state
       final reminder = maybeLater.withDecision(
@@ -319,12 +327,24 @@ void main() {
 
     test('fails closed to suppressed state on missing or wrong-typed required fields', () {
       // Non-map input
-      expect(SupportPromptState.fromJson(null), equals(SupportPromptState.suppressed));
-      expect(SupportPromptState.fromJson('not-a-map'), equals(SupportPromptState.suppressed));
-      expect(SupportPromptState.fromJson(123), equals(SupportPromptState.suppressed));
+      expect(
+        SupportPromptState.fromJson(null),
+        equals(SupportPromptState.suppressed),
+      );
+      expect(
+        SupportPromptState.fromJson('not-a-map'),
+        equals(SupportPromptState.suppressed),
+      );
+      expect(
+        SupportPromptState.fromJson(123),
+        equals(SupportPromptState.suppressed),
+      );
 
       // Empty map (missing required fields)
-      expect(SupportPromptState.fromJson(<String, dynamic>{}), equals(SupportPromptState.suppressed));
+      expect(
+        SupportPromptState.fromJson(<String, dynamic>{}),
+        equals(SupportPromptState.suppressed),
+      );
 
       // Missing single required field
       final validMap = const SupportPromptState().toJson();
@@ -360,11 +380,17 @@ void main() {
 
       // Invariant 1: promptCount out of bounds (< 0 or > 2)
       expect(
-        SupportPromptState.fromJson(<String, dynamic>{...base, 'promptCount': -1}),
+        SupportPromptState.fromJson(<String, dynamic>{
+          ...base,
+          'promptCount': -1,
+        }),
         equals(SupportPromptState.suppressed),
       );
       expect(
-        SupportPromptState.fromJson(<String, dynamic>{...base, 'promptCount': 3}),
+        SupportPromptState.fromJson(<String, dynamic>{
+          ...base,
+          'promptCount': 3,
+        }),
         equals(SupportPromptState.suppressed),
       );
 
@@ -542,9 +568,14 @@ void main() {
     test('SupportPromptDecision.fromJson handles bad input safely and never claims payment', () {
       expect(SupportPromptDecision.fromJson(null).isDismissed, isTrue);
       expect(SupportPromptDecision.fromJson('string').isDismissed, isTrue);
-      expect(SupportPromptDecision.fromJson(<String, dynamic>{}).isDismissed, isTrue);
       expect(
-        SupportPromptDecision.fromJson(<String, dynamic>{'type': 'nonExistentType'}).isDismissed,
+        SupportPromptDecision.fromJson(<String, dynamic>{}).isDismissed,
+        isTrue,
+      );
+      expect(
+        SupportPromptDecision.fromJson(<String, dynamic>{
+          'type': 'nonExistentType',
+        }).isDismissed,
         isTrue,
       );
       expect(
@@ -556,7 +587,9 @@ void main() {
       );
 
       // In all cases, paymentCompleted is strictly false
-      final decoded = SupportPromptDecision.fromJson(<String, dynamic>{'type': 'giftNow'});
+      final decoded = SupportPromptDecision.fromJson(<String, dynamic>{
+        'type': 'giftNow',
+      });
       expect(decoded.paymentCompleted, isFalse);
     });
   });
@@ -564,71 +597,163 @@ void main() {
   group('PayPalUrlValidator public forms & security restrictions (FR-SUP-03, ADR-065)', () {
     test('accepts approved public donation & payment forms', () {
       // 1. paypal.me/<recipient>
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics'), isTrue);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.me/Samlytics'), isTrue);
-
-      // 2. paypal.me/<recipient>/<amount>
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics/5'), isTrue);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics/5GBP'), isTrue);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics/10.50EUR'), isTrue);
-
-      // 3. paypal.com/donate with public hosted_button_id
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/donate?hosted_button_id=ABC123XYZ'),
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics'),
         isTrue,
       );
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/donate?hosted_button_id=BUTTON999'),
+        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.me/Samlytics'),
+        isTrue,
+      );
+
+      // 2. paypal.me/<recipient>/<amount>
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics/5'),
+        isTrue,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics/5GBP'),
+        isTrue,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.me/Samlytics/10.50EUR',
+        ),
+        isTrue,
+      );
+
+      // 3. paypal.com/donate with public hosted_button_id
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.com/donate?hosted_button_id=ABC123XYZ',
+        ),
+        isTrue,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://www.paypal.com/donate?hosted_button_id=BUTTON999',
+        ),
         isTrue,
       );
 
       // 4. paypal.com/ncp/payment/<id>
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/ncp/payment/PAY123'), isTrue);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/ncp/payment/PAY456'), isTrue);
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.com/ncp/payment/PAY123',
+        ),
+        isTrue,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://www.paypal.com/ncp/payment/PAY456',
+        ),
+        isTrue,
+      );
     });
 
     test('rejects private, auth, account and webscr routes', () {
       // paypal.com private/auth routes
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/signin'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/login'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/auth'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/myaccount'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/myaccount/transfer'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/cgi-bin/webscr'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/webscr?cmd=_donations'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/checkout'), isFalse);
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/signin'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/login'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/auth'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/myaccount'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://www.paypal.com/myaccount/transfer',
+        ),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://www.paypal.com/cgi-bin/webscr',
+        ),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://www.paypal.com/webscr?cmd=_donations',
+        ),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://www.paypal.com/checkout'),
+        isFalse,
+      );
 
       // paypal.me forbidden handle names
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/signin'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/login'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/myaccount'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/auth'), isFalse);
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/signin'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/login'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/myaccount'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/auth'),
+        isFalse,
+      );
 
       // Missing required params
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/donate'), isFalse); // no hosted_button_id
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/ncp/payment/'), isFalse); // empty id
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/ncp/other/123'), isFalse);
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/donate'),
+        isFalse,
+      ); // no hosted_button_id
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/ncp/payment/'),
+        isFalse,
+      ); // empty id
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/ncp/other/123'),
+        isFalse,
+      );
     });
 
     test('rejects credential-like query string parameters', () {
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics?token=secret123'),
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.me/Samlytics?token=secret123',
+        ),
         isFalse,
       );
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics?access_token=secret123'),
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.me/Samlytics?access_token=secret123',
+        ),
         isFalse,
       );
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics?password=mypassword'),
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.me/Samlytics?password=mypassword',
+        ),
         isFalse,
       );
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/Samlytics?auth_key=abc'),
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.me/Samlytics?auth_key=abc',
+        ),
         isFalse,
       );
       expect(
-        PayPalUrlValidator.isValidPayPalUrl('https://paypal.com/donate?hosted_button_id=ABC&session_token=xyz'),
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://paypal.com/donate?hosted_button_id=ABC&session_token=xyz',
+        ),
         isFalse,
       );
     });
@@ -636,12 +761,36 @@ void main() {
     test('rejects non-HTTPS, userinfo, non-443 ports, unknown hosts and malformed URLs', () {
       expect(PayPalUrlValidator.isValidPayPalUrl(null), isFalse);
       expect(PayPalUrlValidator.isValidPayPalUrl(''), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('http://paypal.me/Samlytics'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://user:pass@paypal.me/Samlytics'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me:8080/Samlytics'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://evil-paypal.com/Samlytics'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://bank.example.co.uk/donate'), isFalse);
-      expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/'), isFalse);
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('http://paypal.me/Samlytics'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://user:pass@paypal.me/Samlytics',
+        ),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me:8080/Samlytics'),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://evil-paypal.com/Samlytics',
+        ),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl(
+          'https://bank.example.co.uk/donate',
+        ),
+        isFalse,
+      );
+      expect(
+        PayPalUrlValidator.isValidPayPalUrl('https://paypal.me/'),
+        isFalse,
+      );
       expect(PayPalUrlValidator.isValidPayPalUrl('https://paypal.me'), isFalse);
     });
   });
