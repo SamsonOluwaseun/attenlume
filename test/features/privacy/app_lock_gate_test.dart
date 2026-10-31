@@ -270,13 +270,22 @@ void main() {
     expect(find.byKey(const Key('app-lock-cover')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('app-lock-stop-recording')));
-    await settle(tester);
-    await settle(tester);
-
-    expect(recorder.status.state, RecordingState.saved);
-    expect(engine.stopCalls, 1);
-    expect(find.byKey(const Key('app-lock-cover')), findsOneWidget);
-    expect(find.byKey(const Key('app-lock-recording-strip')), findsNothing);
-    await disposeRecorder(tester);
+    try {
+      // File and database finalisation use real async. Wait for the observable
+      // result rather than assuming two short UI settles finish disk work.
+      for (var i = 0; i < 200 && recorder.status.state.holdsActivity; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump();
+      }
+      await tester.pump();
+      expect(recorder.status.state, RecordingState.saved);
+      expect(engine.stopCalls, 1);
+      expect(find.byKey(const Key('app-lock-cover')), findsOneWidget);
+      expect(find.byKey(const Key('app-lock-recording-strip')), findsNothing);
+    } finally {
+      await disposeRecorder(tester);
+    }
   });
 }
