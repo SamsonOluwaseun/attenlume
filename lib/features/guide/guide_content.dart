@@ -68,6 +68,7 @@ const quickGuide = QuickGuide(
             'Tap Record. The first time, allow microphone access.',
             'LIVE, the timer and the level meter show it is recording. The line under the timer shows how many hours your storage allows.',
             'Pause or Stop at any time. Recording carries on with the screen locked, and Android shows Stop in the notification.',
+            'On Windows, minimising keeps recording. The Attenlume tray menu shows the recording status and offers Open Attenlume or Stop, save and quit. Closing an open recording asks whether to save or keep recording. Shutdown waits for saving; retry shutdown after Attenlume closes.',
           ],
         ),
         GuideStep(
