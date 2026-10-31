@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Optional, user-requested speech-model download only (P2-08).
+         Recognition and core capture/export remain offline; no audio upload. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Microphone capture (BUILD_GUIDE 10.2, P0-04). The foreground
          service that keeps capture alive with the screen locked is P1-11. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

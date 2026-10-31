@@ -51,6 +51,7 @@ class _FakeAudioConverter implements AudioToWavConverter {
 
 class _FakeWhisperBackend implements WhisperBackend {
   bool wasTranscribeCalled = false;
+  WhisperTranscribeConfig? lastConfig;
   bool wasCancelCalled = false;
   bool wasDisposeCalled = false;
   Completer<WhisperResult>? pendingTranscribe;
@@ -63,6 +64,7 @@ class _FakeWhisperBackend implements WhisperBackend {
     void Function(WhisperSegment segment)? onSegment,
   }) async {
     wasTranscribeCalled = true;
+    lastConfig = config;
     onProgress?.call(25);
     onProgress?.call(75);
 
@@ -171,6 +173,9 @@ void main() {
 
         expect(audioConverter.wasCalled, isTrue);
         expect(whisperBackend.wasTranscribeCalled, isTrue);
+        // Upstream auto mode currently requests language detection only.
+        expect(whisperBackend.lastConfig?.language, 'en');
+        expect(whisperBackend.lastConfig?.threads, 2);
         expect(spans.length, 2);
         expect(spans[0].text, 'Hello world');
         expect(spans[0].start, const Duration(seconds: 0));

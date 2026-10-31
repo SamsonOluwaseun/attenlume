@@ -3,10 +3,12 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audio_decoder
   audioplayers_windows
   camera_windows
   file_selector_windows
   flutter_timezone
+  flutter_whisper_ggml
   local_auth_windows
   record_windows
   share_plus

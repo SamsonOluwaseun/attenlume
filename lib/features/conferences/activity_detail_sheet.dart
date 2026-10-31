@@ -22,6 +22,7 @@ import '../capture/recording_screen.dart';
 import '../export/export_sheet.dart';
 import '../photos/activity_photos_section.dart';
 import '../playback_review/review_screen.dart';
+import '../transcription/transcription_screen.dart';
 
 /// Modal bottom sheet displaying detailed activity metadata, contact details,
 /// and captured assets (FR-ACT-03, FR-ACT-04, FR-ACT-08).
@@ -574,6 +575,21 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                   label: 'Play and review',
                   leading: const Icon(Icons.play_arrow_rounded),
                   onPressed: () => openReview(context, act.id),
+                ),
+                const SizedBox(height: TokenSpace.space3),
+                AttenlumeButton(
+                  key: const Key('activity-transcription'),
+                  label: 'Optional transcription',
+                  variant: AttenlumeButtonVariant.secondary,
+                  leading: const Icon(Icons.transcribe),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TranscriptionScreen(
+                        activityId: act.id,
+                        isPrivate: act.isPrivate,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: TokenSpace.space3),
               ],

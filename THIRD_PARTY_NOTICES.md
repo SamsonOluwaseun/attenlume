@@ -6,8 +6,8 @@ Attenlume is built with the open-source software listed below. Each component st
 
 ## Summary
 
-- 162 Dart and Flutter packages in `pubspec.lock`: 125 can be part of the app, 37 are build and test tools only.
-- Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (93), Flutter engine bundle (permissive, see note) (1), MIT (22).
+- 164 Dart and Flutter packages in `pubspec.lock`: 127 can be part of the app, 37 are build and test tools only.
+- Licences of packages in the app: Apache-2.0 (8), BSD-2-Clause (1), BSD-3-Clause (93), Flutter engine bundle (permissive, see note) (1), MIT (24).
 - Packages in the app with a copyleft or unrecognised licence: none.
 
 ## Packages in the app
@@ -19,6 +19,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `archive` | 4.5.2 | pub.dev | direct main | MIT | Copyright (c) 2013-2021 Brendan Duncan. |
 | `args` | 2.7.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2013, the Dart project authors. |
 | `async` | 2.13.1 | pub.dev | transitive | BSD-3-Clause | Copyright 2015, the Dart project authors. |
+| `audio_decoder` | 0.8.1 | pub.dev | direct main | MIT | Copyright (c) 2025 Silversoft |
 | `audio_session` | 0.2.4 | pub.dev | direct main | MIT | Copyright (c) 2020 Ryan Heise and the project contributors. |
 | `audioplayers` | 6.8.1 | pub.dev | direct main | MIT | Copyright (c) 2017 Blue Fire |
 | `audioplayers_android` | 5.3.0 | pub.dev | transitive | MIT | Copyright (c) 2017 Blue Fire |
@@ -63,6 +64,7 @@ Reachable from the app's `dependencies`. Platform packages for targets Attenlume
 | `flutter_test` | 0.0.0 | Flutter SDK | direct dev | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
 | `flutter_timezone` | 5.1.1 | pub.dev | direct main | Apache-2.0 | Not stated in the licence file |
 | `flutter_web_plugins` | 0.0.0 | Flutter SDK | transitive | BSD-3-Clause | Copyright 2014 The Flutter Authors. All rights reserved. |
+| `flutter_whisper_ggml` | 0.0.2 | pub.dev | direct main | MIT | Copyright (c) 2026 Ruan Dias |
 | `glob` | 2.2.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
 | `hooks` | 2.2.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2025, the Dart project authors. |
 | `http` | 1.6.0 | pub.dev | transitive | BSD-3-Clause | Copyright 2014, the Dart project authors. |
@@ -411,6 +413,32 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### MIT: `audio_decoder`
+
+```text
+MIT License
+
+Copyright (c) 2025 Silversoft
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### MIT: `audio_session`
@@ -1465,6 +1493,32 @@ Apache License
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+```
+
+### MIT: `flutter_whisper_ggml`
+
+```text
+MIT License
+
+Copyright (c) 2026 Ruan Dias
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 ### MIT: `image`

@@ -12,6 +12,7 @@ import '../capture/recording_banner.dart';
 import '../guide/quick_guide_screen.dart';
 import '../privacy/privacy_screen.dart';
 import '../storage_manager/storage_manager_screen.dart';
+import '../transcription/transcription_screen.dart';
 import 'settings_providers.dart';
 
 /// Settings (BUILD_GUIDE 5.11, ADR-048) [P1-25].
@@ -176,6 +177,21 @@ class SettingsScreen extends ConsumerWidget {
                   onChanged: (m) => save(
                     () => settings.setThemeMode(m),
                     themeModeSettingProvider,
+                  ),
+                ),
+                heading('Accessibility'),
+                ListTile(
+                  key: const Key('settings-transcription'),
+                  leading: const Icon(Icons.transcribe),
+                  title: const Text('Optional transcription · pilot'),
+                  subtitle: const Text(
+                    'Off by default. Set up local text from saved recordings.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const TranscriptionScreen(),
+                    ),
                   ),
                 ),
                 heading('Storage'),

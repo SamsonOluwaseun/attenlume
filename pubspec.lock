@@ -41,6 +41,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  audio_decoder:
+    dependency: "direct main"
+    description:
+      name: audio_decoder
+      sha256: "116d71853a934ede4d2afe31a1dabfb9fe5bb50efe3df4d798dc546cf6604c9f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.8.1"
   audio_session:
     dependency: "direct main"
     description:
@@ -493,6 +501,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_whisper_ggml:
+    dependency: "direct main"
+    description:
+      name: flutter_whisper_ggml
+      sha256: a37a1f51f6617d0beae9ce907a25c361f782cfe76d56e9c8001257a3091d2b57
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.2"
   fuchsia_remote_debug_protocol:
     dependency: transitive
     description: flutter

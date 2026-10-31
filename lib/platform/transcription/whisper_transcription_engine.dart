@@ -24,7 +24,11 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
   }) : _audioConverter = audioConverter ?? const NativeAudioToWavConverter(),
        _audioInfoProvider = audioInfoProvider ?? AudioDecoder.getAudioInfo,
        _whisperLoader =
-           whisperLoader ?? ((path) => FlutterWhisper.load(modelPath: path));
+           whisperLoader ??
+           ((path) => FlutterWhisper.load(
+             modelPath: path,
+             config: const WhisperModelConfig(useGpu: false),
+           ));
 
   final AudioToWavConverter _audioConverter;
   final Future<AudioInfo> Function(String path) _audioInfoProvider;
@@ -119,6 +123,11 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
       _currentWhisper = loaded;
       final result = await loaded.transcribeFile(
         wav.path,
+        config: const WhisperTranscribeConfig(
+          language: 'en',
+          threads: 2,
+          noContext: true,
+        ),
         onProgress: (percent) {
           if (!_isCancelled && !_disposed) {
             onProgress((percent / 100).clamp(0, 1));
