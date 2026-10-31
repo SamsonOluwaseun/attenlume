@@ -6,9 +6,9 @@ import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/services/device_timezone.dart';
 import '../conferences/conference_home_screen.dart';
-import '../conferences/conference_list_screen.dart';
 import '../conferences/conference_wizard_screen.dart';
 import '../guide/quick_guide_screen.dart';
+import '../shell/app_shell.dart';
 
 /// First screen. No sign-in (NFR-01).
 ///
@@ -87,13 +87,8 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     );
   }
 
-  void _openPrevious() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => const ConferenceListScreen(),
-      ),
-    );
-  }
+  /// My conferences inside the navigation shell (ADR-052) [P1-39].
+  void _openPrevious() => AppShell.open(context);
 
   @override
   Widget build(BuildContext context) {
