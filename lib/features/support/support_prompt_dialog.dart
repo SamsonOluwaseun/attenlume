@@ -63,6 +63,7 @@ class _SupportPromptDialogState extends State<SupportPromptDialog> {
 
     return AlertDialog(
       key: const Key('support-prompt-dialog'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(TokenRadius.radiusLg)),
       ),

@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   void phoneSize(WidgetTester tester) {
-    tester.view.physicalSize = const Size(1080, 2400);
+    // 360x800 logical phone screen (e.g. standard Android phone)
+    tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -25,20 +26,23 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: theme ?? AppTheme.light(),
-        home: MediaQuery(
-          data: MediaQueryData(
+        // MaterialApp.builder places the scaled MediaQuery ABOVE the Navigator,
+        // ensuring that the modal dialog route and overlay are properly scaled.
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),
           ),
-          child: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                key: const Key('open-support-dialog'),
-                onPressed: () async {
-                  final result = await showSupportPrompt(context, kind);
-                  onResult(result);
-                },
-                child: const Text('Open'),
-              ),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              key: const Key('open-support-dialog'),
+              onPressed: () async {
+                final result = await showSupportPrompt(context, kind);
+                onResult(result);
+              },
+              child: const Text('Open'),
             ),
           ),
         ),
@@ -69,8 +73,8 @@ void main() {
       expect(find.text('Maybe later'), findsOneWidget);
       expect(find.text('Don’t ask again'), findsOneWidget);
 
-      // Dismiss dialog
-      await tester.tapAt(const Offset(10, 10)); // Tap barrier
+      // Dismiss dialog via barrier tap
+      await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
       expect(decision, isNull);
     });
@@ -93,7 +97,7 @@ void main() {
       expect(find.text('Maybe later'), findsOneWidget);
       expect(find.text('Don’t ask again'), findsOneWidget);
 
-      await tester.tapAt(const Offset(10, 10)); // Tap barrier to dismiss
+      await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
       expect(decision, isNull);
     });
@@ -169,29 +173,78 @@ void main() {
     });
   });
 
-  group('SupportPromptDialog themes and 200% accessibility scaling', () {
-    testWidgets('renders cleanly in dark theme', (tester) async {
+  group('SupportPromptDialog real 200% phone viewport & actions (360x800)', () {
+    testWidgets('200% text scale in light theme: scales overlay, taps Gift now without overflow', (tester) async {
+      SupportPromptDecision? decision;
       await pumpDialogHost(
         tester,
         kind: SupportPromptKind.initial,
-        onResult: (_) {},
-        theme: AppTheme.dark(),
-      );
-
-      expect(find.byKey(const Key('support-prompt-dialog')), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('renders at 200% text scale without overflow', (tester) async {
-      await pumpDialogHost(
-        tester,
-        kind: SupportPromptKind.initial,
-        onResult: (_) {},
+        onResult: (res) => decision = res,
+        theme: AppTheme.light(),
         textScale: 2.0,
       );
 
-      expect(find.byKey(const Key('support-prompt-dialog')), findsOneWidget);
-      // Ensure no RenderFlex overflow exception was thrown
+      final dialogContext = tester.element(find.byKey(const Key('support-prompt-dialog')));
+      expect(MediaQuery.textScalerOf(dialogContext).scale(16), equals(32.0));
+
+      // Select amount chip (£5) and ensure visible
+      await tester.ensureVisible(find.byKey(const Key('support-amount-5')));
+      await tester.tap(find.byKey(const Key('support-amount-5')));
+      await tester.pumpAndSettle();
+
+      // Tap Gift now
+      await tester.ensureVisible(find.byKey(const Key('support-prompt-gift-now')));
+      await tester.tap(find.byKey(const Key('support-prompt-gift-now')));
+      await tester.pumpAndSettle();
+
+      expect(decision, isNotNull);
+      expect(decision!.isGiftNow, isTrue);
+      expect(decision!.selectedAmount, equals(SupportGiftAmount.five));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('200% text scale in dark theme: scales overlay, taps Maybe later without overflow', (tester) async {
+      SupportPromptDecision? decision;
+      await pumpDialogHost(
+        tester,
+        kind: SupportPromptKind.initial,
+        onResult: (res) => decision = res,
+        theme: AppTheme.dark(),
+        textScale: 2.0,
+      );
+
+      final dialogContext = tester.element(find.byKey(const Key('support-prompt-dialog')));
+      expect(MediaQuery.textScalerOf(dialogContext).scale(16), equals(32.0));
+
+      // Tap Maybe later
+      await tester.ensureVisible(find.byKey(const Key('support-prompt-maybe-later')));
+      await tester.tap(find.byKey(const Key('support-prompt-maybe-later')));
+      await tester.pumpAndSettle();
+
+      expect(decision, isNotNull);
+      expect(decision!.isMaybeLater, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('200% text scale: taps Don’t ask again without overflow', (tester) async {
+      SupportPromptDecision? decision;
+      await pumpDialogHost(
+        tester,
+        kind: SupportPromptKind.initial,
+        onResult: (res) => decision = res,
+        textScale: 2.0,
+      );
+
+      final dialogContext = tester.element(find.byKey(const Key('support-prompt-dialog')));
+      expect(MediaQuery.textScalerOf(dialogContext).scale(16), equals(32.0));
+
+      // Tap Don't ask again
+      await tester.ensureVisible(find.byKey(const Key('support-prompt-dont-ask-again')));
+      await tester.tap(find.byKey(const Key('support-prompt-dont-ask-again')));
+      await tester.pumpAndSettle();
+
+      expect(decision, isNotNull);
+      expect(decision!.isDontAskAgain, isTrue);
       expect(tester.takeException(), isNull);
     });
   });
