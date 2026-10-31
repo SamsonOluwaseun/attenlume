@@ -8,6 +8,7 @@ import '../../app/theme/tokens.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../domain/models/enums.dart';
+import '../capture/recording_banner.dart';
 import '../guide/quick_guide_screen.dart';
 import '../privacy/privacy_screen.dart';
 import '../storage_manager/storage_manager_screen.dart';
@@ -88,157 +89,161 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: TokenSpace.space6),
-            children: [
-              heading('Recording'),
-              _ChoiceTile<RecordingProfile>(
-                key: const Key('settings-default-profile'),
-                icon: Icons.graphic_eq_rounded,
-                title: 'Default recording quality',
-                help:
-                    'Used for new conferences. Existing conferences keep '
-                    'their own setting.',
-                value: profile,
-                choices: RecordingProfile.values,
-                label: (p) => p.label,
-                onChanged: (p) => save(
-                  () => settings.setGlobalDefaultRecordingProfile(p),
-                  defaultRecordingProfileSettingProvider,
+      body: WithRecordingBanner(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: TokenSpace.space6),
+              children: [
+                heading('Recording'),
+                _ChoiceTile<RecordingProfile>(
+                  key: const Key('settings-default-profile'),
+                  icon: Icons.graphic_eq_rounded,
+                  title: 'Default recording quality',
+                  help:
+                      'Used for new conferences. Existing conferences keep '
+                      'their own setting.',
+                  value: profile,
+                  choices: RecordingProfile.values,
+                  label: (p) => p.label,
+                  onChanged: (p) => save(
+                    () => settings.setGlobalDefaultRecordingProfile(p),
+                    defaultRecordingProfileSettingProvider,
+                  ),
                 ),
-              ),
-              _ChoiceTile<Duration>(
-                key: const Key('settings-long-recording'),
-                icon: Icons.timer_outlined,
-                title: 'Check in on long recordings after',
-                value: safety?.longRecording,
-                choices: SettingsRepository.longRecordingChoices,
-                label: durationLabel,
-                onChanged: (d) => save(
-                  () => settings.setSafetyLongRecording(d),
-                  safetyThresholdsSettingProvider,
+                _ChoiceTile<Duration>(
+                  key: const Key('settings-long-recording'),
+                  icon: Icons.timer_outlined,
+                  title: 'Check in on long recordings after',
+                  value: safety?.longRecording,
+                  choices: SettingsRepository.longRecordingChoices,
+                  label: durationLabel,
+                  onChanged: (d) => save(
+                    () => settings.setSafetyLongRecording(d),
+                    safetyThresholdsSettingProvider,
+                  ),
                 ),
-              ),
-              _ChoiceTile<Duration>(
-                key: const Key('settings-silence'),
-                icon: Icons.volume_off_outlined,
-                title: 'Ask after no sound for',
-                value: safety?.silence,
-                choices: SettingsRepository.silenceChoices,
-                label: durationLabel,
-                onChanged: (d) => save(
-                  () => settings.setSafetySilence(d),
-                  safetyThresholdsSettingProvider,
+                _ChoiceTile<Duration>(
+                  key: const Key('settings-silence'),
+                  icon: Icons.volume_off_outlined,
+                  title: 'Ask after no sound for',
+                  value: safety?.silence,
+                  choices: SettingsRepository.silenceChoices,
+                  label: durationLabel,
+                  onChanged: (d) => save(
+                    () => settings.setSafetySilence(d),
+                    safetyThresholdsSettingProvider,
+                  ),
                 ),
-              ),
-              _ChoiceTile<int>(
-                key: const Key('settings-low-battery'),
-                icon: Icons.battery_alert_outlined,
-                title: 'Warn when battery is below',
-                help: 'These reminders never stop a recording.',
-                value: safety?.lowBatteryPercent,
-                choices: SettingsRepository.lowBatteryChoices,
-                label: (p) => '$p%',
-                onChanged: (p) => save(
-                  () => settings.setSafetyLowBatteryPercent(p),
-                  safetyThresholdsSettingProvider,
+                _ChoiceTile<int>(
+                  key: const Key('settings-low-battery'),
+                  icon: Icons.battery_alert_outlined,
+                  title: 'Warn when battery is below',
+                  help: 'These reminders never stop a recording.',
+                  value: safety?.lowBatteryPercent,
+                  choices: SettingsRepository.lowBatteryChoices,
+                  label: (p) => '$p%',
+                  onChanged: (p) => save(
+                    () => settings.setSafetyLowBatteryPercent(p),
+                    safetyThresholdsSettingProvider,
+                  ),
                 ),
-              ),
-              heading('Photos'),
-              _ChoiceTile<bool>(
-                key: const Key('settings-photo-quality'),
-                icon: Icons.photo_size_select_large_outlined,
-                title: 'Photo quality',
-                help:
-                    'Space saving keeps slide text readable and uses less '
-                    'storage. Applies to new photos only.',
-                value: keepPhotos,
-                choices: const [false, true],
-                label: photoQualityLabel,
-                onChanged: (keep) => save(
-                  () => settings.setPhotoKeepHighestQuality(keep),
-                  photoKeepHighestQualitySettingProvider,
+                heading('Photos'),
+                _ChoiceTile<bool>(
+                  key: const Key('settings-photo-quality'),
+                  icon: Icons.photo_size_select_large_outlined,
+                  title: 'Photo quality',
+                  help:
+                      'Space saving keeps slide text readable and uses less '
+                      'storage. Applies to new photos only.',
+                  value: keepPhotos,
+                  choices: const [false, true],
+                  label: photoQualityLabel,
+                  onChanged: (keep) => save(
+                    () => settings.setPhotoKeepHighestQuality(keep),
+                    photoKeepHighestQualitySettingProvider,
+                  ),
                 ),
-              ),
-              heading('Appearance'),
-              _ChoiceTile<ThemeMode>(
-                key: const Key('settings-theme'),
-                icon: Icons.brightness_6_outlined,
-                title: 'Theme',
-                value: themeMode,
-                choices: ThemeMode.values,
-                label: themeLabel,
-                onChanged: (m) => save(
-                  () => settings.setThemeMode(m),
-                  themeModeSettingProvider,
+                heading('Appearance'),
+                _ChoiceTile<ThemeMode>(
+                  key: const Key('settings-theme'),
+                  icon: Icons.brightness_6_outlined,
+                  title: 'Theme',
+                  value: themeMode,
+                  choices: ThemeMode.values,
+                  label: themeLabel,
+                  onChanged: (m) => save(
+                    () => settings.setThemeMode(m),
+                    themeModeSettingProvider,
+                  ),
                 ),
-              ),
-              heading('Storage'),
-              ListTile(
-                key: const Key('settings-storage'),
-                leading: const Icon(Icons.storage_outlined),
-                title: const Text('Storage manager'),
-                subtitle: const Text(
-                  'Space used, clear temporary files, delete copies you exported',
+                heading('Storage'),
+                ListTile(
+                  key: const Key('settings-storage'),
+                  leading: const Icon(Icons.storage_outlined),
+                  title: const Text('Storage manager'),
+                  subtitle: const Text(
+                    'Space used, clear temporary files, delete copies you exported',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const StorageManagerScreen(),
+                      ),
+                    );
+                    // A conference may have been deleted: My conferences
+                    // must not show it when the user goes back.
+                    ref.invalidate(allConferencesFutureProvider);
+                  },
                 ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const StorageManagerScreen(),
-                    ),
-                  );
-                  // A conference may have been deleted: My conferences
-                  // must not show it when the user goes back.
-                  ref.invalidate(allConferencesFutureProvider);
-                },
-              ),
-              heading('Privacy and security'),
-              ListTile(
-                key: const Key('settings-privacy'),
-                leading: const Icon(Icons.lock_outline_rounded),
-                title: const Text('Privacy and app lock'),
-                subtitle: const Text(
-                  'Where your data stays, permissions and app lock',
+                heading('Privacy and security'),
+                ListTile(
+                  key: const Key('settings-privacy'),
+                  leading: const Icon(Icons.lock_outline_rounded),
+                  title: const Text('Privacy and app lock'),
+                  subtitle: const Text(
+                    'Where your data stays, permissions and app lock',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => unawaited(PrivacyScreen.open(context)),
                 ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => unawaited(PrivacyScreen.open(context)),
-              ),
-              heading('Help'),
-              ListTile(
-                key: const Key('settings-quick-guide'),
-                leading: const Icon(Icons.menu_book_outlined),
-                title: const Text('Quick guide'),
-                subtitle: const Text('How to set up, record, review and share'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => unawaited(QuickGuideScreen.open(context)),
-              ),
-              heading('About'),
-              const ListTile(
-                key: Key('settings-about'),
-                leading: Icon(Icons.info_outline_rounded),
-                title: Text(appName),
-                subtitle: Text(
-                  'Version $appVersion\nBy $publisher\n$licenceLine',
+                heading('Help'),
+                ListTile(
+                  key: const Key('settings-quick-guide'),
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: const Text('Quick guide'),
+                  subtitle: const Text(
+                    'How to set up, record, review and share',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => unawaited(QuickGuideScreen.open(context)),
                 ),
-                isThreeLine: true,
-              ),
-              ListTile(
-                key: const Key('settings-licences'),
-                leading: const Icon(Icons.description_outlined),
-                title: const Text('Third-party licences'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => showLicensePage(
-                  context: context,
-                  applicationName: appName,
-                  applicationVersion: appVersion,
-                  applicationLegalese: licenceLine,
+                heading('About'),
+                const ListTile(
+                  key: Key('settings-about'),
+                  leading: Icon(Icons.info_outline_rounded),
+                  title: Text(appName),
+                  subtitle: Text(
+                    'Version $appVersion\nBy $publisher\n$licenceLine',
+                  ),
+                  isThreeLine: true,
                 ),
-              ),
-            ],
+                ListTile(
+                  key: const Key('settings-licences'),
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Third-party licences'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => showLicensePage(
+                    context: context,
+                    applicationName: appName,
+                    applicationVersion: appVersion,
+                    applicationLegalese: licenceLine,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

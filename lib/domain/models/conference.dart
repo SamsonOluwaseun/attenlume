@@ -104,3 +104,23 @@ class ConferenceStats {
     totalStorageBytes: 0,
   );
 }
+
+/// What a card on My conferences shows besides the conference itself
+/// (FR-UI-10, ADR-052) [P1-39].
+class ConferenceCardInfo {
+  const ConferenceCardInfo({
+    required this.activityCount,
+    required this.photoCount,
+    this.coverPhotoPath,
+  });
+
+  final int activityCount;
+  final int photoCount;
+
+  /// Media-root-relative path of the cover: the thumbnail (else the file)
+  /// of the first photo taken in a non-private activity. Null when there
+  /// is none, and the card shows the branded placeholder.
+  final String? coverPhotoPath;
+
+  static const empty = ConferenceCardInfo(activityCount: 0, photoCount: 0);
+}

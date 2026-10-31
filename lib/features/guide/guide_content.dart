@@ -41,6 +41,8 @@ const quickGuide = QuickGuide(
             'Type the conference name, for example Samlytics Conference 2026.',
             'Tap Create conference. You can add dates and goals later.',
             'Prefer to fill everything in now? Tap Set up with wizard.',
+            'Later, tap Open previous to see My conferences. Search by name or place, and use the bar at the bottom (at the side on tablets and Windows) for Record, Library and Settings.',
+            'While recording, the status banner and Stop action remain available in Settings as well as the other navigation pages.',
           ],
         ),
         GuideStep(
@@ -147,7 +149,7 @@ const quickGuide = QuickGuide(
           title: 'Settings',
           images: ['17-menu', '18-settings'],
           points: [
-            'On My conferences, tap the menu, then Settings.',
+            'Tap Settings in the navigation bar.',
             'Choose the default recording quality, when Attenlume checks in during long recordings, photo quality and the theme.',
             'Privacy and app lock, the quick guide and About are here too.',
           ],
@@ -156,7 +158,7 @@ const quickGuide = QuickGuide(
           title: 'Storage manager',
           images: ['19-storage'],
           points: [
-            'See how much space each conference uses, and whether it is exported, partly exported or verified.',
+            'Open Library, then Files on this device. See how much space each conference uses, and whether it is exported, partly exported or verified.',
             'Clear temporary files at any time. Your recordings and photos are never touched.',
             'Delete local copies is only possible after a complete, verified export of a folder, with a preview and a second confirmation.',
           ],
@@ -166,7 +168,7 @@ const quickGuide = QuickGuide(
           images: ['20-import'],
           points: [
             'Export the conference, then copy the ZIP to the new device.',
-            'On the new device, tap the menu on My conferences, then Import an export.',
+            'On the new device, open Library, then Import an export.',
             'Every file is checked first, and nothing already in the app is overwritten.',
           ],
         ),
@@ -179,7 +181,7 @@ const quickGuide = QuickGuide(
     'Your conferences, recordings, photos and notes stay on this device unless you export or share them.',
     'No account, no analytics, no adverts and no trackers.',
     'Recording is always shown on screen. There is no hidden recording mode.',
-    'Turn on App lock under My conferences, menu, Settings, Privacy and app lock, to ask for your fingerprint, face or PIN.',
+    'Turn on App lock under Settings, Privacy and app lock, to ask for your fingerprint, face or PIN.',
   ],
   tips: [
     GuideTip(
