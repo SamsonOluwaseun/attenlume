@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:attenlume/data/repositories/repository_providers.dart';
-import 'package:attenlume/domain/models/conference.dart';
 import 'package:attenlume/domain/models/activity.dart';
+import 'package:attenlume/domain/models/conference.dart';
 import 'package:attenlume/domain/services/recording_state.dart';
 import 'package:attenlume/features/conferences/conference_home_screen.dart';
 import 'package:attenlume/features/conferences/conference_list_screen.dart';

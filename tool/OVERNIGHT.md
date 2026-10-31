@@ -1,34 +1,21 @@
 # Overnight relay (P1-45)
 
-**Current readiness: blocked for unattended use** (31 October 2026, ADR-062).
-The first run stopped at 00:55 with no integrations. Codex's sandbox could not
-update ACLs on the additional session-log write root, and a fallback setup
-overwrote an already tracked/mapped PDF. Tests/builds passed on two preserved
-candidates, but peer reviews could not execute. No same-chat alert transport
-exists in this runner. The instructions below describe the intended workflow,
-not proof that the system is ready to run unattended again.
+**Current mode: attended recovery only** (31 October 2026, ADR-063).
+The Codex log-root permission request is removed and real-worktree reviews run.
+Local-doc restoration skips Git-tracked files; a mapped-PDF regression test passes.
+Review-blocked and code-findings outcomes are distinct. The runner refuses
+unattended execution by default and returns a nonzero exit for blocked/partial
+work. No same-chat alert transport exists, so it is still not ready to run detached.
+Use `-Attended` in the PowerShell wrapper, or `--attended` in Python, only while
+an active lead monitors this chat. Dry-run does not launch agents.
 
-## Required recovery before the next detached run
-
-1. Remove the unnecessary session-log `--add-dir` permission request from Codex
-   tool access, or make a narrowly scoped folder-access repair if still needed.
-   The parent CLI/supervisor can write final outputs without giving shell tools
-   that additional root. Verify this with actual worktree execution; do not
-   disable the sandbox or grant broad administrator/Everyone permissions.
-2. Restore only ignored development documents to a new worktree. Do not recopy
-   already checked-out user-guide PDFs or tracked source. Test with a mapped/
-   locked existing PDF and preserve both source and candidate branches.
-3. Distinguish infrastructure-blocked review from code findings, pass findings
-   back to the preserved candidate for bounded repair, and resume its checks.
-   Do not retry from an untouched main branch as if earlier work did not exist.
-4. Test the whole builder/check/reviewer path in the actual worktree. Test alert
-   delivery with an intentional failure while the owner is present. A scratch
-   commit and writing a report do not prove these paths work.
-5. Only then review preserved P1-39a `90a13c3` and P1-28 `d5c06fd`, integrate
-   approved changes, export the Mac pack and proceed to their dependent tasks.
-
-These are reviewed recovery steps, not fixes implemented by P1-46. Only static
-analysis's diagnostic-folder exclusion was fixed in that task.
+P1-39a 90a13c3 and P1-28 d5c06fd were resumed rather than rebuilt. Actual code
+reviews identified and repaired scroll retention, Settings recording visibility,
+release draft/signing/input safety and strict manifest verification. Both repaired
+candidates passed read-only follow-up review; see P1-47 recovery report for exact
+commits and combined validation. Native Mac/signing/remote CI evidence remains
+separate. Future repair loops should keep the same candidate and failed step;
+this task uses attended recovery rather than claiming an autonomous repair loop.
 
 ## Immediate failure notifications
 
