@@ -397,8 +397,145 @@ void main() {
           'reminderShown': true,
           'reminderEligible': true,
           'promptCount': 2,
+          'lastDecision': {'type': 'maybeLater'},
         }),
         equals(SupportPromptState.suppressed),
+      );
+
+      // Invariant 5 (Codex finding): contradictory lastDecision (e.g. dontAskAgain with reminderEligible: true)
+      expect(
+        SupportPromptState.fromJson(<String, dynamic>{
+          'initialPromptShown': true,
+          'reminderEligible': true,
+          'reminderShown': false,
+          'dismissedPermanently': false,
+          'giftClicked': false,
+          'promptCount': 1,
+          'lastDecision': {'type': 'dontAskAgain'},
+        }),
+        equals(SupportPromptState.suppressed),
+      );
+
+      // Invariant 6: contradictory giftNow decision with reminderEligible: true
+      expect(
+        SupportPromptState.fromJson(<String, dynamic>{
+          'initialPromptShown': true,
+          'reminderEligible': true,
+          'reminderShown': false,
+          'dismissedPermanently': false,
+          'giftClicked': false,
+          'promptCount': 1,
+          'lastDecision': {'type': 'giftNow'},
+        }),
+        equals(SupportPromptState.suppressed),
+      );
+
+      // Invariant 7: missing or malformed lastDecision with reminderEligible: true
+      expect(
+        SupportPromptState.fromJson(<String, dynamic>{
+          'initialPromptShown': true,
+          'reminderEligible': true,
+          'reminderShown': false,
+          'dismissedPermanently': false,
+          'giftClicked': false,
+          'promptCount': 1,
+        }),
+        equals(SupportPromptState.suppressed),
+      );
+
+      expect(
+        SupportPromptState.fromJson(<String, dynamic>{
+          'initialPromptShown': true,
+          'reminderEligible': true,
+          'reminderShown': false,
+          'dismissedPermanently': false,
+          'giftClicked': false,
+          'promptCount': 1,
+          'lastDecision': {'type': 'malformedType'},
+        }),
+        equals(SupportPromptState.suppressed),
+      );
+    });
+
+    test('direct construct inconsistent states fail closed in shouldPrompt and canPromptAgain', () {
+      // 1. Contradictory dontAskAgain with reminderEligible: true
+      const contradictoryDontAsk = SupportPromptState(
+        initialPromptShown: true,
+        reminderEligible: true,
+        reminderShown: false,
+        dismissedPermanently: false,
+        giftClicked: false,
+        promptCount: 1,
+        lastDecision: SupportPromptDecision.dontAskAgain(),
+      );
+      expect(contradictoryDontAsk.isConsistent, isFalse);
+      expect(contradictoryDontAsk.canPromptAgain, isFalse);
+      expect(
+        defaultPolicy.shouldPrompt(
+          state: contradictoryDontAsk,
+          exportSucceeded: true,
+          isChannelEligible: true,
+          supportUrl: validPayPalUrl,
+        ),
+        isNull,
+      );
+
+      // 2. Contradictory giftNow with reminderEligible: true
+      const contradictoryGift = SupportPromptState(
+        initialPromptShown: true,
+        reminderEligible: true,
+        reminderShown: false,
+        dismissedPermanently: false,
+        giftClicked: false,
+        promptCount: 1,
+        lastDecision: SupportPromptDecision.giftNow(),
+      );
+      expect(contradictoryGift.isConsistent, isFalse);
+      expect(contradictoryGift.canPromptAgain, isFalse);
+      expect(
+        defaultPolicy.shouldPrompt(
+          state: contradictoryGift,
+          exportSucceeded: true,
+          isChannelEligible: true,
+          supportUrl: validPayPalUrl,
+        ),
+        isNull,
+      );
+
+      // 3. reminderEligible: true but missing lastDecision
+      const missingDecision = SupportPromptState(
+        initialPromptShown: true,
+        reminderEligible: true,
+        reminderShown: false,
+        dismissedPermanently: false,
+        giftClicked: false,
+        promptCount: 1,
+        lastDecision: null,
+      );
+      expect(missingDecision.isConsistent, isFalse);
+      expect(missingDecision.canPromptAgain, isFalse);
+      expect(
+        defaultPolicy.shouldPrompt(
+          state: missingDecision,
+          exportSucceeded: true,
+          isChannelEligible: true,
+          supportUrl: validPayPalUrl,
+        ),
+        isNull,
+      );
+
+      // 4. Fresh empty constructor state is consistent and permits initial prompt
+      const fresh = SupportPromptState();
+      expect(fresh.isConsistent, isTrue);
+      expect(fresh.canPromptAgain, isTrue);
+      expect(
+        defaultPolicy.shouldPrompt(
+          state: fresh,
+          exportSucceeded: true,
+          isChannelEligible: true,
+          supportUrl: validPayPalUrl,
+        ),
+        equals(SupportPromptKind.initial),
       );
     });
 

@@ -350,14 +350,80 @@ class SupportPromptState {
   /// Rule (FR-SUP-01): Payment is never inferred from clicking a link.
   bool get paymentCompleted => false;
 
+  /// Validates internal consistency across all state flags and lastDecision.
+  bool get isConsistent {
+    // 1. Prompt count bounds: 0..2
+    if (promptCount < 0 || promptCount > 2) return false;
+
+    // 2. Fresh state: promptCount == 0, initialPromptShown == false
+    if (!initialPromptShown) {
+      if (reminderEligible || reminderShown || promptCount != 0 || giftClicked) {
+        return false;
+      }
+      // A fresh state before first prompt must not have a recorded decision
+      if (lastDecision != null) return false;
+      return true;
+    }
+
+    // 3. Persisted shown state (initialPromptShown == true):
+    // Must have promptCount >= 1 and a valid recorded lastDecision
+    if (promptCount < 1 || lastDecision == null) return false;
+
+    // 4. Invariants for reminderEligible:
+    // User must have chosen maybeLater on the initial prompt.
+    // Missing, malformed, or contradictory decision forbids reminder eligibility.
+    if (reminderEligible) {
+      if (lastDecision?.type != SupportPromptDecisionType.maybeLater) {
+        return false;
+      }
+      if (reminderShown || dismissedPermanently || giftClicked || promptCount != 1) {
+        return false;
+      }
+    }
+
+    // 5. Contradictory decision validations:
+    switch (lastDecision!.type) {
+      case SupportPromptDecisionType.dontAskAgain:
+        if (!dismissedPermanently || reminderEligible) return false;
+        break;
+      case SupportPromptDecisionType.giftNow:
+        if (!giftClicked || reminderEligible) return false;
+        break;
+      case SupportPromptDecisionType.maybeLater:
+        if (promptCount == 1 && !reminderEligible) return false;
+        if (reminderShown && reminderEligible) return false;
+        break;
+      case SupportPromptDecisionType.declined:
+      case SupportPromptDecisionType.dismissed:
+        if (reminderEligible) return false;
+        break;
+    }
+
+    // 6. Invariants for reminderShown:
+    if (reminderShown) {
+      if (!initialPromptShown || reminderEligible || promptCount != 2) {
+        return false;
+      }
+    }
+
+    // 7. Dismissed or giftClicked cannot be reminderEligible
+    if (dismissedPermanently && reminderEligible) return false;
+    if (giftClicked && reminderEligible) return false;
+
+    return true;
+  }
+
   /// Whether any further prompt could ever be shown under this state.
   /// Enforces promptCount < 2, no prompt after reminder, and no prompt if dismissed/gifted.
   bool get canPromptAgain {
+    if (!isConsistent) return false;
     if (dismissedPermanently || giftClicked) return false;
     if (promptCount >= 2) return false;
     if (reminderShown) return false;
     if (!initialPromptShown) return promptCount == 0;
-    return reminderEligible && promptCount == 1;
+    return reminderEligible &&
+        promptCount == 1 &&
+        lastDecision?.type == SupportPromptDecisionType.maybeLater;
   }
 
   /// Returns a new [SupportPromptState] reflecting the decision on [kind].
@@ -507,47 +573,13 @@ class SupportPromptState {
     final giftClicked = giftClickedRaw;
     final promptCount = promptCountRaw;
 
-    // 2. Validate invariant consistency
-    // Prompt count must be within 0..2
-    if (promptCount < 0 || promptCount > 2) {
-      return SupportPromptState.suppressed;
-    }
-
-    // Cannot have initialPromptShown == false with reminder flags or promptCount > 0
-    if (!initialPromptShown) {
-      if (reminderEligible || reminderShown || promptCount != 0) {
-        return SupportPromptState.suppressed;
-      }
-    }
-
-    // If reminder was shown, initial must have been shown, reminder cannot still be eligible,
-    // and promptCount must be 2
-    if (reminderShown) {
-      if (!initialPromptShown || reminderEligible || promptCount != 2) {
-        return SupportPromptState.suppressed;
-      }
-    }
-
-    // If reminder is eligible, initial must be shown, reminder must not be shown yet,
-    // cannot be dismissed/gifted, and promptCount must be 1
-    if (reminderEligible) {
-      if (!initialPromptShown || reminderShown || dismissedPermanently || giftClicked || promptCount != 1) {
-        return SupportPromptState.suppressed;
-      }
-    }
-
-    // If giftClicked is true, initial must be shown and reminder cannot be eligible
-    if (giftClicked && (!initialPromptShown || reminderEligible)) {
-      return SupportPromptState.suppressed;
-    }
-
-    // 3. Decode lastDecision safely if present
+    // 2. Decode lastDecision safely if present
     SupportPromptDecision? lastDecision;
     if (json.containsKey('lastDecision') && json['lastDecision'] != null) {
       lastDecision = SupportPromptDecision.fromJson(json['lastDecision']);
     }
 
-    return SupportPromptState(
+    final parsedState = SupportPromptState(
       initialPromptShown: initialPromptShown,
       reminderEligible: reminderEligible,
       reminderShown: reminderShown,
@@ -556,6 +588,13 @@ class SupportPromptState {
       promptCount: promptCount,
       lastDecision: lastDecision,
     );
+
+    // 3. Fail closed if state violates internal consistency
+    if (!parsedState.isConsistent) {
+      return SupportPromptState.suppressed;
+    }
+
+    return parsedState;
   }
 
   @override
@@ -605,6 +644,9 @@ class SupportPromptPolicy {
     required bool isChannelEligible,
     required String? supportUrl,
   }) {
+    // Fail closed for any inconsistent state (whether manually constructed or deserialized)
+    if (!state.isConsistent) return null;
+
     // 0. Hard prompt count cap: promptCount 0..2
     if (state.promptCount >= 2) return null;
 
@@ -630,8 +672,12 @@ class SupportPromptPolicy {
     }
 
     // 7. Reminder prompt: Exactly one neutral reminder if user chose "Maybe later" (FR-SUP-02).
-    // Prompt count must be 1, reminderEligible must be true, and reminderShown must be false.
-    if (state.reminderEligible && !state.reminderShown && state.promptCount == 1) {
+    // Prompt count must be 1, reminderEligible must be true, reminderShown must be false,
+    // and lastDecision must strictly be maybeLater.
+    if (state.reminderEligible &&
+        !state.reminderShown &&
+        state.promptCount == 1 &&
+        state.lastDecision?.type == SupportPromptDecisionType.maybeLater) {
       return SupportPromptKind.reminder;
     }
 
