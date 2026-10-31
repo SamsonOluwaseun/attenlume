@@ -1,9 +1,12 @@
 """P1-45 tests for fail-closed unattended coordination."""
 import json
+import mmap
 from pathlib import Path
 import tempfile
 import unittest
-from overnight_runner import forbidden, quota_error, review_pass, final_text, atomic_json
+from datetime import datetime, timezone, timedelta
+from overnight_runner import (forbidden, quota_error, review_pass, review_status,
+                              final_text, atomic_json, restore_local_documents, Relay)
 
 
 class OvernightTests(unittest.TestCase):
@@ -44,6 +47,40 @@ class OvernightTests(unittest.TestCase):
             atomic_json(path, {'status': 'finished'})
             self.assertEqual(json.loads(path.read_text())['status'], 'finished')
             self.assertFalse(path.with_suffix('.json.tmp').exists())
+
+    def test_p1_47_review_access_failure_is_not_a_code_finding(self):
+        self.assertEqual(review_status('NIGHT_REVIEW_BLOCKED\nAccess denied'), 'blocked')
+        self.assertEqual(review_status('NIGHT_REVIEW_CHANGES_REQUIRED\nregression'), 'changes requested')
+        self.assertFalse(review_pass('NIGHT_REVIEW_PASS\nNIGHT_REVIEW_BLOCKED'))
+        self.assertEqual(review_status('could not inspect'), 'blocked')
+
+    def test_p1_47_mapped_tracked_pdf_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, target = root / 'source', root / 'worktree'
+            for path in [source / 'docs/user-guide', target / 'docs/user-guide']:
+                path.mkdir(parents=True)
+            relative = 'docs/user-guide/guide.pdf'
+            (source / relative).write_bytes(b'new guide')
+            (target / relative).write_bytes(b'checked out guide')
+            (source / 'docs/HANDOVER.md').write_text('private handover')
+            with (target / relative).open('rb') as stream:
+                with mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ):
+                    restore_local_documents(source, target, {relative})
+                    self.assertEqual((target / relative).read_bytes(), b'checked out guide')
+            self.assertEqual((target / 'docs/HANDOVER.md').read_text(), 'private handover')
+
+    def test_p1_47_unattended_run_refused_without_an_alert_transport(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            logs = repo / 'tool/logs/test'
+            config = {'repo': str(repo), 'logs': str(logs), 'checkpoint': 'test',
+                      'deadline': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()}
+            relay = Relay(config)
+            relay.run()
+            self.assertEqual(relay.state['status'], 'blocked')
+            self.assertEqual(relay.state['commands'], [])
+            self.assertFalse((repo / 'tool/logs/overnight.lock').exists())
 
 
 if __name__ == '__main__':

@@ -65,14 +65,46 @@ def forbidden(paths):
     return bad
 
 
+def review_status(text):
+    markers = {line.strip() for line in text.splitlines()}
+    if 'NIGHT_REVIEW_BLOCKED' in markers:
+        return 'blocked'
+    if 'NIGHT_REVIEW_CHANGES_REQUIRED' in markers:
+        return 'changes requested'
+    if 'NIGHT_REVIEW_PASS' in markers:
+        return 'passed'
+    return 'blocked'
+
+
 def review_pass(text):
-    return any(line.strip() == 'NIGHT_REVIEW_PASS' for line in text.splitlines())
+    return review_status(text) == 'passed'
+
+
+def restore_local_documents(source, destination, tracked):
+    """Copy private development material without touching checked-out files."""
+    source, destination = Path(source).resolve(), Path(destination).resolve()
+    for name in ['AGENTS.md', 'CLAUDE.md', 'docs', 'assets/brand/reference',
+                 'test/docs', 'tool/agent-prompt.md', 'tool/team_check.ps1']:
+        entry = source / name
+        files = entry.rglob('*') if entry.is_dir() else [entry]
+        for path in files:
+            if not path.is_file() or path.is_symlink():
+                continue
+            relative = path.relative_to(source).as_posix()
+            if relative in tracked:
+                continue
+            target = destination / relative
+            if not target.resolve().is_relative_to(destination):
+                raise ValueError(f'Local document path escapes worktree: {relative}')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
 
 
 class Relay:
-    def __init__(self, config, dry_run=False):
+    def __init__(self, config, dry_run=False, attended=False):
         self.config = config
         self.dry_run = dry_run
+        self.attended = attended
         self.repo = Path(config['repo']).resolve()
         self.logs = Path(config['logs']).resolve()
         self.logs.mkdir(parents=True, exist_ok=True)
@@ -214,8 +246,10 @@ class Relay:
             raise RuntimeError(f'{agent} disabled after quota/failure')
         final = self.logs / f'{label}-final.md'
         if agent == 'codex':
+            # The parent CLI writes the final file. Shell tools do not need
+            # the log root, whose ACL refresh blocked the original reviews.
             args = [self.config['codex'], 'exec', '--approve-for-me', '--add-dir',
-                    'C:/dev/flutter', '--add-dir', str(self.logs), '-C', str(cwd), '--json',
+                    'C:/dev/flutter', '-C', str(cwd), '--json',
                     '-o', str(final), '-']
             stdin = prompt
         else:
@@ -264,15 +298,8 @@ class Relay:
             self.command(['git', 'worktree', 'add', '-b', branch, str(worktree), base],
                          self.repo, f'{slug}-worktree')
             self.snapshot_docs(self.repo, self.logs / f'{slug}-docs-before')
-            self.snapshot_docs(self.repo, worktree / '.night-local-docs')
-            # Place private/local-only docs in their original locations for the builder.
-            shutil.copytree(worktree / '.night-local-docs', worktree, dirs_exist_ok=True)
-            # Keep the private staging snapshot out of git add/status.
-            exclude = Path(self.git(worktree, 'rev-parse', '--git-path', 'info/exclude'))
-            if not exclude.is_absolute():
-                exclude = worktree / exclude
-            with exclude.open('a', encoding='utf-8') as f:
-                f.write('\n.night-local-docs/\n')
+            tracked = set(self.git(worktree, 'ls-files', '-z').split('\0'))
+            restore_local_documents(self.repo, worktree, tracked)
             # A worker can commit, but cannot merge: this instruction is explicit
             # in its local operating rules as well as in its task prompt.
             with (worktree / 'AGENTS.md').open('a', encoding='utf-8') as f:
@@ -314,11 +341,16 @@ class Relay:
                              'Tests and both Android/Windows debug builds passed outside the agent. '
                              'Return NIGHT_REVIEW_PASS on its own line only if no actionable findings; '
                              'otherwise return NIGHT_REVIEW_CHANGES_REQUIRED and concrete findings. '
+                             'If execution/access fails before inspection return NIGHT_REVIEW_BLOCKED, '
+                             'with the exact cause, not code findings. '
                              'No development changes are authorised in this review.')
             review = self.run_agent(peer, review_prompt, worktree, f'{slug}-review', reviewer=True)
             result['review_agent'] = peer
+            result['review_status'] = review_status(review)
             if not review_pass(review):
-                raise RuntimeError('Peer review requested changes; branch preserved for morning review')
+                if result['review_status'] == 'blocked':
+                    raise RuntimeError('Peer review blocked by execution/access; resume this candidate after repair')
+                raise RuntimeError('Peer review identified changes; repair this preserved candidate')
             if (self.git(worktree, 'rev-parse', 'HEAD') != candidate
                     or self.git(worktree, 'status', '--porcelain')):
                 raise RuntimeError('Review modified candidate; refusing untested merge')
@@ -361,6 +393,11 @@ class Relay:
             self.state['status'] = 'dry-run only'
             self.log('Configuration checked; no agent or development command launched.')
             return
+        if not self.attended:
+            self.state['status'] = 'blocked'
+            self.log('Unattended launch refused: no tested same-chat failure delivery. '
+                     'Use --attended only with an active coordinating lead.')
+            return
         self.lock.parent.mkdir(parents=True, exist_ok=True)
         with self.lock.open('x', encoding='utf-8') as f:
             f.write(str(os.getpid()))
@@ -390,7 +427,8 @@ class Relay:
                     if self.task(spec, agent, attempt):
                         succeeded.add(spec['id'])
                         break
-            self.state['status'] = 'finished'
+            self.state['status'] = ('finished with blockers' if any(
+                task['status'] != 'merged' for task in self.state['tasks']) else 'finished')
             self.log('Relay finished; inspect task outcomes and retained branches in the morning.')
         except Exception as error:
             self.state['status'] = 'blocked'
@@ -406,5 +444,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--attended', action='store_true',
+                        help='Require an active lead monitoring failures in the current chat')
     args = parser.parse_args()
-    Relay(json.loads(args.config.read_text(encoding='utf-8-sig')), args.dry_run).run()
+    relay = Relay(json.loads(args.config.read_text(encoding='utf-8-sig')), args.dry_run, args.attended)
+    relay.run()
+    sys.exit(0 if relay.state['status'] in {'finished', 'dry-run only'} else 1)
