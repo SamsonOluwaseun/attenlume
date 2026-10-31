@@ -3,6 +3,9 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
+#include <flutter/encodable_value.h>
+#include <shellapi.h>
 
 #include <memory>
 
@@ -23,6 +26,18 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  void UpdateTray();
+  void RestoreWindow();
+  void RequestQuit();
+  void TrayMenu();
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> lifecycle_;
+  NOTIFYICONDATAW tray_{};
+  bool tray_added_ = false;
+  bool recorder_held_ = true;  // Protect startup until Dart reports its state.
+  bool bridge_ready_ = false;
+  bool allow_close_ = false;
+  std::wstring status_ = L"Starting";
+  UINT taskbar_created_ = 0;
   // The project to run.
   flutter::DartProject project_;
 
