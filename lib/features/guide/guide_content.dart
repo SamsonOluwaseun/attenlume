@@ -42,6 +42,7 @@ const quickGuide = QuickGuide(
             'Tap Create conference. You can add dates and goals later.',
             'Prefer to fill everything in now? Tap Set up with wizard.',
             'Later, tap Open previous to see My conferences. Search by name or place, and use the bar at the bottom (at the side on tablets and Windows) for Record, Library and Settings.',
+            'While recording, the status banner and Stop action remain available in Settings as well as the other navigation pages.',
           ],
         ),
         GuideStep(

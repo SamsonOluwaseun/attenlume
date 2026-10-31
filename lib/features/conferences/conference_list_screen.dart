@@ -171,11 +171,11 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
         child: Builder(
           builder: (context) {
             final asyncVal = ref.watch(allConferencesFutureProvider);
-            if (asyncVal.isLoading) {
+            if (asyncVal.isLoading && !asyncVal.hasValue) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final all = asyncVal.asData?.value ?? const <Conference>[];
+            final all = asyncVal.value ?? const <Conference>[];
             final active = all.where((c) => !c.isArchived).toList();
             final archived = all.where((c) => c.isArchived).toList();
             final info =
@@ -192,6 +192,9 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
                       _buildConferenceList(
                         active,
                         info,
+                        listKey: const PageStorageKey(
+                          'active-conferences-list',
+                        ),
                         emptyMessage:
                             'No active conferences. Tap "New conference" to '
                             'get started.',
@@ -199,6 +202,9 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
                       _buildConferenceList(
                         archived,
                         info,
+                        listKey: const PageStorageKey(
+                          'archived-conferences-list',
+                        ),
                         emptyMessage: 'No archived conferences.',
                       ),
                     ],
@@ -254,6 +260,7 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
   Widget _buildConferenceList(
     List<Conference> conferences,
     Map<String, ConferenceCardInfo> info, {
+    required Key listKey,
     required String emptyMessage,
   }) {
     final theme = Theme.of(context);
@@ -264,6 +271,7 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
 
     if (shown.isEmpty) {
       return ListView(
+        key: listKey,
         padding: const EdgeInsets.all(TokenSpace.space4),
         children: [
           Center(
@@ -285,6 +293,7 @@ class _ConferenceListScreenState extends ConsumerState<ConferenceListScreen>
     }
 
     return ListView.builder(
+      key: listKey,
       // Room under the last card for the floating "New conference" button.
       padding: const EdgeInsets.fromLTRB(
         TokenSpace.space4,

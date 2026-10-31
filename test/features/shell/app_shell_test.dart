@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:attenlume/data/repositories/repository_providers.dart';
+import 'package:attenlume/domain/models/conference.dart';
 import 'package:attenlume/domain/models/activity.dart';
 import 'package:attenlume/domain/services/recording_state.dart';
 import 'package:attenlume/features/conferences/conference_home_screen.dart';
@@ -126,6 +130,77 @@ void main() {
   });
 
   group('FR-UI-11 destinations', () {
+    testWidgets('FR-UI-11 conference scroll survives destination refresh', (
+      tester,
+    ) async {
+      final h = A11yHarness(tester);
+      await h.setUp();
+      addTearDown(h.tearDown);
+      h.size(A11ySize.phone);
+      final conferences = await h.io(() async {
+        for (var i = 0; i < 30; i++) {
+          await h.t.conferences.create(
+            name: 'Samlytics Conference 2026',
+            timezone: 'Europe/London',
+          );
+        }
+        return h.t.conferences.getAll();
+      });
+      final refresh = Completer<List<Conference>>();
+      var reads = 0;
+      await tester.pumpWidget(
+        h.app(
+          const AppShell(),
+          extra: [
+            allConferencesFutureProvider.overrideWith((ref) {
+              reads++;
+              return reads == 1 ? Future.value(conferences) : refresh.future;
+            }),
+          ],
+        ),
+      );
+      await h.settle();
+      final list = find.byKey(const PageStorageKey('active-conferences-list'));
+      ScrollPosition position() => tester
+          .state<ScrollableState>(
+            find.descendant(of: list, matching: find.byType(Scrollable)),
+          )
+          .position;
+      await tester.drag(list, const Offset(0, -650));
+      await h.settle(25);
+      final offset = position().pixels;
+      expect(offset, greaterThan(0));
+      await tester.tap(find.byKey(const Key('nav-library')));
+      await h.settle();
+      await tester.tap(find.byKey(const Key('nav-conferences')));
+      await h.settle();
+      expect(reads, 2);
+      expect(position().pixels, closeTo(offset, 1));
+      refresh.complete(conferences);
+      await h.settle();
+      expect(position().pixels, closeTo(offset, 1));
+    });
+
+    testWidgets('FR-PRI-02 Settings retains recording status and quick Stop', (
+      tester,
+    ) async {
+      final h = await open(
+        tester,
+        const AppShell(),
+        status: const RecordingStatus(
+          state: RecordingState.recording,
+          activityId: 'aaaaaaaa-0000-4000-8000-000000000001',
+        ),
+      );
+      await tester.tap(find.byKey(const Key('nav-settings')));
+      await h.settle();
+      expect(find.byKey(const Key('recording-banner')), findsOneWidget);
+      final stop = find.byKey(const Key('recording-banner-stop'));
+      expect(stop.hitTestable(), findsOneWidget);
+      expect(tester.widget<TextButton>(stop).onPressed, isNotNull);
+      expect(find.text('Recording'), findsWidgets);
+    });
+
     testWidgets('FR-UI-11 each destination opens its page, and the list '
         'keeps its search when you come back', (tester) async {
       final h = await open(tester, const AppShell(), sample: true);
