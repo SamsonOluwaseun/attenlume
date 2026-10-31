@@ -6,8 +6,12 @@ import 'package:attenlume/data/local_database/database_provider.dart';
 import 'package:attenlume/data/repositories/activity_repository.dart';
 import 'package:attenlume/data/repositories/conference_repository.dart';
 import 'package:attenlume/data/repositories/media_asset_repository.dart';
+import 'package:attenlume/domain/models/enums.dart';
+import 'package:attenlume/domain/services/recording_state.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/platform/audio_capture/record_capture_engine.dart';
+import 'package:attenlume/platform/windows_lifecycle/windows_lifecycle_host.dart';
+import 'package:crypto/crypto.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,19 +34,57 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'J2 quick start opens the recorder, records, bookmarks, notes and stops',
+    'P1-29 FR-REC-01 FR-REC-09 J2 capture saves verifiable media and notes',
     (tester) async {
       final db = AppDatabase(NativeDatabase.memory());
       final mediaDir = await Directory.systemTemp.createTemp(
         'attenlume_journey_',
       );
-      addTearDown(db.close);
-
-      final inputs = await tester.runAsync(
-        () => RecordCaptureEngine().listInputs(),
-      );
+      final probe = RecordCaptureEngine();
+      final inputs = await tester.runAsync(() async {
+        try {
+          return await probe.listInputs();
+        } finally {
+          await probe.dispose();
+        }
+      });
       final hasMic = inputs!.isNotEmpty;
-      debugPrint('J2 microphones: ${inputs.map((i) => i.label).toList()}');
+      debugPrint('J2 microphone count: ${inputs.length}');
+
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          mediaRootProvider.overrideWithValue(() async => mediaDir),
+        ],
+      );
+      addTearDown(() async {
+        // Real file/stream finalisation must finish before the database closes,
+        // including when an assertion fails. Keep captured files for inspection.
+        try {
+          await tester.pumpWidget(const SizedBox.shrink());
+          // The non-autoDispose async* status provider can retain a paused
+          // subscription after unmount. Cancel it before closing its source.
+          container.invalidate(recordingStatusProvider);
+          await tester.pump();
+          var disposed = false;
+          final disposal = container
+              .read(recordingServiceProvider)
+              .dispose()
+              .whenComplete(() => disposed = true);
+          final deadline = DateTime.now().add(const Duration(seconds: 20));
+          while (!disposed && DateTime.now().isBefore(deadline)) {
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 10)),
+            );
+            await tester.pump();
+          }
+          expect(disposed, isTrue, reason: 'recorder disposal must complete');
+          await disposal;
+        } finally {
+          container.dispose();
+          await tester.runAsync(db.close);
+        }
+      });
 
       // Lets real time pass for the plugins while keeping frames coming.
       Future<void> wait(Duration d) async {
@@ -56,12 +98,9 @@ void main() {
       }
 
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            appDatabaseProvider.overrideWithValue(db),
-            mediaRootProvider.overrideWithValue(() async => mediaDir),
-          ],
-          child: const AttenlumeApp(),
+        UncontrolledProviderScope(
+          container: container,
+          child: const WindowsLifecycleHost(child: AttenlumeApp()),
         ),
       );
       await wait(const Duration(seconds: 2));
@@ -69,7 +108,7 @@ void main() {
       // J1: quick start a conference.
       await tester.enterText(
         find.byKey(const Key('conference-name-input')),
-        'Journey test',
+        'Samlytics Conference 2026',
       );
       await tapKey('create-conference-button');
       await wait(const Duration(seconds: 1));
@@ -157,7 +196,13 @@ void main() {
 
       // J2 step 7: Stop.
       await tapKey('record-button-stop');
-      await wait(const Duration(seconds: 3));
+      final recorder = container.read(recordingServiceProvider);
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      while (recorder.status.state.holdsActivity &&
+          DateTime.now().isBefore(deadline)) {
+        await wait(const Duration(milliseconds: 100));
+      }
+      expect(recorder.status.state, RecordingState.saved);
       expect(find.byKey(const Key('record-status-live')), findsNothing);
 
       final segments = (await tester.runAsync(
@@ -172,12 +217,24 @@ void main() {
         );
         expect(file.existsSync(), isTrue, reason: s.filePath);
         expect(file.lengthSync(), greaterThan(10 * 1024), reason: s.filePath);
+        expect(s.state, SegmentState.finalised, reason: s.filePath);
+        expect(s.bytes, file.lengthSync(), reason: 'stored byte count');
+        expect(s.durationMs, greaterThan(0), reason: 'observed media duration');
+        final digest = await tester.runAsync(
+          () async => (await sha256.bind(file.openRead()).first).toString(),
+        );
+        expect(s.sha256, digest, reason: 'saved checksum matches actual media');
       }
 
       final bookmarks = (await tester.runAsync(
         () => media.bookmarksFor(activity.id),
       ))!;
-      expect(bookmarks, isNotEmpty, reason: 'bookmark and note are saved');
+      expect(bookmarks.length, greaterThanOrEqualTo(2));
+      expect(
+        bookmarks.any((b) => b.note == 'Key point from the journey test'),
+        isTrue,
+        reason: 'quick note content survives stop',
+      );
       debugPrint('J2 media folder: ${mediaDir.path}');
     },
     skip: !Platform.isWindows && !Platform.isAndroid,
