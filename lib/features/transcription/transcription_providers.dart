@@ -41,6 +41,8 @@ final transcriptionControllerProvider = FutureProvider<TranscriptionController>(
     await controller.refresh();
     return controller;
   },
+  // Setup retries are explicit: avoid repeated native/storage initialisation.
+  retry: (_, _) => null,
 );
 
 final transcriptionSourcesProvider = FutureProvider.autoDispose

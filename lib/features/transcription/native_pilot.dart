@@ -20,8 +20,12 @@ Future<NativeTranscriptionPilot> createNativePilot(Directory root) async {
   if (Platform.isAndroid && ffi.sizeOf<ffi.IntPtr>() != 8) {
     throw UnsupportedError('The transcription pilot needs a 64-bit device.');
   }
+  // The platform owns this root. Android can expose it through OS-managed
+  // aliases (for example /data/user/0). Resolve that trusted boundary once;
+  // model storage still rejects links introduced inside the owned directory.
+  final canonicalRoot = await root.resolveSymbolicLinks();
   final store = WhisperModelStore(
-    baseDirectory: Directory(p.join(root.path, 'transcription-models-v1')),
+    baseDirectory: Directory(p.join(canonicalRoot, 'transcription-models-v1')),
   );
   return NativeTranscriptionPilot(
     _PilotModels(store),

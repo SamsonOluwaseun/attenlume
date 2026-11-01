@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../data/filesystem/app_data_directory.dart';
 import '../../domain/transcription/transcript.dart';
+import '../../platform/transcription/transcription_exceptions.dart';
 import 'transcription_controller.dart';
 import 'transcription_providers.dart';
 
@@ -138,11 +139,47 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       appBar: AppBar(title: const Text('Transcription · pilot')),
       body: data.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(
-          child: Text(
-            'Transcription is unavailable. Your recordings are unchanged.',
-          ),
-        ),
+        error: (error, _) {
+          final unsupported =
+              error is UnsupportedError &&
+              error.message == 'The transcription pilot needs a 64-bit device.';
+          final storage =
+              error is FileSystemException || error is WhisperStorageException;
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Transcription unavailable'),
+                  const SizedBox(height: 12),
+                  Text(
+                    unsupported
+                        ? 'This pilot needs a 64-bit Android app and operating system. '
+                              'Reinstalling the model will not change this. '
+                              'Recording and export still work.'
+                        : storage
+                        ? 'Transcription storage could not be opened safely. '
+                              'Restart the app and try again. '
+                              'Your recordings and saved text are unchanged.'
+                        : 'Transcription setup could not finish. Try again, or '
+                              'restart the app. Your recordings are unchanged.',
+                    textAlign: TextAlign.center,
+                  ),
+                  if (!unsupported) ...[
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      key: const Key('transcription-setup-retry'),
+                      onPressed: () =>
+                          ref.invalidate(transcriptionControllerProvider),
+                      child: const Text('Retry setup'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
         data: (controller) => AnimatedBuilder(
           animation: controller,
           builder: (context, _) {

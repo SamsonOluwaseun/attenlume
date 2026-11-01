@@ -163,7 +163,7 @@ const quickGuide = QuickGuide(
             'Open Settings > Optional transcription. It is off by default. Read the conditions before enabling it, then choose Download model (about 31 MB).',
             'For English audio up to 10 minutes per clip, choose audio here or open a saved activity and tap Optional transcription. Activities with audio cuts are not supported yet: import their exported trimmed audio instead. Setup alone never starts transcription.',
             'Review the generated text, correct errors, copy it or share transcript.txt for Notepad, or timestamped transcript.md. Private activity text needs a separate opt-in to copy or share.',
-            'Switching off stops processing and keeps audio and saved text. Keep the model for offline use, or explicitly remove it. Live captions will follow this after-recording pilot.',
+            'Switching off stops processing and keeps audio and saved text. Keep the model for offline use, or explicitly remove it. Live captions will follow this after-recording pilot. If setup fails, read the reason and use Retry setup. A 32-bit Android system is not supported by this pilot.',
           ],
         ),
         GuideStep(
