@@ -1,6 +1,6 @@
 # Builds the Windows installer, attenlume-windows-setup.exe (Inno Setup).
 #
-#   powershell -File tool\build_windows_installer.ps1 [-SkipBuild] [-OutDir <folder>]
+#   powershell -File tool\build_windows_installer.ps1 [-SkipBuild] [-DirectSupport] [-OutDir <folder>]
 #
 # Builds the release app (unless -SkipBuild), adds the Visual C++ runtime
 # next to it, and compiles tool\windows_installer\attenlume.iss. The setup
@@ -9,6 +9,7 @@
 
 param(
     [switch]$SkipBuild,
+    [switch]$DirectSupport,
     [string]$OutDir = (Join-Path $PSScriptRoot '..\..\attenlume-release\windows-installer')
 )
 
@@ -27,14 +28,29 @@ if (-not $iscc) { throw 'Inno Setup 6 not found. Run: winget install JRSoftware.
 Push-Location $repo
 try {
     if (-not $SkipBuild) {
-        flutter build windows --release
-        if ($LASTEXITCODE -ne 0) { throw 'flutter build windows failed' }
+        $buildArgs = @('build', 'windows', '--release')
+        if ($DirectSupport) {
+            $buildArgs += '--dart-define=ATTENLUME_SUPPORT_DISTRIBUTION=windows-direct'
+        }
+        # Windows PowerShell wraps Flutter's informational stderr as ErrorRecord.
+        # Use the native exit code to distinguish a build failure from warnings.
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            & flutter @buildArgs
+            $buildExit = $LASTEXITCODE
+        }
+        finally { $ErrorActionPreference = $previousPreference }
+        if ($buildExit -ne 0) { throw 'flutter build windows failed' }
     }
     $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches[0].Groups[1].Value)
 
     # Stage the release build with the app-local Visual C++ runtime.
-    $stage = Join-Path $env:TEMP "attenlume-installer-stage"
-    if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+    $stageRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')
+    $stage = [IO.Path]::GetFullPath((Join-Path $stageRoot ("attenlume-installer-" + [guid]::NewGuid().ToString('N'))))
+    if (-not $stage.StartsWith($stageRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Installer staging path escapes temporary directory'
+    }
     Copy-Item 'build\windows\x64\runner\Release' $stage -Recurse
     foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
         Copy-Item (Join-Path $env:SystemRoot "System32\$dll") $stage
@@ -44,7 +60,10 @@ try {
     $OutDir = Resolve-Path $OutDir
     & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$stage" "/DOutputDir=$OutDir" 'tool\windows_installer\attenlume.iss'
     if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
-    Remove-Item $stage -Recurse -Force
+    # Recheck the absolute target before recursively removing only our unique stage.
+    if ([IO.Path]::GetFullPath($stage).StartsWith($stageRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        Remove-Item -LiteralPath $stage -Recurse -Force
+    }
 
     $setup = Join-Path $OutDir 'attenlume-windows-setup.exe'
     Write-Host "Installer: $setup ($([math]::Round((Get-Item $setup).Length / 1MB, 1)) MB, version $version)"

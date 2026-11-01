@@ -3,4 +3,4 @@
 ///
 /// A test compares it with `pubspec.yaml`, so a release that changes the
 /// version there must change it here too.
-const appVersion = '0.1.5+6';
+const appVersion = '0.1.6+7';

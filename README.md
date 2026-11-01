@@ -34,6 +34,20 @@ For Windows 10 (version 1809 or later) and Windows 11, 64-bit. No administrator 
 
 To update, run the newest installer; it replaces the old version and keeps your recordings. To remove Attenlume, use **Settings > Apps > Installed apps**. Your recordings, photos and notes stay in `%LOCALAPPDATA%\Samlytics\Attenlume` until you delete that folder.
 
+## Optional transcription and support
+
+The 0.1.6 test build adds an off-by-default after-recording transcription pilot.
+Enable it in Settings, accept the resource notice and explicitly download the
+English model (about 32 MB). Process saved/imported English audio up to ten
+minutes, then save corrections or copy/share TXT and timestamped Markdown.
+Recognition runs on your device. Model download needs internet; processing can
+use substantial memory, CPU and battery. Live captions are still planned.
+
+Direct-download builds may show an optional support prompt after export, with
+GBP 5, 10, 20 or Other confirmed on PayPal. Your export always remains available.
+Maybe later allows one reminder; Don't ask again stops prompts on this device.
+No payment or subscription unlocks transcription or core features.
+
 ## Develop
 
 Requires Flutter 3.47.8 stable (Dart 3.13.7). Android builds need JDK 17 and the Android SDK. iOS builds need a Mac.
@@ -47,6 +61,7 @@ flutter run -d windows
 ```
 
 - Windows installer: `powershell -File tool\build_windows_installer.ps1` builds the app and an installer with Inno Setup 6 (`winget install JRSoftware.InnoSetup`).
+- Direct Windows gifts: add `-DirectSupport` to the installer script. Direct Android gifts: build with `--dart-define=ATTENLUME_SUPPORT_DISTRIBUTION=android-direct`. Store/iOS builds remain disabled pending platform review; see [support configuration](lib/features/support/README.md).
 - End-to-end check with the real microphone and camera: `flutter test integration_test/app_capture_journey_test.dart -d windows` (or `-d <android device>`).
 - Design tokens: edit `design/tokens.json`, then run `dart run tool/gen_tokens.dart`. A test fails if you forget.
 - Third-party notices: run `dart run tool/licence_audit.dart` after any `pubspec.lock` change. A test fails if they are stale.
@@ -55,14 +70,14 @@ App data lives in `%LOCALAPPDATA%\Samlytics\Attenlume` on Windows and in the app
 
 ## Export format
 
-A conference, a day or chosen activities export as a folder or ZIP with `conference.json`, one folder per activity (audio, photos, `activity.json`, `notes.md`, `bookmarks.csv`, cut ranges) and `checksums.sha256`. On Android and iOS a ZIP can be shared straight from the app. A summary README, a timeline and a prompt for AI tools are coming next.
+A conference, a day or chosen activities export as a folder or ZIP with `conference.json`, one folder per activity (audio, photos, `activity.json`, `notes.md`, `bookmarks.csv`, cut ranges) and `checksums.sha256`. On Android and iOS a ZIP can be shared straight from the app. A summary README, a timeline and a prompt for AI tools are included. Pilot transcript text is shared separately; full conference-export integration is pending.
 
 ## Known limits
 
 - These are early test builds. Most real-device checks are still to do.
-- There is no iPhone version yet; it needs a Mac to build and sign.
+- There is no published iPhone download yet; the shared iOS project needs Mac build, signing and device checks.
 - On Windows the system's audio encoder records at 96 kbps or more, so every quality setting uses about 43 MB per hour.
-- Test builds are not signed yet, so Android and Windows warn before installing.
+- Android test APKs use the existing private release key; they are directly distributed outside the Play Store. Windows installers have no publisher signature yet.
 
 ## Docs
 
