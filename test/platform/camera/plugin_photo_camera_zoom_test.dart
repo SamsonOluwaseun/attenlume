@@ -17,6 +17,7 @@ class FakeCameraPlatform extends CameraPlatform {
   final events = <String>[];
   final audio = <bool>[];
   Completer<void>? zoomGate;
+  void Function(double)? onZoomEnd;
   Completer<void>? captureGate;
   Completer<void>? initializeGate;
   final tempDirectories = <Directory>[];
@@ -86,6 +87,7 @@ class FakeCameraPlatform extends CameraPlatform {
     levels.add(zoom);
     await zoomGate?.future;
     events.add('zoom-end');
+    onZoomEnd?.call(zoom);
   }
 
   @override
@@ -246,5 +248,40 @@ void main() {
     expect(camera.isOpen, isFalse);
     expect(camera.zoomRange, isNull);
     expect(platform.events.last, 'close');
+  });
+  test('FR-PHO-09 P1-53 awaiting completion-gap request waits for restarted native work', () async {
+    await camera.open();
+    final firstGate = Completer<void>();
+    final latestGate = Completer<void>();
+    final requested = Completer<void>();
+    Future<void>? latest;
+    platform.zoomGate = firstGate;
+    platform.onZoomEnd = (level) {
+      if (level != 2) return;
+      platform.zoomGate = latestGate;
+      // Submit after native completion while the old drain's completion
+      // callback is queued. The restarted native setter stays gated.
+      scheduleMicrotask(() {
+        latest = camera.setZoomLevel(4);
+        requested.complete();
+      });
+    };
+    final first = camera.setZoomLevel(2);
+    firstGate.complete();
+    await requested.future;
+    var completed = false;
+    final awaitingLatest = latest!.then((_) => completed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(platform.levels.last, 4);
+    expect(
+      completed,
+      isFalse,
+      reason: 'Caller must wait for native zoom, including restarted drain',
+    );
+    latestGate.complete();
+    platform.zoomGate = null;
+    await awaitingLatest;
+    await first;
+    expect(camera.zoomLevel, 4);
   });
 }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/widgets.dart';
 
@@ -39,12 +37,12 @@ class PluginPhotoCamera implements ours.PhotoCamera, ours.PhotoCameraZoom {
     final range = _zoomRange;
     if (range == null || !isOpen || !level.isFinite) return Future.value();
     _pendingZoom = range.clamp(level);
-    return _zoomJob ??= _drainZoom().whenComplete(() {
+    return _zoomJob ??= _drainZoom().whenComplete(() async {
       _zoomJob = null;
       // A request may arrive after the drain loop finishes but before this
       // completion callback. Do not strand it behind a completed job.
       final pending = _pendingZoom;
-      if (pending != null) unawaited(setZoomLevel(pending));
+      if (pending != null) await setZoomLevel(pending);
     });
   }
 
