@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../shared/utilities/serial_lock.dart';
 import 'photo_camera.dart' as ours;
 
 /// [ours.PhotoCamera] on the `camera` plugin: CameraX on Android,
@@ -12,14 +15,63 @@ import 'photo_camera.dart' as ours;
 /// category, and the capture sessions are created with
 /// `automaticallyConfiguresApplicationAudioSession = false`. Whether the
 /// recording really carries on is what P0-05 measures on devices.
-class PluginPhotoCamera implements ours.PhotoCamera {
+class PluginPhotoCamera implements ours.PhotoCamera, ours.PhotoCameraZoom {
   PluginPhotoCamera({this.resolution = ResolutionPreset.veryHigh});
 
   /// `veryHigh` is 1920 by 1080 on most devices, close to the 1600 to
   /// 2048 px long edge of FR-PHO-02. Compression is P1-14.
   final ResolutionPreset resolution;
 
+  final _lock = SerialLock();
   CameraController? _controller;
+  ours.CameraZoomRange? _zoomRange;
+  double _zoomLevel = 1;
+  double? _pendingZoom;
+  Future<void>? _zoomJob;
+
+  @override
+  ours.CameraZoomRange? get zoomRange => _zoomRange;
+  @override
+  double get zoomLevel => _zoomLevel;
+
+  @override
+  Future<void> setZoomLevel(double level) {
+    final range = _zoomRange;
+    if (range == null || !isOpen || !level.isFinite) return Future.value();
+    _pendingZoom = range.clamp(level);
+    return _zoomJob ??= _drainZoom().whenComplete(() {
+      _zoomJob = null;
+      // A request may arrive after the drain loop finishes but before this
+      // completion callback. Do not strand it behind a completed job.
+      final pending = _pendingZoom;
+      if (pending != null) unawaited(setZoomLevel(pending));
+    });
+  }
+
+  Future<void> _drainZoom() => _lock.run(() async {
+    while (_pendingZoom != null) {
+      await _applyPendingZoomLocked();
+    }
+  });
+
+  Future<void> _applyPendingZoomLocked() async {
+    final requested = _pendingZoom;
+    _pendingZoom = null;
+    final controller = _controller;
+    final range = _zoomRange;
+    if (requested == null || controller == null || range == null) return;
+    try {
+      final level = range.clamp(requested);
+      await controller.setZoomLevel(level);
+      _zoomLevel = level;
+    } on Object {
+      // Some Windows cameras report limits but reject setting zoom.
+      // Zoom failure must not disable the viewfinder or photo capture.
+      _zoomRange = null;
+      _pendingZoom = null;
+    }
+  }
+
   List<CameraDescription>? _cameras;
   ours.CameraLens? _openLens;
 
@@ -38,7 +90,10 @@ class PluginPhotoCamera implements ours.PhotoCamera {
   ];
 
   @override
-  Future<void> open({ours.CameraLens? lens}) async {
+  Future<void> open({ours.CameraLens? lens}) =>
+      _lock.run(() => _openLocked(lens: lens));
+
+  Future<void> _openLocked({ours.CameraLens? lens}) async {
     if (isOpen) return;
     final cameras = await _descriptions();
     if (cameras.isEmpty) {
@@ -70,6 +125,21 @@ class PluginPhotoCamera implements ours.PhotoCamera {
     }
     _controller = controller;
     _openLens = _lens(chosen);
+    _zoomRange = null;
+    _zoomLevel = 1;
+    try {
+      final min = await controller.getMinZoomLevel();
+      final max = await controller.getMaxZoomLevel();
+      final range = ours.CameraZoomRange(min, max);
+      if (range.isUsable) {
+        final initial = range.clamp(1);
+        await controller.setZoomLevel(initial);
+        _zoomLevel = initial;
+        _zoomRange = range;
+      }
+    } on Object {
+      // Optional capability: unsupported/invalid queries keep capture available.
+    }
   }
 
   @override
@@ -80,7 +150,13 @@ class PluginPhotoCamera implements ours.PhotoCamera {
   }
 
   @override
-  Future<ours.CapturedPhoto> takePhoto(String path) async {
+  Future<ours.CapturedPhoto> takePhoto(String path) =>
+      _lock.run(() => _takePhotoLocked(path));
+
+  Future<ours.CapturedPhoto> _takePhotoLocked(String path) async {
+    // The shutter must use the latest requested zoom, including a request
+    // arriving in the zoom drain's completion microtask gap.
+    await _applyPendingZoomLocked();
     final controller = _controller;
     if (controller == null || !isOpen) {
       throw StateError('Camera is not open');
@@ -91,7 +167,12 @@ class PluginPhotoCamera implements ours.PhotoCamera {
   }
 
   @override
-  Future<void> close() async {
+  Future<void> close() => _lock.run(_closeLocked);
+
+  Future<void> _closeLocked() async {
+    _pendingZoom = null;
+    _zoomRange = null;
+    _zoomLevel = 1;
     final controller = _controller;
     _controller = null;
     _openLens = null;

@@ -43,6 +43,40 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   String? _error;
   bool _shutterBusy = false;
   bool _switching = false;
+  bool _closing = false;
+  Future<void>? _openJob;
+  CameraZoomRange? _zoomRange;
+  double _zoomLevel = 1;
+
+  void _readZoom() {
+    final camera = _service.camera;
+    _zoomRange = camera is PhotoCameraZoom
+        ? (camera as PhotoCameraZoom).zoomRange
+        : null;
+    _zoomLevel = camera is PhotoCameraZoom
+        ? (camera as PhotoCameraZoom).zoomLevel
+        : 1;
+  }
+
+  Future<void> _setZoom(double level) async {
+    final camera = _service.camera;
+    if (_closing ||
+        _switching ||
+        _shutterBusy ||
+        _state != _CameraState.ready ||
+        camera is! PhotoCameraZoom) {
+      return;
+    }
+    final range = _zoomRange;
+    if (range == null) return;
+    setState(() => _zoomLevel = range.clamp(level));
+    try {
+      await (camera as PhotoCameraZoom).setZoomLevel(level);
+      if (mounted && !_closing && !_switching) setState(_readZoom);
+    } on Object {
+      if (mounted && !_closing) setState(() => _zoomRange = null);
+    }
+  }
 
   /// The switch in progress, so closing waits for it and never leaves a
   /// newly opened camera running behind a closed screen.
@@ -58,11 +92,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   void initState() {
     super.initState();
     _service = ref.read(photoCaptureServiceProvider);
-    unawaited(_open());
+    _openJob = _open();
+    unawaited(_openJob);
   }
 
   @override
   void dispose() {
+    _closing = true;
     final switching = _switchJob;
     unawaited(
       switching == null
@@ -75,12 +111,18 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   Future<void> _open() async {
     try {
       _mediaRoot = await ref.read(mediaRootProvider)();
+      if (_closing || !mounted) return;
       await _service.open();
+      if (_closing || !mounted) {
+        await _service.close();
+        return;
+      }
       final lenses = await _service.cameras();
       if (mounted) {
         setState(() {
           _state = _CameraState.ready;
           _lenses = lenses;
+          _readZoom();
         });
       }
     } on CameraAccessDeniedException {
@@ -98,7 +140,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   void _takePhoto() {
-    if (_state != _CameraState.ready || _shutterBusy || _switching) return;
+    if (_closing ||
+        _state != _CameraState.ready ||
+        _shutterBusy ||
+        _switching) {
+      return;
+    }
     unawaited(HapticFeedback.lightImpact());
     setState(() {
       _shutterBusy = true;
@@ -142,7 +189,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   /// Flips to the next camera. Photos still being saved carry on; only a
   /// shot the camera has not taken yet blocks the switch.
   Future<void> _switchCamera() async {
-    if (_state != _CameraState.ready || _shutterBusy || _switching) return;
+    if (_closing ||
+        _state != _CameraState.ready ||
+        _shutterBusy ||
+        _switching) {
+      return;
+    }
     setState(() => _switching = true);
     final job = _service.switchCamera();
     _switchJob = job.then<void>((_) {}, onError: (Object _) {});
@@ -160,7 +212,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       }
     } finally {
       _switchJob = null;
-      if (mounted) setState(() => _switching = false);
+      if (mounted) {
+        setState(() {
+          _switching = false;
+          _readZoom();
+        });
+      }
     }
   }
 
@@ -173,6 +230,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   }
 
   Future<void> _close() async {
+    if (_closing) return;
+    setState(() => _closing = true);
+    await _openJob;
     await _switchJob;
     await Future.wait(List.of(_pending));
     if (mounted) Navigator.of(context).pop(_saved);
@@ -244,6 +304,51 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                         ],
                       ),
                     ),
+                    if (_zoomRange case final range? when range.isUsable)
+                      Container(
+                        color: surface,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: TokenSpace.space4,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Zoom ${_zoomLevel.toStringAsFixed(1)}\u00d7',
+                              key: const Key('camera-zoom-level'),
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: onSurface,
+                              ),
+                            ),
+                            Slider(
+                              key: const Key('camera-zoom-slider'),
+                              min: range.min,
+                              max: range.max,
+                              value: range.clamp(_zoomLevel),
+                              semanticFormatterCallback: (value) =>
+                                  'Camera zoom ${value.toStringAsFixed(1)} times',
+                              onChanged:
+                                  !_closing && !_switching && !_shutterBusy
+                                  ? (value) => unawaited(_setZoom(value))
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (_state == _CameraState.ready && _zoomRange == null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: TokenSpace.space4,
+                        ),
+                        child: Text(
+                          'Zoom is not available for this camera.',
+                          key: const Key('camera-zoom-unavailable'),
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: onSurface,
+                          ),
+                        ),
+                      ),
                     Container(
                       color: surface,
                       padding: const EdgeInsets.symmetric(
@@ -314,7 +419,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   Widget _shutter(Color ring, Color fill) {
     final enabled =
-        _state == _CameraState.ready && !_shutterBusy && !_switching;
+        _state == _CameraState.ready &&
+        !_shutterBusy &&
+        !_switching &&
+        !_closing;
     return Semantics(
       button: true,
       label: 'Take photo',
@@ -349,7 +457,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     if (next == null || _state != _CameraState.ready) {
       return const SizedBox.shrink();
     }
-    final enabled = !_shutterBusy && !_switching;
+    final enabled = !_shutterBusy && !_switching && !_closing;
     final label = switch (next) {
       CameraFacing.front => 'Switch to front camera',
       CameraFacing.back => 'Switch to back camera',

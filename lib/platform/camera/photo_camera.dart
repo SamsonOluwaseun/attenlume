@@ -34,6 +34,22 @@ abstract interface class PhotoCamera {
   Future<void> close();
 }
 
+/// Optional hardware/plugin zoom capability [FR-PHO-09, P1-53]. A null range means
+/// unsupported; base PhotoCamera implementations remain compatible.
+abstract interface class PhotoCameraZoom {
+  CameraZoomRange? get zoomRange;
+  double get zoomLevel;
+  Future<void> setZoomLevel(double level);
+}
+
+class CameraZoomRange {
+  const CameraZoomRange(this.min, this.max);
+  final double min;
+  final double max;
+  bool get isUsable => min.isFinite && max.isFinite && min > 0 && max > min;
+  double clamp(double value) => value.isFinite ? value.clamp(min, max) : min;
+}
+
 enum CameraFacing { back, front, external }
 
 class CameraLens {
