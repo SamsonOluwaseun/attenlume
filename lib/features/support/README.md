@@ -30,3 +30,8 @@ The supplied hosted Donate page publicly displays Samlytics Data Service and
 the Attenlume support message. Actual receipt and final checkout choices still
 need a manual check; no automated payment has been submitted.
 Browser/provider failure leaves the completed export available.
+
+P1-51: Settings > Support Attenlume remains available on eligible direct builds
+even after automatic prompts are suppressed. User-initiated support never reads
+or writes reminder preferences; manual copy has no export-ready claim. Browser
+failures show a retry notice. README and public PDF/PPTX guide include the link.

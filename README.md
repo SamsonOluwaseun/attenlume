@@ -36,7 +36,7 @@ To update, run the newest installer; it replaces the old version and keeps your 
 
 ## Optional transcription and support
 
-The 0.1.6 test build adds an off-by-default after-recording transcription pilot.
+The 0.1.7 test build adds an off-by-default after-recording transcription pilot.
 Enable it in Settings, accept the resource notice and explicitly download the
 English model (about 32 MB). Process saved/imported English audio up to ten
 minutes, then save corrections or copy/share TXT and timestamped Markdown.
@@ -47,6 +47,9 @@ Direct-download builds may show an optional support prompt after export, with
 GBP 5, 10, 20 or Other confirmed on PayPal. Your export always remains available.
 Maybe later allows one reminder; Don't ask again stops prompts on this device.
 No payment or subscription unlocks transcription or core features.
+Open **Settings > Support Attenlume** at any time on eligible direct builds,
+even after dismissing reminders. You can also [support Attenlume on PayPal](https://www.paypal.com/donate/?hosted_button_id=EMQCVQHTPDR2U).
+Choose GBP 5, 10, 20 or a custom amount there; gifts are entirely voluntary.
 
 ## Develop
 

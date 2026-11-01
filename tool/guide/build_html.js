@@ -20,6 +20,7 @@ const step = (s) => {
       <p class="step-no">Step ${stepNo}</p>
       <h3>${esc(s.title)}</h3>
       <ol>${s.points.map((p) => `<li>${esc(p)}</li>`).join('')}</ol>
+      ${s.link ? `<p><a href="${s.link.url}">${esc(s.link.label)}</a></p>` : ''}
     </div>
     <div class="phones n${s.images.length}">${s.images.map(phone).join('')}</div>
   </section>`;

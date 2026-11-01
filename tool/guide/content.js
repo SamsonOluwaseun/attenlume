@@ -162,9 +162,10 @@ module.exports = {
         },
         {
           title: 'Optional support',
-          images: ['22-support'],
+          images: ['23-support-settings'],
+          link: { label: 'Support Attenlume on PayPal (optional)', url: 'https://www.paypal.com/donate/?hosted_button_id=EMQCVQHTPDR2U' },
           points: [
-            'On eligible direct Android and Windows builds, an optional support prompt appears after your export is ready. Your files remain available whether you give or not.',
+            'On eligible direct Android and Windows builds, open Settings > Support Attenlume whenever you choose, even after dismissing export reminders. Your files remain available whether you give or not.',
             'Choose £5, £10, £20 or Other, then Gift now to open PayPal. Choose or change your final amount there.',
             'Maybe later allows one reminder after a later export. Don’t ask again stops these prompts on this device.',
           ],

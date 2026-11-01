@@ -12,6 +12,7 @@ import '../capture/recording_banner.dart';
 import '../guide/quick_guide_screen.dart';
 import '../privacy/privacy_screen.dart';
 import '../storage_manager/storage_manager_screen.dart';
+import '../support/support_after_export.dart';
 import '../transcription/transcription_screen.dart';
 import 'settings_providers.dart';
 
@@ -58,6 +59,7 @@ class SettingsScreen extends ConsumerWidget {
     final safety = ref.watch(safetyThresholdsSettingProvider).value;
     final keepPhotos = ref.watch(photoKeepHighestQualitySettingProvider).value;
     final themeMode = ref.watch(themeModeSettingProvider).value;
+    final supportAvailable = ref.watch(supportAfterExportProvider).available;
 
     Widget heading(String text) => Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -236,6 +238,18 @@ class SettingsScreen extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => unawaited(QuickGuideScreen.open(context)),
                 ),
+                if (supportAvailable)
+                  ListTile(
+                    key: const Key('settings-support'),
+                    leading: const Icon(Icons.favorite_outline_rounded),
+                    title: const Text('Support Attenlume'),
+                    subtitle: const Text(
+                      'Optional gifts. All core features stay free.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () =>
+                        unawaited(openSupportFromSettings(ref, context)),
+                  ),
                 heading('About'),
                 const ListTile(
                   key: Key('settings-about'),

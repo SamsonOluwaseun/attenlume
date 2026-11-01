@@ -29,6 +29,37 @@ class SupportAfterExport {
   bool get available =>
       channel.isExternalLinkAllowed && PayPalUrlValidator.isValidPayPalUrl(url);
 
+  // User initiation never changes automatic prompt preferences or counters.
+  Future<bool?> requestSupport({
+    required Future<SupportPromptDecision?> Function() show,
+  }) async {
+    if (!available || _showing) return null;
+    _showing = true;
+    try {
+      final decision = await show();
+      if (decision?.isGiftNow == true) {
+        return await _openGift(decision!.selectedAmount);
+      }
+      return null;
+    } on Object {
+      return false;
+    } finally {
+      _showing = false;
+    }
+  }
+
+  Future<bool> _openGift(SupportGiftAmount? amount) async {
+    var target = Uri.parse(url);
+    if (amount != null &&
+        (target.host == 'paypal.me' || target.host == 'www.paypal.me')) {
+      target = target.replace(
+        pathSegments: [target.pathSegments.first, '${amount.pounds}GBP'],
+      );
+    }
+    return PayPalUrlValidator.isValidPayPalUrl(target.toString()) &&
+        await openLink(target);
+  }
+
   Future<void> run({
     required bool exportSucceeded,
     required Future<SupportPromptDecision?> Function(SupportPromptKind) show,
@@ -58,17 +89,7 @@ class SupportAfterExport {
       final decision = await show(kind);
       await writeState(jsonEncode(state.withDecision(kind, decision).toJson()));
       if (decision?.isGiftNow == true) {
-        var target = Uri.parse(url);
-        final amount = decision!.selectedAmount;
-        if (amount != null &&
-            (target.host == 'paypal.me' || target.host == 'www.paypal.me')) {
-          target = target.replace(
-            pathSegments: [target.pathSegments.first, '${amount.pounds}GBP'],
-          );
-        }
-        if (PayPalUrlValidator.isValidPayPalUrl(target.toString())) {
-          await openLink(target);
-        }
+        await _openGift(decision!.selectedAmount);
       }
     } on Object {
       // Missing configuration, preferences or browser must never undo or block
@@ -119,6 +140,34 @@ Future<void> offerSupportAfterExport(
         );
   } on Object {
     // Provider construction/lifetime errors cannot affect the export result.
+  }
+}
+
+Future<void> openSupportFromSettings(
+  WidgetRef ref,
+  BuildContext context,
+) async {
+  if (!context.mounted) return;
+  bool? opened;
+  try {
+    opened = await ref
+        .read(supportAfterExportProvider)
+        .requestSupport(
+          show: () => showSupportPrompt(
+            context,
+            SupportPromptKind.initial,
+            userInitiated: true,
+          ),
+        );
+  } on Object {
+    opened = false;
+  }
+  if (opened == false && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('PayPal could not be opened. Please try again later.'),
+      ),
+    );
   }
 }
 

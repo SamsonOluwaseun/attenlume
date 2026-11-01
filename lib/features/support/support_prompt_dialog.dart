@@ -4,14 +4,19 @@ import '../../app/theme/tokens.dart';
 import '../../presentation/components/attenlume_button.dart';
 import 'support_prompt_policy.dart';
 
-/// Shows the optional post-export voluntary support prompt dialog (FR-SUP-01, FR-SUP-02).
+/// Shows the optional voluntary support dialog (FR-SUP-01, FR-SUP-02).
 ///
 /// Returns a [SupportPromptDecision] reflecting user choice, or `null` if dismissed.
 Future<SupportPromptDecision?> showSupportPrompt(
   BuildContext context,
-  SupportPromptKind kind,
-) {
-  return SupportPromptDialog.show(context, kind: kind);
+  SupportPromptKind kind, {
+  bool userInitiated = false,
+}) {
+  return SupportPromptDialog.show(
+    context,
+    kind: kind,
+    userInitiated: userInitiated,
+  );
 }
 
 /// Accessible voluntary support dialog (FR-SUP-01, FR-SUP-02, ADR-065).
@@ -22,19 +27,26 @@ Future<SupportPromptDecision?> showSupportPrompt(
 /// - Suggested amounts (£5, £10, £20 or Other), confirmed on PayPal.
 /// - Safe at 200% text scale in both light and dark themes.
 class SupportPromptDialog extends StatefulWidget {
-  const SupportPromptDialog({super.key, required this.kind});
+  const SupportPromptDialog({
+    super.key,
+    required this.kind,
+    this.userInitiated = false,
+  });
 
   final SupportPromptKind kind;
+  final bool userInitiated;
 
   /// Shows the dialog. Returns the chosen [SupportPromptDecision], or null if dismissed.
   static Future<SupportPromptDecision?> show(
     BuildContext context, {
     required SupportPromptKind kind,
+    bool userInitiated = false,
   }) {
     return showDialog<SupportPromptDecision>(
       context: context,
       barrierDismissible: true,
-      builder: (context) => SupportPromptDialog(kind: kind),
+      builder: (context) =>
+          SupportPromptDialog(kind: kind, userInitiated: userInitiated),
     );
   }
 
@@ -56,7 +68,12 @@ class _SupportPromptDialogState extends State<SupportPromptDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isInitial = widget.kind == SupportPromptKind.initial;
-    final message = isInitial ? initialMessage : reminderMessage;
+    final message = widget.userInitiated
+        ? 'Thank you for considering a gift. Your optional support helps improve '
+              'Attenlume and cover app-store costs. All core features stay free.'
+        : isInitial
+        ? initialMessage
+        : reminderMessage;
 
     return AlertDialog(
       key: const Key('support-prompt-dialog'),
@@ -137,21 +154,25 @@ class _SupportPromptDialogState extends State<SupportPromptDialog> {
               const SizedBox(height: TokenSpace.space2),
               AttenlumeButton(
                 key: const Key('support-prompt-maybe-later'),
-                label: 'Maybe later',
+                label: widget.userInitiated ? 'Close' : 'Maybe later',
                 variant: AttenlumeButtonVariant.secondary,
-                onPressed: () =>
-                    Navigator.of(context)
-                        .pop(const SupportPromptDecision.maybeLater()),
+                onPressed: () => Navigator.of(context).pop(
+                  widget.userInitiated
+                      ? null
+                      : const SupportPromptDecision.maybeLater(),
+                ),
               ),
-              const SizedBox(height: TokenSpace.space2),
-              AttenlumeButton(
-                key: const Key('support-prompt-dont-ask-again'),
-                label: 'Don’t ask again',
-                variant: AttenlumeButtonVariant.ghost,
-                onPressed: () =>
-                    Navigator.of(context)
-                        .pop(const SupportPromptDecision.dontAskAgain()),
-              ),
+              if (!widget.userInitiated) ...[
+                const SizedBox(height: TokenSpace.space2),
+                AttenlumeButton(
+                  key: const Key('support-prompt-dont-ask-again'),
+                  label: 'Don’t ask again',
+                  variant: AttenlumeButtonVariant.ghost,
+                  onPressed: () =>
+                      Navigator.of(context)
+                          .pop(const SupportPromptDecision.dontAskAgain()),
+                ),
+              ],
             ],
           ),
         ),

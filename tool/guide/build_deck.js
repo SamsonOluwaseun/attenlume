@@ -80,6 +80,7 @@ function stepSlide(section, step) {
   }));
   s.addText(items, { x: 0.5, y: 1.95, w: textW, h: 3.0, fontFace: FONT, fontSize: 14, color: C.navy, valign: 'top', margin: 0, isTextBox: true });
 
+  if (step.link) s.addText(step.link.label, { x: 0.5, y: 5.0, w: textW, h: 0.25, fontFace: FONT, fontSize: 11, color: C.blue, margin: 0, hyperlink: { url: step.link.url } });
   let x = 9.5 - total + 0.07;
   for (const img of step.images) {
     phone(s, img, x, 0.55, h);
