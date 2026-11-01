@@ -34,9 +34,13 @@ For Windows 10 (version 1809 or later) and Windows 11, 64-bit. No administrator 
 
 To update, run the newest installer; it replaces the old version and keeps your recordings. To remove Attenlume, use **Settings > Apps > Installed apps**. Your recordings, photos and notes stay in `%LOCALAPPDATA%\Samlytics\Attenlume` until you delete that folder.
 
+The opening page now has a **Settings gear**, so no conference is needed to
+reach Settings. The camera offers a labelled **Zoom slider** when the active
+camera/driver reports a usable range; capture remains available without zoom.
+
 ## Optional transcription and support
 
-The 0.1.7 test build adds an off-by-default after-recording transcription pilot.
+The 0.1.8 test build adds an off-by-default after-recording transcription pilot.
 Enable it in Settings, accept the resource notice and explicitly download the
 English model (about 32 MB). Process saved/imported English audio up to ten
 minutes, then save corrections or copy/share TXT and timestamped Markdown.

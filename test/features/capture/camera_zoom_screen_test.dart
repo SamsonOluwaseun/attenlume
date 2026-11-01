@@ -1,10 +1,13 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:attenlume/domain/services/photo_capture_service.dart';
 import 'package:attenlume/features/capture/camera_screen.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/platform/camera/photo_camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -43,7 +46,11 @@ void main() {
     await root.delete(recursive: true);
   });
 
-  Future<void> show(WidgetTester tester, FakePhotoCamera camera) async {
+  Future<void> show(
+    WidgetTester tester,
+    FakePhotoCamera camera, {
+    double textScale = 2,
+  }) async {
     final service = PhotoCaptureService(
       camera: camera,
       activities: data.activities,
@@ -59,10 +66,13 @@ void main() {
         child: MaterialApp(
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context)
-                .copyWith(textScaler: const TextScaler.linear(2)),
+                .copyWith(textScaler: TextScaler.linear(textScale)),
             child: child!,
           ),
-          home: const CameraScreen(activityId: 'test'),
+          home: const RepaintBoundary(
+            key: Key('camera-guide-capture'),
+            child: CameraScreen(activityId: 'test'),
+          ),
         ),
       ),
     );
@@ -115,4 +125,46 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+  if (const bool.fromEnvironment('CAPTURE_CAMERA_GUIDE')) {
+    testWidgets('FR-UI-09 camera zoom guide capture (synthetic preview)', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(540, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.runAsync(() async {
+        await (FontLoader('Montserrat')
+              ..addFont(rootBundle.load('assets/fonts/Montserrat-Regular.ttf'))
+              ..addFont(rootBundle.load('assets/fonts/Montserrat-Bold.ttf')))
+            .load();
+        await (FontLoader(
+          'MaterialIcons',
+        )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+      });
+      final camera = ZoomCamera()
+        ..lenses = const [
+          CameraLens(id: 'back', facing: CameraFacing.back),
+          CameraLens(id: 'front', facing: CameraFacing.front),
+        ];
+      await show(tester, camera, textScale: 1);
+      tester
+          .widget<Slider>(find.byKey(const Key('camera-zoom-slider')))
+          .onChanged!(2);
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const Key('camera-guide-capture')),
+        );
+        final image = await boundary.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File('tool/logs/camera-zoom-guide.png')
+            .writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    });
+  }
 }

@@ -90,11 +90,14 @@ void main() {
 
       final nameInput = find.byKey(const Key('conference-name-input'));
       expect(nameInput, findsOneWidget);
-      await tester.enterText(nameInput, 'Health Security 2026');
+      await tester.enterText(nameInput, 'Samlytics Conference 2026');
       interactionCount++;
 
       final createButton = find.byKey(const Key('create-conference-button'));
       expect(createButton, findsOneWidget);
+      await tester.ensureVisible(createButton);
+      await tester.pumpAndSettle();
+      expect(createButton.hitTestable(), findsOneWidget);
       await tester.tap(createButton);
       interactionCount++;
 
@@ -108,7 +111,7 @@ void main() {
 
       // Land on ConferenceHomeScreen (FR-ACT-01 / J1)
       expect(find.byType(ConferenceHomeScreen), findsOneWidget);
-      expect(find.text('Health Security 2026'), findsWidgets);
+      expect(find.text('Samlytics Conference 2026'), findsWidgets);
       expect(find.byKey(const Key('start-activity-button')), findsOneWidget);
 
       // Verify stored row in database
@@ -117,7 +120,7 @@ void main() {
       expect(conferences.length, equals(1));
 
       final created = conferences.first;
-      expect(created.name, 'Health Security 2026');
+      expect(created.name, 'Samlytics Conference 2026');
       expect(created.defaultRecordingProfile, RecordingProfile.balanced);
       expect(created.policyAcknowledgedAt, isNotNull);
       expect(created.isArchived, isFalse);
@@ -131,6 +134,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final createButton = find.byKey(const Key('create-conference-button'));
+      await tester.ensureVisible(createButton);
+      await tester.pumpAndSettle();
+      expect(createButton.hitTestable(), findsOneWidget);
       await tester.tap(createButton);
       await tester.pumpAndSettle();
 

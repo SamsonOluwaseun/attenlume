@@ -47,49 +47,54 @@ final transcriptionControllerProvider = FutureProvider<TranscriptionController>(
 
 final transcriptionSourcesProvider = FutureProvider.autoDispose
     .family<List<TranscriptionSource>, String>((ref, activityId) async {
-      if ((await ref.read(cutRangeRepositoryProvider).activeFor(activityId))
-          .isNotEmpty) {
-        throw StateError(
-          'Audio cuts are not supported by this transcription pilot.',
-        );
-      }
-      final segments = await ref
-          .read(mediaAssetRepositoryProvider)
-          .segmentsFor(activityId);
-      final saved =
-          segments
-              .where(
-                (segment) =>
-                    segment.state == SegmentState.finalised ||
-                    segment.state == SegmentState.recovered,
-              )
-              .toList()
-            ..sort((a, b) => a.startUtc.compareTo(b.startUtc));
-      if (saved.isEmpty) return [];
-      final firstStart = await ref
-          .read(mediaAssetRepositoryProvider)
-          .firstSegmentStart(activityId);
-      final root = await ref.read(mediaRootProvider)();
-      final resolvedRoot = await root.resolveSymbolicLinks();
-      final sources = <TranscriptionSource>[];
-      for (final segment in saved) {
-        final resolved = await File(p.join(root.path, segment.filePath))
-            .resolveSymbolicLinks();
-        if (!p.isWithin(resolvedRoot, resolved)) {
-          throw const FileSystemException('Audio path is outside app media');
+      // A button reads .future without a persistent listener. Keep this request
+      // alive across database/file awaits; never use ref after an async gap.
+      final request = ref.keepAlive();
+      try {
+        final cuts = ref.read(cutRangeRepositoryProvider);
+        final media = ref.read(mediaAssetRepositoryProvider);
+        final resolveRoot = ref.read(mediaRootProvider);
+        if ((await cuts.activeFor(activityId)).isNotEmpty) {
+          throw StateError(
+            'Audio cuts are not supported by this transcription pilot.',
+          );
         }
-        sources.add(
-          TranscriptionSource(
-            activityId: activityId,
-            segmentId: segment.id,
-            audioPath: resolved,
-            offset: segment.startUtc.difference(
-              firstStart ?? saved.first.startUtc,
+        final segments = await media.segmentsFor(activityId);
+        final saved =
+            segments
+                .where(
+                  (segment) =>
+                      segment.state == SegmentState.finalised ||
+                      segment.state == SegmentState.recovered,
+                )
+                .toList()
+              ..sort((a, b) => a.startUtc.compareTo(b.startUtc));
+        if (saved.isEmpty) return [];
+        final firstStart = await media.firstSegmentStart(activityId);
+        final root = await resolveRoot();
+        final resolvedRoot = await root.resolveSymbolicLinks();
+        final sources = <TranscriptionSource>[];
+        for (final segment in saved) {
+          final resolved = await File(p.join(root.path, segment.filePath))
+              .resolveSymbolicLinks();
+          if (!p.isWithin(resolvedRoot, resolved)) {
+            throw const FileSystemException('Audio path is outside app media');
+          }
+          sources.add(
+            TranscriptionSource(
+              activityId: activityId,
+              segmentId: segment.id,
+              audioPath: resolved,
+              offset: segment.startUtc.difference(
+                firstStart ?? saved.first.startUtc,
+              ),
             ),
-          ),
-        );
+          );
+        }
+        return sources;
+      } finally {
+        request.close();
       }
-      return sources;
     });
 
 final transcriptionEditsPresentProvider = FutureProvider.autoDispose

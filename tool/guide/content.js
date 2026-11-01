@@ -23,7 +23,7 @@ module.exports = {
           title: 'Create your conference',
           images: ['01-create-conference'],
           points: [
-            'Type the conference name, for example Samlytics Conference 2026.',
+            'Use the Settings gear at the top of the opening page to reach settings before creating a conference. Type a name, for example Samlytics Conference 2026.',
             'Tap Create conference. You can add dates and goals later.',
             'Prefer to fill everything in now? Tap Set up with wizard.',
             'Later, tap Open previous to see My conferences. Search by name or place, and use the bar at the bottom (at the side on tablets and Windows) for Record, Library and Settings.',
@@ -70,7 +70,7 @@ module.exports = {
           images: ['08-camera'],
           points: [
             'Tap Photo to open the camera. The recording carries on.',
-            'Tap the shutter for each slide or poster. Each photo is linked to the moment it was taken.',
+            'Use the Zoom slider when your camera supports it. The range follows the selected camera; unsupported cameras still take photos. Tap the shutter for each slide or poster. Each photo is linked to its recording time.',
             'Tap the switch button to use the front camera. Tap X to return to the recorder.',
           ],
         },
