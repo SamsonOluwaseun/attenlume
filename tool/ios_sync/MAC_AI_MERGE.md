@@ -71,10 +71,63 @@ your Mac remotely. If the Mac received a different initial version, inspect the
 three versions carefully and document the correct ancestor before resolving
 conflicts. Never substitute a guessed baseline.
 
+## When both folders are in the same Mac workspace
+
+Use the existing Mac `attenlume-ios` as the working app. Do not copy the historical
+Windows handoff over it. Place `attenlume-ios-updates` beside it. The AI coding
+session needs filesystem access to both folders. Read `LATEST.json` to select one
+cumulative pack; earlier packs need not be merged first. If only the latest ZIP
+was transferred, keep LATEST.json with it and extract the ZIP in the updates
+folder. Do not rename or edit the immutable package contents.
+
+Example layout:
+
+```text
+workspace/
+  attenlume-ios/                 # existing working Flutter project
+    pubspec.yaml
+    ios/
+  attenlume-ios-updates/
+    LATEST.json
+    <package_id>.zip
+    <package_id>/                # extracted pack
+      MAC_AI_MERGE.md
+      UPDATE.json
+      compare_on_mac.py
+      base/
+      incoming/
+```
+
 ## Pasteable request to the Mac AI
 
-“My current iOS app works. Read MAC_AI_MERGE.md in this transferred update pack,
-compare its base and incoming source with my working app, then review and merge
-the updates while preserving my iOS fixes and signing settings. Resolve conflicts,
-run analysis/tests and the iOS build, and record the package ID and results.
-Do not replace my whole project or publish anything.”
+```text
+My existing working iOS Flutter project is in `attenlume-ios`. The sibling
+`attenlume-ios-updates` folder contains cumulative updates from Android/Windows.
+Merge the latest update into the working iOS project; do not replace the project.
+
+1. Read `attenlume-ios-updates/LATEST.json` and use its `package_id`. If the named
+   package folder is absent, verify the named ZIP against `archive_sha256` and
+   extract it into the updates folder. Read the package's `MAC_AI_MERGE.md`,
+   `UPDATE.json` and `incoming/docs/IOS_SYNC_NOTES.md`, plus the working app's rules.
+2. Locate the working Flutter root containing `pubspec.yaml`. Preserve all current
+   work with a local source checkpoint or backup; leave secrets/media untracked.
+3. Verify the package checksums. Run `compare_on_mac.py` FROM THE UPDATE PACKAGE
+   against the working Flutter root, with a new sibling review folder. Read
+   REPORT.md/REPORT.json. Compare base/incoming/working versions; review proposals
+   and resolve conflicts. Keep Mac-only fixes, signing, team/bundle identifiers,
+   entitlements and deployment configuration. Never blindly copy incoming/ over
+   attenlume-ios, and never treat Windows native files as iOS replacements.
+4. Merge shared code, resources, tests and dependency files together. Include the
+   transcription setup/activity-lookup fixes, opening-page Settings gear, camera
+   zoom and support functionality where eligible. Keep iOS external-payment
+   guards disabled unless a separate approved iOS payment design exists.
+5. Run Flutter package restoration, analysis, tests, licence audit and an iOS
+   simulator build using the working project's process. Check plugin minimum iOS
+   versions/Pods as needed. If a physical device is available, test recording,
+   photos/zoom, transcription/model lifecycle and text sharing. Clearly mark
+   anything not verified; do not claim Windows checks prove iOS works.
+6. Record package_id/source_commit, preserved Mac changes, resolved conflicts,
+   results and remaining work in IOS_SYNC_HISTORY.md and the handover. Commit
+   merged source locally. Do not push, publish or upload to App Store/TestFlight.
+   Return a patch for any new shared-code fixes so Windows can receive them too.
+```
