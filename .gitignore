@@ -46,6 +46,8 @@ tool/guide/guide.html
 /CLAUDE.md
 /docs/*
 !/docs/user-guide/
+!/docs/legal/
+/docs/legal/DEPLOYMENT.md
 /assets/brand/reference/
 /test/docs/
 /tool/overnight.ps1

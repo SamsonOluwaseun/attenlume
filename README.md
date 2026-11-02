@@ -90,6 +90,7 @@ A conference, a day or chosen activities export as a folder or ZIP with `confere
 
 - [Quick guide (PDF)](docs/user-guide/Attenlume-Quick-Guide.pdf): how to set up, record, review and export
 - [Quick guide (PowerPoint)](docs/user-guide/Attenlume-Quick-Guide.pptx): the same guide as slides
+- [Privacy policy](https://www.samlytics.co.uk/attenlume-policy/attenlume-privacy.html): what Attenlume stores, where, and who to contact ([source](docs/legal/))
 - [Releases](https://github.com/SamsonOluwaseun/attenlume/releases): every version, with SHA-256 checksums
 - [Third-party notices](THIRD_PARTY_NOTICES.md): licences of the packages Attenlume uses
 
