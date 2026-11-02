@@ -28,6 +28,7 @@ class GalleryCandidate {
     required this.item,
     required this.duplicate,
     required this.large,
+    this.outsideWindow = false,
   });
 
   final GalleryItem item;
@@ -38,6 +39,9 @@ class GalleryCandidate {
   /// Bigger than [GalleryImportService.largeBytes] or
   /// [GalleryImportService.largePixels].
   final bool large;
+
+  /// Taken outside the activity's window (FR-PHO-05, P1-58).
+  final bool outsideWindow;
 
   /// Selected for import by default unless it is a duplicate.
   bool get selectedByDefault => !duplicate;
@@ -69,12 +73,12 @@ class GalleryImportResult {
   final int skipped;
 }
 
-/// "Import photos taken during this activity" (FR-PHO-05) [P1-15].
+/// "Import photos taken during this activity" (FR-PHO-05) [P1-15, P1-58].
 ///
 /// Lists gallery photos taken between the activity's start and end with a
-/// margin (default 2 minutes), flags likely duplicates and large files,
-/// and imports only what the user confirms. Each photo is copied, never
-/// moved, and compressed like a camera shot through
+/// margin (default 2 minutes), flags likely duplicates, large files and
+/// outside-session photos, and imports only what the user confirms. Each
+/// photo is copied, never moved, and compressed like a camera shot through
 /// [PhotoCaptureService.importFile]; its time is the gallery's capture
 /// time, so it lines up with the recording.
 class GalleryImportService {
@@ -134,8 +138,8 @@ class GalleryImportService {
     );
   }
 
-  /// Asks for access (or a folder on Windows), then lists the window's
-  /// photos. Call only when the user starts an import (FR-PRI-04).
+  /// Asks for access (or a folder on Windows, or opens picker on Android),
+  /// then lists the window's photos. Call only when the user starts an import (FR-PRI-04).
   Future<GalleryScan> scan(
     String activityId, {
     Duration margin = defaultMargin,
@@ -156,14 +160,31 @@ class GalleryImportService {
       access: access,
       window: window,
       candidates: [
-        for (final item in items)
-          GalleryCandidate(
-            item: item,
-            duplicate: existing.any(
-              (t) => t.difference(item.takenUtc).abs() <= duplicateTolerance,
-            ),
-            large: isLarge(item),
-          ),
+        for (final rawItem in items)
+          () {
+            // If a photo has no EXIF time, place it at the activity start (P1-58).
+            final item = !rawItem.hasExifTime
+                ? rawItem.copyWith(takenUtc: window.startUtc)
+                : rawItem;
+            final isOutside =
+                item.hasExifTime &&
+                (item.takenUtc.isBefore(window.fromUtc) ||
+                    item.takenUtc.isAfter(window.toUtc));
+            // Skip duplicate check for photos without a capture time so they are
+            // not wrongly flagged as duplicates of photos at the start (P1-58 review item 4).
+            final isDuplicate =
+                item.hasExifTime &&
+                existing.any(
+                  (t) =>
+                      t.difference(item.takenUtc).abs() <= duplicateTolerance,
+                );
+            return GalleryCandidate(
+              item: item,
+              duplicate: isDuplicate,
+              large: isLarge(item),
+              outsideWindow: isOutside,
+            );
+          }(),
       ],
     );
   }

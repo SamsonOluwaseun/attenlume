@@ -11,15 +11,19 @@ import '../../domain/services/gallery_import_service.dart';
 import '../../platform/gallery/folder_gallery_source.dart';
 import '../../platform/gallery/gallery_source.dart';
 import '../../platform/gallery/photo_manager_gallery_source.dart';
+import '../../platform/gallery/picker_gallery_source.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../capture/recording_providers.dart';
 
-/// The camera roll on phones, a chosen folder on Windows (ADR-035).
-final gallerySourceProvider = Provider<GallerySource>(
-  (ref) => ref.watch(capturePlatformProvider) == CapturePlatform.windows
-      ? FolderGallerySource()
-      : PhotoManagerGallerySource(),
-);
+/// The photo picker on Android, camera roll on iOS, a chosen folder on Windows
+/// (ADR-035, ADR-074, P1-58).
+final gallerySourceProvider = Provider<GallerySource>((ref) {
+  return switch (ref.watch(capturePlatformProvider)) {
+    CapturePlatform.android => PickerGallerySource(),
+    CapturePlatform.windows => FolderGallerySource(),
+    CapturePlatform.ios => PhotoManagerGallerySource(),
+  };
+});
 
 final galleryImportServiceProvider = Provider<GalleryImportService>(
   (ref) => GalleryImportService(
@@ -30,7 +34,7 @@ final galleryImportServiceProvider = Provider<GalleryImportService>(
   ),
 );
 
-/// "Import photos taken during this activity" (FR-PHO-05) [P1-15].
+/// "Import photos taken during this activity" (FR-PHO-05) [P1-15, P1-58].
 ///
 /// Lists the gallery's photos from the activity's window with a margin
 /// the user can change, flags likely duplicates and large files, and
@@ -77,17 +81,19 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
   bool _loading = true;
   bool _importing = false;
 
-  GalleryImportService get _service => ref.read(galleryImportServiceProvider);
+  late final GalleryImportService _service;
 
   @override
   void initState() {
     super.initState();
+    _service = ref.read(galleryImportServiceProvider);
     _load(reopen: true);
   }
 
   @override
   void dispose() {
     _label.dispose();
+    _service.gallery.cleanUp();
     super.dispose();
   }
 
@@ -100,6 +106,15 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
     );
     if (!mounted) return;
     if (scan.access == GalleryAccess.cancelled) {
+      await _service.gallery.cleanUp();
+      if (!mounted) return;
+      if (ref.read(capturePlatformProvider) == CapturePlatform.android) {
+        setState(() {
+          _scan = scan;
+          _loading = false;
+        });
+        return;
+      }
       Navigator.of(context).pop();
       return;
     }
@@ -168,6 +183,7 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
     final result = await _service.importItems(widget.activityId, [
       for (final c in chosen) c.item,
     ], label: _label.text);
+    await _service.gallery.cleanUp();
     if (mounted) Navigator.of(context).pop(result);
   }
 
@@ -223,6 +239,22 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
         ),
       ];
     }
+    if (scan.access == GalleryAccess.cancelled) {
+      return [
+        Text(
+          'The photo picker closed, please choose again.',
+          key: const Key('gallery-import-picker-closed'),
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: TokenSpace.space3),
+        OutlinedButton.icon(
+          key: const Key('gallery-picker-open-button'),
+          onPressed: _loading ? null : () => _load(reopen: true),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('Pick photos'),
+        ),
+      ];
+    }
     if (scan.access == GalleryAccess.denied) {
       return [
         Text(
@@ -240,6 +272,8 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
     }
     final chosen = _chosen.length;
     final source = _service.gallery;
+    final isAndroid =
+        ref.watch(capturePlatformProvider) == CapturePlatform.android;
     return [
       Text(
         '${_time(window.startUtc)} to ${_time(window.endUtc)}'
@@ -248,6 +282,14 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
         key: const Key('gallery-import-window'),
         style: muted,
       ),
+      if (isAndroid || source is PickerGallerySource) ...[
+        const SizedBox(height: TokenSpace.space1),
+        Text(
+          'Choose up to 50 photos from your gallery.',
+          key: const Key('gallery-import-limit-note'),
+          style: muted,
+        ),
+      ],
       const SizedBox(height: TokenSpace.space2),
       Wrap(
         spacing: TokenSpace.space2,
@@ -273,13 +315,36 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
         ),
       ],
       const SizedBox(height: TokenSpace.space3),
-      if (scan.candidates.isEmpty)
+      if (scan.candidates.isEmpty) ...[
         Text(
           'No photos found in this time.',
           key: const Key('gallery-import-empty'),
           style: muted,
-        )
-      else
+        ),
+        if (isAndroid || source is PickerGallerySource) ...[
+          const SizedBox(height: TokenSpace.space3),
+          OutlinedButton.icon(
+            key: const Key('gallery-picker-open-button'),
+            onPressed: _loading ? null : () => _load(reopen: true),
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Pick photos'),
+          ),
+        ],
+      ] else ...[
+        if (isAndroid || source is PickerGallerySource) ...[
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              key: const Key('gallery-import-repick-button'),
+              onPressed: _loading || _importing
+                  ? null
+                  : () => _load(reopen: true),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Choose different photos'),
+            ),
+          ),
+          const SizedBox(height: TokenSpace.space1),
+        ],
         Flexible(
           child: GridView.extent(
             shrinkWrap: true,
@@ -302,6 +367,7 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
             ],
           ),
         ),
+      ],
       if (scan.candidates.isNotEmpty) ...[
         const SizedBox(height: TokenSpace.space3),
         TextField(
@@ -350,13 +416,20 @@ class _CandidateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final item = candidate.item;
+    final timeStr = item.hasExifTime ? time : 'No capture time';
     final notes = [
       if (candidate.duplicate) 'Already imported',
       if (candidate.large) 'Large file',
+      if (candidate.outsideWindow) 'Taken outside this session',
     ];
     return Semantics(
       checked: selected,
-      label: ['Photo taken at $time', ...notes].join(', '),
+      label: [
+        item.hasExifTime
+            ? 'Photo taken at $time'
+            : 'Photo with no capture time',
+        ...notes,
+      ].join(', '),
       child: InkWell(
         onTap: () => onChanged(!selected),
         borderRadius: BorderRadius.circular(TokenRadius.radiusSm),
@@ -383,7 +456,7 @@ class _CandidateTile extends StatelessWidget {
               ),
             ),
             const SizedBox(height: TokenSpace.space1),
-            Text(time, style: theme.textTheme.labelSmall),
+            Text(timeStr, style: theme.textTheme.labelSmall),
             if (notes.isNotEmpty)
               Row(
                 children: [

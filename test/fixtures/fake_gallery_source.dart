@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:attenlume/platform/gallery/gallery_source.dart';
 
-/// A [GallerySource] for tests [P1-15].
+/// A [GallerySource] for tests [P1-15, P1-58].
 ///
 /// [photosBetween] filters [items] by time, as the platform query would.
 /// [fileFor] returns [files] for an item's ID, or null when there is none.
@@ -15,6 +15,7 @@ class FakeGallerySource implements GallerySource {
   final Map<String, File> files = {};
   int opens = 0;
   int settingsOpened = 0;
+  int cleanUps = 0;
   final List<(DateTime, DateTime)> queries = [];
 
   @override
@@ -47,4 +48,7 @@ class FakeGallerySource implements GallerySource {
 
   @override
   Future<void> openSettings() async => settingsOpened++;
+
+  @override
+  Future<void> cleanUp() async => cleanUps++;
 }

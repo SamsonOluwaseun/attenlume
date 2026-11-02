@@ -62,11 +62,12 @@ class PrivacyScreen extends ConsumerWidget {
       icon: Icons.photo_camera_outlined,
     ),
     PermissionExplanation(
-      name: 'Photos',
-      whenAsked: 'The first time you import photos from your gallery.',
+      name: 'Photos (iOS)',
+      whenAsked: 'The first time you import photos from your gallery on iOS.',
       why:
           'To list photos you took during a session so you can pick some. '
-          'Only the photos you pick are copied.',
+          'Only the photos you pick are copied. On Android, the system photo '
+          'picker needs no permission.',
       icon: Icons.photo_library_outlined,
     ),
     PermissionExplanation(

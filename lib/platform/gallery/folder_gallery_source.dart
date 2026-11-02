@@ -3,10 +3,12 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
+import 'exif_reader.dart';
 import 'gallery_source.dart';
+
+export 'exif_reader.dart';
 
 /// Photos in a folder the user chooses, for Windows, which has no photo
 /// library API for `photo_manager` (ADR-035, PLATFORM_FEASIBILITY 2.8)
@@ -57,6 +59,9 @@ class FolderGallerySource implements GallerySource {
 
   @override
   Future<void> openSettings() async {}
+
+  @override
+  Future<void> cleanUp() async {}
 }
 
 const _extensions = {'.jpg', '.jpeg', '.png'};
@@ -66,9 +71,6 @@ const _maxDepth = 3;
 
 /// Files read for EXIF in one scan, so a huge folder stays quick.
 const _maxReads = 2000;
-
-/// EXIF sits in the first segments of a JPEG, well inside this.
-const _exifHeadBytes = 128 * 1024;
 
 /// Lists JPEG and PNG files under [folder] taken between [fromUtc] and
 /// [toUtc], oldest first. Files last modified more than a day before the
@@ -120,66 +122,4 @@ List<GalleryItem> scanFolder(String folder, DateTime fromUtc, DateTime toUtc) {
   }
   items.sort((a, b) => a.takenUtc.compareTo(b.takenUtc));
   return items;
-}
-
-/// The EXIF capture time of a JPEG [file] in UTC, or null when it has none.
-DateTime? exifTakenUtc(File file) {
-  final ext = p.extension(file.path).toLowerCase();
-  if (ext != '.jpg' && ext != '.jpeg') return null;
-  Uint8List head;
-  try {
-    final raf = file.openSync();
-    try {
-      head = raf.readSync(_exifHeadBytes);
-    } finally {
-      raf.closeSync();
-    }
-  } on FileSystemException {
-    return null;
-  }
-  final exif = img.decodeJpgExif(head);
-  if (exif == null) return null;
-  final original = exif.exifIfd['DateTimeOriginal']?.toString();
-  if (original == null) return null;
-  return parseExifTime(
-    original,
-    exif.exifIfd['OffsetTimeOriginal']?.toString(),
-  );
-}
-
-/// Parses EXIF `YYYY:MM:DD HH:MM:SS` with an optional `+HH:MM` offset.
-/// Without an offset the time is taken as this device's local time.
-DateTime? parseExifTime(String value, [String? offset]) {
-  final m = RegExp(r'^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})')
-      .firstMatch(value.trim());
-  if (m == null) return null;
-  final parts = [for (var i = 1; i <= 6; i++) int.parse(m.group(i)!)];
-  if (parts[0] == 0) return null;
-  final o = offset == null
-      ? null
-      : RegExp(r'^([+-])(\d{2}):(\d{2})$').firstMatch(offset.trim());
-  if (o == null) {
-    return DateTime(
-      parts[0],
-      parts[1],
-      parts[2],
-      parts[3],
-      parts[4],
-      parts[5],
-    ).toUtc();
-  }
-  final sign = o.group(1) == '-' ? -1 : 1;
-  final shift = Duration(
-    hours: int.parse(o.group(2)!),
-    minutes: int.parse(o.group(3)!),
-  );
-  final wall = DateTime.utc(
-    parts[0],
-    parts[1],
-    parts[2],
-    parts[3],
-    parts[4],
-    parts[5],
-  );
-  return sign > 0 ? wall.subtract(shift) : wall.add(shift);
 }

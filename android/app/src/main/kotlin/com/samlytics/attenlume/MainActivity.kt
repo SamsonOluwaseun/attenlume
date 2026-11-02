@@ -3,6 +3,9 @@ package com.samlytics.attenlume
 import android.content.Intent
 import android.os.Bundle
 import android.net.Uri
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -12,6 +15,21 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterFragmentActivity() {
     private var supportLinkChannel: MethodChannel? = null
     private var policyLinkChannel: MethodChannel? = null
+
+    private val photoPickerLauncher: ActivityResultLauncher<PickVisualMediaRequest> =
+        registerForActivityResult(
+            ActivityResultContracts.PickMultipleVisualMedia(PhotoPickerChannel.MAX_ITEMS)
+        ) { uris ->
+            PhotoPickerChannel.onPickerResult(uris)
+        }
+
+    fun launchPhotoPicker(maxItems: Int) {
+        val request = PickVisualMediaRequest.Builder()
+            .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            .build()
+        photoPickerLauncher.launch(request)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val coldStart = !ShortcutChannel.activityEverCreated
         ShortcutChannel.activityEverCreated = true
@@ -28,6 +46,7 @@ class MainActivity : FlutterFragmentActivity() {
         ForegroundServiceChannel.attach(flutterEngine.dartExecutor.binaryMessenger, this)
         FreeSpaceChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
         BatteryChannel.attach(flutterEngine.dartExecutor.binaryMessenger, this)
+        PhotoPickerChannel.attach(flutterEngine.dartExecutor.binaryMessenger, this)
         supportLinkChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.samlytics.attenlume/support_link"
@@ -83,6 +102,7 @@ class MainActivity : FlutterFragmentActivity() {
         policyLinkChannel = null
         supportLinkChannel?.setMethodCallHandler(null)
         supportLinkChannel = null
+        PhotoPickerChannel.detach()
         BatteryChannel.detach()
         FreeSpaceChannel.detach()
         ForegroundServiceChannel.detach()

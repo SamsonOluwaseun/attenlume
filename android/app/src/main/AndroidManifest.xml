@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Optional, user-requested speech-model download only (P2-08).
          Recognition and core capture/export remain offline; no audio upload. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -9,9 +10,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Gallery import by time window (FR-PHO-05, ADR-035). Android 14+ partial access. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <!-- Gallery import by photo picker (FR-PHO-05, ADR-074, P1-58).
+         System photo picker needs no permissions. Plugins (e.g. photo_manager)
+         merge legacy storage/media permissions; remove them explicitly so the
+         merged manifest and APK contain no photo/media permissions. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" tools:node="remove" />
     <!-- Optional app lock through the system prompt (FR-PRI-06, ADR-041). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application

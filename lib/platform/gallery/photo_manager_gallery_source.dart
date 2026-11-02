@@ -5,13 +5,11 @@ import 'package:photo_manager/photo_manager.dart';
 
 import 'gallery_source.dart';
 
-/// The Android and iOS photo library through `photo_manager` (ADR-035)
+/// The iOS photo library through `photo_manager` (ADR-035, ADR-074)
 /// [P1-15, FR-PHO-05].
 ///
 /// Unverified on devices (MT-24). Only images are listed. On iOS the file
-/// is the system's JPEG rendition, so HEIC photos can be imported; on
-/// Android a HEIC original is skipped because `processPhoto` cannot decode
-/// it.
+/// is the system's JPEG rendition, so HEIC photos can be imported.
 class PhotoManagerGallerySource implements GallerySource {
   PhotoManagerGallerySource({this.maxItems = 500});
 
@@ -100,4 +98,7 @@ class PhotoManagerGallerySource implements GallerySource {
 
   @override
   Future<void> openSettings() => PhotoManager.openSetting();
+
+  @override
+  Future<void> cleanUp() async {}
 }
