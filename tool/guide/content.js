@@ -1,3 +1,4 @@
+// P1-56: deck/PDF icon comes from the cleaned assets/brand/icons master.
 // Shared text for the Attenlume quick guide (deck, PDF and in-app guide).
 // UK English. Screenshots live in assets/guide (540 x 1200 JPEG).
 
