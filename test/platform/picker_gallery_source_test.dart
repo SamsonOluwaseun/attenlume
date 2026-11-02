@@ -196,4 +196,33 @@ void main() {
     expect(photo.existsSync(), isFalse);
     expect(channelCleaned, isTrue);
   });
+
+  test('FR-PHO-05 native-provided takenIso takes priority over missing JPEG EXIF time', () async {
+    // Photo has no JPEG EXIF header (e.g. from transcoded HEIC file)
+    final plain = await createTestPhoto('transcoded_heic.jpg');
+
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'pick') {
+        return [
+          {
+            'path': plain.path,
+            'name': 'Samlytics_Slide_HEIC.jpg',
+            'bytes': plain.lengthSync(),
+            'takenIso': '2026-11-04T09:42:15.000Z',
+          },
+        ];
+      }
+      if (call.method == 'cleanUp') return true;
+      return null;
+    });
+
+    final source = PickerGallerySource();
+    final result = await source.open();
+    expect(result, GalleryAccess.full);
+
+    final item = source.items.single;
+    expect(item.name, 'Samlytics_Slide_HEIC.jpg');
+    expect(item.hasExifTime, isTrue);
+    expect(item.takenUtc, DateTime.utc(2026, 11, 4, 9, 42, 15));
+  });
 }

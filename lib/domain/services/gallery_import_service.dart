@@ -170,11 +170,17 @@ class GalleryImportService {
                 item.hasExifTime &&
                 (item.takenUtc.isBefore(window.fromUtc) ||
                     item.takenUtc.isAfter(window.toUtc));
+            // Skip duplicate check for photos without a capture time so they are
+            // not wrongly flagged as duplicates of photos at the start (P1-58 review item 4).
+            final isDuplicate =
+                item.hasExifTime &&
+                existing.any(
+                  (t) =>
+                      t.difference(item.takenUtc).abs() <= duplicateTolerance,
+                );
             return GalleryCandidate(
               item: item,
-              duplicate: existing.any(
-                (t) => t.difference(item.takenUtc).abs() <= duplicateTolerance,
-              ),
+              duplicate: isDuplicate,
               large: isLarge(item),
               outsideWindow: isOutside,
             );

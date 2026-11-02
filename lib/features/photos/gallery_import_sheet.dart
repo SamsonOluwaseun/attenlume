@@ -80,6 +80,7 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
   final _selected = <String>{};
   bool _loading = true;
   bool _importing = false;
+
   late final GalleryImportService _service;
 
   @override
@@ -106,7 +107,15 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
     if (!mounted) return;
     if (scan.access == GalleryAccess.cancelled) {
       await _service.gallery.cleanUp();
-      if (mounted) Navigator.of(context).pop();
+      if (!mounted) return;
+      if (ref.read(capturePlatformProvider) == CapturePlatform.android) {
+        setState(() {
+          _scan = scan;
+          _loading = false;
+        });
+        return;
+      }
+      Navigator.of(context).pop();
       return;
     }
     setState(() {
@@ -227,6 +236,22 @@ class _GalleryImportSheetState extends ConsumerState<GalleryImportSheet> {
           'look in. Use Import photos to pick files instead.',
           key: const Key('gallery-import-not-started'),
           style: muted,
+        ),
+      ];
+    }
+    if (scan.access == GalleryAccess.cancelled) {
+      return [
+        Text(
+          'The photo picker closed, please choose again.',
+          key: const Key('gallery-import-picker-closed'),
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: TokenSpace.space3),
+        OutlinedButton.icon(
+          key: const Key('gallery-picker-open-button'),
+          onPressed: _loading ? null : () => _load(reopen: true),
+          icon: const Icon(Icons.photo_library_outlined),
+          label: const Text('Pick photos'),
         ),
       ];
     }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:attenlume/app/theme/app_theme.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
 import 'package:attenlume/data/repositories/repository_providers.dart';
+import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/services/capture_settings.dart';
 import 'package:attenlume/domain/services/photo_capture_service.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
@@ -207,6 +208,109 @@ void main() {
       // Photo without EXIF was placed at the activity start (offset 0)
       expect(importedNoExif.takenUtc, start);
       expect(importedNoExif.offsetMs, 0);
+
+      await tester.pumpWidget(const SizedBox());
+      imageCache.clear();
+      await settle(tester);
+    },
+  );
+
+  testWidgets(
+    'FR-PHO-05 photo without EXIF capture time is not marked duplicate even if existing photo exists at session start',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final actId = (await tester.runAsync(recordedActivity))!;
+      await tester.runAsync(
+        () => t.media.addPhoto(
+          activityId: actId,
+          filePath: 'photos/existing_at_start.jpg',
+          takenUtc: start,
+          source: PhotoSource.galleryImport,
+        ),
+      );
+
+      late File noExifFile;
+      await tester.runAsync(() async {
+        noExifFile = await writePhotoFile('no_exif.jpg');
+      });
+
+      gallery
+        ..items = [
+          GalleryItem(
+            id: 'no_exif',
+            path: noExifFile.path,
+            takenUtc: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+            hasExifTime: false,
+          ),
+        ]
+        ..files['no_exif'] = noExifFile;
+
+      await tester.pumpWidget(subject(actId));
+      await settle(tester);
+      await openSheet(tester);
+
+      expect(find.text('Already imported'), findsNothing);
+      expect(find.text('No capture time'), findsOneWidget);
+      expect(find.text('Import 1 photo'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      imageCache.clear();
+      await settle(tester);
+    },
+  );
+
+  testWidgets(
+    'FR-PHO-05 Android picker cancellation shows reopen message and button',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final actId = (await tester.runAsync(recordedActivity))!;
+      late File photoFile;
+      await tester.runAsync(() async {
+        photoFile = await writePhotoFile('test.jpg');
+      });
+
+      gallery
+        ..access = GalleryAccess.cancelled
+        ..items = [
+          GalleryItem(
+            id: 'test',
+            path: photoFile.path,
+            takenUtc: start.add(const Duration(minutes: 5)),
+            hasExifTime: true,
+          ),
+        ]
+        ..files['test'] = photoFile;
+
+      await tester.pumpWidget(subject(actId));
+      await settle(tester);
+      await openSheet(tester);
+
+      expect(find.byKey(const Key('gallery-import-sheet')), findsOneWidget);
+      expect(
+        find.text('The photo picker closed, please choose again.'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('gallery-picker-open-button')),
+        findsOneWidget,
+      );
+
+      // Tap "Pick photos" after picker is reopened and user selects a photo
+      gallery.access = GalleryAccess.full;
+      await tester.tap(find.byKey(const Key('gallery-picker-open-button')));
+      await settle(tester);
+
+      expect(
+        find.text('The photo picker closed, please choose again.'),
+        findsNothing,
+      );
+      expect(find.text('Import 1 photo'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       imageCache.clear();

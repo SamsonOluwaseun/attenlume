@@ -10,8 +10,9 @@ import 'gallery_source.dart';
 /// Uses AndroidX Activity Result photo picker via method channel
 /// `com.samlytics.attenlume/photo_picker`. Does not require or request
 /// `READ_MEDIA_IMAGES` or any storage permissions.
-/// Picked files are streamed byte-for-byte into the app cache so EXIF
-/// capture times are preserved without re-encoding.
+/// Picked files are streamed byte-for-byte into the app cache; HEIC/HEIF
+/// files are decoded and saved as high-quality JPEG on Android 9+ (API 28+)
+/// with EXIF metadata preserved.
 class PickerGallerySource implements GallerySource {
   PickerGallerySource({MethodChannel? channel, this.maxItems = 50})
     : _channel =
@@ -53,7 +54,15 @@ class PickerGallerySource implements GallerySource {
       final path = map['path'] as String?;
       if (path == null) continue;
       final file = File(path);
-      final taken = exifTakenUtc(file);
+
+      // Prefer native EXIF timestamp from ExifInterface (supports HEIF/JPEG)
+      // over Dart JPEG reader [P1-58 review item 1].
+      final nativeIso = (map['takenIso'] as String?)?.trim();
+      final nativeTaken = (nativeIso != null && nativeIso.isNotEmpty)
+          ? DateTime.tryParse(nativeIso)?.toUtc()
+          : null;
+      final taken = nativeTaken ?? exifTakenUtc(file);
+
       final name = map['name'] as String? ?? file.uri.pathSegments.last;
       final bytes =
           (map['bytes'] as num?)?.toInt() ??
