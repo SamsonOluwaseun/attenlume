@@ -54,3 +54,8 @@ tool/guide/guide.html
 /tool/agent-prompt.md
 /tool/team_check.ps1
 /tool/pub_audit.py
+
+# Graphify code map (local developer tool, not published)
+graphify-out/
+.graphifyignore
+tool/graph_refresh.ps1
