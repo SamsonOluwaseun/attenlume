@@ -183,18 +183,24 @@ String renderTranscriptMarkdown(
   ];
   for (var i = 0; i < document.machineSpans.length; i++) {
     final span = document.machineSpans[i];
-    final text = document
-        .textAt(i, useCorrections: useCorrections)
-        .replaceAllMapped(RegExp(r'[\\`*_{}\[\]<>#!|]'), (m) => '\\${m[0]}')
-        .replaceAll('\r\n', '\n')
-        .replaceAll('\r', '\n')
-        .replaceAll('\n', '  \n  ');
+    final text = escapeTranscriptMarkdown(
+      document.textAt(i, useCorrections: useCorrections),
+    );
     lines.add(
       '- **[${_timestamp(span.start + document.segmentOffset)} - ${_timestamp(span.end + document.segmentOffset)}]** $text',
     );
   }
   return '${lines.join('\n')}\n';
 }
+
+/// Transcript text made safe inside a Markdown list item: Markdown
+/// characters are escaped and line breaks stay inside the item. Shared by
+/// copy/share and the export's `transcript.md` (FR-TRN-08).
+String escapeTranscriptMarkdown(String text) => text
+    .replaceAllMapped(RegExp(r'[\\`*_{}\[\]<>#!|]'), (m) => '\\${m[0]}')
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .replaceAll('\n', '  \n  ');
 
 String _timestamp(Duration value) {
   String pad(int n, [int width = 2]) => '$n'.padLeft(width, '0');

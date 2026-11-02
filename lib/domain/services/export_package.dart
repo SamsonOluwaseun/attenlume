@@ -16,8 +16,10 @@ import '../models/conference.dart';
 import '../models/enums.dart';
 import '../models/media.dart';
 import 'activity_title.dart';
+import 'cut_range_math.dart';
 import 'export_documents.dart';
 import 'export_service.dart';
+import 'export_transcript.dart';
 import 'review_timeline.dart';
 import 'timeline_offset.dart';
 
@@ -59,15 +61,23 @@ const timelineCsvHeader =
     final inSegment = offsetMs - ts.startMs;
     final keep = a.files.trimmedKeepRanges[ts.segment.id];
     if (keep == null) return (_join(a.folder, rel), inSegment);
-    final ranges = [...keep]..sort((x, y) => x.startMs.compareTo(y.startMs));
-    var before = 0;
-    for (final r in ranges) {
-      if (inSegment >= r.startMs && inSegment < r.endMs) {
-        return (_join(a.folder, rel), before + inSegment - r.startMs);
-      }
-      before += r.durationMs;
-    }
-    return null;
+    final position = positionInKeptAudio(keep, inSegment);
+    return position == null ? null : (_join(a.folder, rel), position.$1);
+  }
+  return null;
+}
+
+/// Where [startMs] (ms from a segment's start) is in a trimmed copy that
+/// holds only [keep] of that segment, joined in order, as (position, the
+/// kept range that holds it). Null when the trim removed that moment. The
+/// one mapping for trimmed copies, shared by `timeline.csv`, `activity.md`
+/// and the transcripts (ADR-046, ADR-077).
+(int, TimeRange)? positionInKeptAudio(List<TimeRange> keep, int startMs) {
+  final ranges = [...keep]..sort((x, y) => x.startMs.compareTo(y.startMs));
+  var before = 0;
+  for (final r in ranges) {
+    if (r.contains(startMs)) return (before + startMs - r.startMs, r);
+    before += r.durationMs;
   }
   return null;
 }
@@ -99,8 +109,32 @@ class ExportPackageContributor extends ExportContributor {
       activityMarkdownFileName,
       buildActivityMarkdown(context, activity),
     ),
+    // Saved transcripts (FR-TRN-08, ADR-077): only in exports with notes
+    // and details, which is when contributors are asked for activity files.
+    if (activity.transcript case final transcript?) ...[
+      ExportDocument(
+        transcriptTextFileName,
+        buildTranscriptText(activity.activity.title, transcript),
+      ),
+      ExportDocument(
+        transcriptMarkdownFileName,
+        buildTranscriptMarkdown(
+          activity.activity.title,
+          transcript,
+          timezone: context.conference.timezone,
+        ),
+      ),
+      ExportDocument(
+        transcriptJsonFileName,
+        buildTranscriptJson(activity.activity.id, transcript),
+      ),
+    ],
   ];
 }
+
+/// Whether any exported activity carries a transcript.
+bool _hasTranscripts(ExportContext context) =>
+    context.activities.any((a) => a.transcript != null);
 
 // ---------------------------------------------------------------------------
 // Shared wording
@@ -296,6 +330,16 @@ String buildReadme(ExportContext context) {
       )
       ..writeln('  - `notes.md`: your notes and follow-up.')
       ..writeln('  - `bookmarks.csv`: the moments you marked.');
+    if (_hasTranscripts(context)) {
+      out.writeln(
+        '  - `$transcriptMarkdownFileName`: the saved transcript with times '
+        'that match the exported audio, and the original machine text '
+        'under any line you corrected. `$transcriptTextFileName` is the '
+        'same text as plain text, and `$transcriptJsonFileName` is for '
+        'software. Transcripts are machine-generated and may contain '
+        'errors; only activities you transcribed have them.',
+      );
+    }
   }
   if (content.audio) {
     out.writeln(
@@ -350,8 +394,10 @@ String buildReadme(ExportContext context) {
       content.text
           ? '2. Add the files it should read. Start with the text files: '
                 '`$timelineFileName`, `$participantGoalsFileName` and, for '
-                'each activity, `activity.md` and `notes.md`. Then add photos '
-                'and audio for the activities that matter most.'
+                'each activity, `activity.md` and `notes.md`'
+                '${_hasTranscripts(context) ? ', and `$transcriptMarkdownFileName` where there is one' : ''}. '
+                'Then add photos and audio for the activities that matter '
+                'most.'
           : '2. Add the files it should read. Start with '
                 '`$timelineFileName` and `$participantGoalsFileName`, then '
                 'the files for the activities that matter most.',
@@ -483,7 +529,19 @@ String buildManifestJson(ExportContext context) {
             'notes': ?a.notesFile,
             'bookmarks': ?a.bookmarksFile,
             'cuts': ?a.cutsFile,
+            if (a.transcript != null) ...{
+              'transcript_txt': transcriptTextFileName,
+              'transcript_md': transcriptMarkdownFileName,
+              'transcript_json': transcriptJsonFileName,
+            },
           },
+          if (a.transcript case final transcript?)
+            'transcript': {
+              'machine_generated': true,
+              'line_count': transcript.lineCount,
+              'corrected_count': transcript.correctedCount,
+              'removed_count': transcript.removedCount,
+            },
         },
     ],
   };
@@ -632,6 +690,15 @@ String buildTimelineCsv(ExportContext context) {
         label: 'Notes',
       );
     }
+    if (a.transcript != null) {
+      add(
+        _activityStart(a),
+        0,
+        kind: 'transcript',
+        file: _join(a.folder, transcriptMarkdownFileName),
+        label: 'Transcript (machine-generated)',
+      );
+    }
     for (final s in a.segments) {
       final keep = a.files.trimmedKeepRanges[s.id];
       add(
@@ -722,6 +789,11 @@ String _groundRules(ExportContext context) {
         'are in the conference timezone, $tz.',
     '- If you cannot open or transcribe a file, name it and ask for an '
         'accessible version, such as the notes or a transcript.',
+    if (_hasTranscripts(context))
+      '- `$transcriptMarkdownFileName` files are machine-generated and may '
+          'contain errors. Treat them as a guide to what was said, not as '
+          'verified quotations: cite the audio file and time shown in '
+          'brackets, and say when a point rests on a transcript alone.',
     '- Do not invent quotations, speakers, outcomes or statistics.',
     '- ${_privacyLine(context)} Flag anything that came from a private '
         'conversation before suggesting it is used publicly.',
@@ -751,6 +823,13 @@ String _contents(ExportContext context) {
       '`notes.md` (the owner\'s notes and reflections) and '
       '`bookmarks.csv`.',
     );
+    if (_hasTranscripts(context)) {
+      out.writeln(
+        '- Where an activity was transcribed: `$transcriptMarkdownFileName` '
+        '(machine-generated transcript with audio times) and '
+        '`$transcriptTextFileName` (plain text).',
+      );
+    }
   }
   out
     ..writeln()
@@ -770,6 +849,7 @@ String _contents(ExportContext context) {
       _count(a.files.photoFiles.length, 'photo'),
       _count(a.bookmarks.length, 'bookmark'),
       if (a.notesFile != null) 'notes',
+      if (a.transcript != null) 'transcript',
       if (act.isPrivate) 'PRIVATE',
     ];
     out.writeln('- `${a.folder}/`: "${act.title}" (${details.join(', ')}).');
@@ -1049,5 +1129,19 @@ String buildActivityMarkdown(ExportContext context, ExportedActivity item) {
           ? 'No notes were written for this activity.'
           : 'See `${item.notesFile}`.',
     );
+  if (item.transcript case final transcript?) {
+    out
+      ..writeln()
+      ..writeln('## Transcript')
+      ..writeln()
+      ..writeln(
+        'Machine-generated; it may contain errors. See '
+        '`$transcriptMarkdownFileName` (with times that match the exported '
+        'audio) and `$transcriptTextFileName` (plain text): '
+        '${_count(transcript.lineCount, 'line')}'
+        '${transcript.correctedCount > 0 ? ', ${transcript.correctedCount} corrected by the owner' : ''}'
+        '${transcript.removedCount > 0 ? ', ${transcript.removedCount} removed with cut audio' : ''}.',
+      );
+  }
   return out.toString();
 }

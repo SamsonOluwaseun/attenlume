@@ -16,15 +16,18 @@ import '../../data/repositories/cut_range_repository.dart';
 import '../../data/repositories/export_job_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
 import '../../data/repositories/repository_support.dart';
+import '../../data/transcription/transcript_store.dart';
 import '../../platform/storage/free_space_probe.dart';
 import '../models/activity.dart';
 import '../models/conference.dart';
 import '../models/enums.dart';
 import '../models/media.dart';
+import '../transcription/transcript.dart';
 import 'activity_title.dart';
 import 'cut_range_math.dart';
 import 'export_documents.dart';
 import 'export_package.dart';
+import 'export_transcript.dart';
 import 'permanent_trim_service.dart';
 import 'private_notes.dart';
 import 'review_timeline.dart';
@@ -146,6 +149,7 @@ class ExportedActivity {
     this.bookmarksFile,
     this.activityJsonFile,
     this.cutsFile,
+    this.transcript,
   });
 
   final Activity activity;
@@ -173,6 +177,11 @@ class ExportedActivity {
   final String? bookmarksFile;
   final String? activityJsonFile;
   final String? cutsFile;
+
+  /// The activity's saved transcript placed against the exported audio
+  /// (FR-TRN-08, ADR-077). Only in exports with notes and details, and
+  /// only when a saved transcript belongs to one of [segments].
+  final ExportTranscript? transcript;
 }
 
 /// What contributors see when adding files.
@@ -391,6 +400,7 @@ class ExportService {
     this.writer = writeExportInBackground,
     this.contributors = const [ExportPackageContributor()],
     this.clock = systemUtcClock,
+    this.transcriptStore,
   });
 
   final ConferenceRepository conferences;
@@ -408,6 +418,11 @@ class ExportService {
   final ExportWriterFunction writer;
   final List<ExportContributor> contributors;
   final UtcClock clock;
+
+  /// Saved transcripts (FR-TRN-08). Null leaves transcripts out. Only read
+  /// for exports with notes and details; reading never loads a model or
+  /// starts transcription (FR-TRN-01).
+  final Future<TranscriptStore> Function()? transcriptStore;
 
   /// Calendar days (conference timezone) that have activities, for the
   /// one-day scope.
@@ -463,6 +478,9 @@ class ExportService {
     var skipped = 0;
     var tempBytes = 0;
     final mode = request.effectiveAudioMode;
+    final store = request.content.text && transcriptStore != null
+        ? await transcriptStore!()
+        : null;
 
     for (final (n, a) in chosen) {
       final type =
@@ -712,6 +730,17 @@ class ExportService {
         }
       }
 
+      ExportTranscript? transcript;
+      if (store != null) {
+        transcript = buildExportTranscript(
+          segments: segments,
+          cuts: activeCuts,
+          files: files,
+          audioMode: mode,
+          documents: await _savedTranscripts(store, a.id),
+        );
+      }
+
       final item = ExportedActivity(
         activity: a,
         type: type,
@@ -727,6 +756,7 @@ class ExportService {
         bookmarksFile: bookmarksFile,
         activityJsonFile: activityJsonFile,
         cutsFile: cutsFile,
+        transcript: transcript,
       );
 
       if (activityEntries.isEmpty) continue;
@@ -936,6 +966,22 @@ class ExportService {
         _ => error.runtimeType.toString(),
       });
       rethrow;
+    }
+  }
+
+  /// The activity's readable saved transcripts. One that cannot be read
+  /// is left out rather than stopping the export; the transcript screen
+  /// reports it (FR-TRN-08).
+  Future<List<TranscriptDocument>> _savedTranscripts(
+    TranscriptStore store,
+    String activityId,
+  ) async {
+    try {
+      return await store.listDocuments(activityId: activityId);
+    } on FileSystemException {
+      return const [];
+    } on ArgumentError {
+      return const [];
     }
   }
 
