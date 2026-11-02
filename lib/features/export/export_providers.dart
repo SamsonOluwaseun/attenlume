@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../data/filesystem/app_data_directory.dart';
 import '../../data/local_database/database_provider.dart';
 import '../../data/repositories/repository_providers.dart';
+import '../../data/transcription/transcript_store.dart';
 import '../../domain/services/export_import_service.dart';
 import '../../domain/services/export_service.dart';
 import '../../platform/share/export_sharer.dart';
@@ -24,8 +25,14 @@ final exportServiceProvider = Provider<ExportService>(
     mediaRoot: ref.watch(mediaRootProvider),
     tempRoot: getTemporaryDirectory,
     freeSpace: ref.watch(freeSpaceProbeProvider),
+    transcriptStore: _transcriptStore,
   ),
 );
+
+/// Saved transcripts (FR-TRN-08, ADR-077): the same folder the
+/// transcription screen uses. Opening it loads no model.
+Future<TranscriptStore> _transcriptStore() async =>
+    TranscriptStore(await appDataDirectory());
 
 /// Where exports go (ADR-040).
 abstract interface class ExportDestinations {
@@ -79,6 +86,7 @@ final exportImportServiceProvider = Provider<ExportImportService>(
     activities: ref.watch(activityRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
     freeSpace: ref.watch(freeSpaceProbeProvider),
+    transcriptStore: _transcriptStore,
   ),
 );
 

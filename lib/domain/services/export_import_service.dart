@@ -36,9 +36,13 @@ import '../../data/local_database/app_database.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/repository_support.dart';
 import '../../data/repositories/settings_repository.dart';
+import '../../data/transcription/transcript_store.dart';
 import '../../platform/storage/free_space_probe.dart';
 import '../models/enums.dart';
+import '../transcription/transcript.dart';
 import 'export_documents.dart' show exportSchemaVersion;
+import 'export_transcript.dart'
+    show transcriptJsonFileName, transcriptJsonSchemaVersion;
 import 'timeline_offset.dart';
 
 /// Where the import is.
@@ -68,6 +72,7 @@ class ImportActivityPreview {
     required this.hasNotes,
     required this.cuts,
     required this.bytes,
+    this.transcriptLines = 0,
   });
 
   final String title;
@@ -79,6 +84,10 @@ class ImportActivityPreview {
   final bool hasNotes;
   final int cuts;
   final int bytes;
+
+  /// Transcript lines in `transcript.json` that can be attached to an
+  /// imported recording (FR-TRN-08, ADR-077).
+  final int transcriptLines;
 }
 
 /// What an export holds and whether it passed the checksum check.
@@ -138,6 +147,7 @@ class ImportSummary {
     required this.notes,
     required this.cuts,
     required this.bytes,
+    this.transcripts = 0,
     this.warnings = const [],
   });
 
@@ -151,6 +161,9 @@ class ImportSummary {
   final int notes;
   final int cuts;
   final int bytes;
+
+  /// Recordings whose saved transcript was restored (ADR-077).
+  final int transcripts;
   final List<String> warnings;
 }
 
@@ -177,6 +190,7 @@ class ExportImportService {
     this.reserveBytes = defaultExportReserveBytes,
     this._clock = systemUtcClock,
     this._newId = uuidV4,
+    this.transcriptStore,
   });
 
   final AppDatabase db;
@@ -187,6 +201,10 @@ class ExportImportService {
   final Future<Directory> Function()? _stagingRoot;
   final UtcClock _clock;
   final IdGenerator _newId;
+
+  /// Where restored transcripts are saved (FR-TRN-08, ADR-077). Null
+  /// imports the export without its transcripts.
+  final Future<TranscriptStore> Function()? transcriptStore;
   bool _busy = false;
 
   /// `<app data>/imports-temp/`: next to `media/`, so the final move is a
@@ -271,6 +289,7 @@ class ExportImportService {
               bookmarks: a.bookmarks.length,
               hasNotes: a.hasNotes,
               cuts: a.cuts.length,
+              transcriptLines: a.transcriptLines,
               bytes: [
                 for (final s in a.segments) staged.sizes[s.file] ?? 0,
                 for (final ph in a.photos) staged.sizes[ph.file] ?? 0,
@@ -369,6 +388,8 @@ class ExportImportService {
       var bytes = 0;
       var notes = 0;
       final warnings = [...conf.warnings];
+      final transcripts = <TranscriptDocument>[];
+      var transcriptsDropped = 0;
 
       for (var i = 0; i < conf.activities.length; i++) {
         final a = conf.activities[i];
@@ -409,6 +430,7 @@ class ExportImportService {
           ),
         );
 
+        final importedSegments = <_Seg, String>{};
         for (var n = 0; n < segments.length; n++) {
           final s = segments[n];
           final sequence = n + 1;
@@ -427,9 +449,11 @@ class ExportImportService {
           moves.add((staged.file(s.file), target));
           final size = staged.sizes[s.file]!;
           bytes += size;
+          final segmentId = idFor(s.id);
+          importedSegments[s] = segmentId;
           segmentRows.add(
             RecordingSegmentsCompanion.insert(
-              id: idFor(s.id),
+              id: segmentId,
               activityId: activityId,
               sequence: sequence,
               filePath: _relative(root, target),
@@ -452,6 +476,25 @@ class ExportImportService {
               updatedAt: now,
             ),
           );
+        }
+
+        // Saved transcripts follow their recordings (ADR-077).
+        for (final part in a.transcriptParts) {
+          final segment = part.segmentIn(a.segments);
+          final segmentId = segment == null ? null : importedSegments[segment];
+          final document = segment == null || segmentId == null
+              ? null
+              : part.toDocument(
+                  activityId: activityId,
+                  segmentId: segmentId,
+                  segmentOffset: segment.start.difference(firstStart!),
+                  fallbackCreatedAt: now,
+                );
+          if (document == null) {
+            transcriptsDropped++;
+          } else {
+            transcripts.add(document);
+          }
         }
 
         for (final ph in a.photos) {
@@ -638,6 +681,21 @@ class ExportImportService {
       }
 
       await discard(prepared);
+      var restored = 0;
+      if (transcripts.isNotEmpty && transcriptStore != null) {
+        final store = await transcriptStore!();
+        for (final document in transcripts) {
+          if (await _restoreTranscript(store, document)) restored++;
+        }
+      }
+      final notRestored = transcriptsDropped + transcripts.length - restored;
+      if (notRestored > 0) {
+        warnings.add(
+          '$notRestored ${notRestored == 1 ? 'transcript was' : 'transcripts were'} '
+          'not restored. The recordings and notes were imported; the '
+          'transcript files are still in the export.',
+        );
+      }
       return ImportSummary(
         conferenceId: conferenceId,
         conferenceName: name,
@@ -649,10 +707,40 @@ class ExportImportService {
         notes: notes,
         cuts: cutRows.length,
         bytes: bytes,
+        transcripts: restored,
         warnings: warnings,
       );
     } finally {
       _busy = false;
+    }
+  }
+
+  /// Saves an imported transcript as the original machine output, then
+  /// its corrections. An existing transcript for the same recording is
+  /// never replaced (`TranscriptStore.saveOriginal`); the import itself has
+  /// already succeeded, so a failure here only means a warning.
+  Future<bool> _restoreTranscript(
+    TranscriptStore store,
+    TranscriptDocument document,
+  ) async {
+    try {
+      final saved = await store.saveOriginal(
+        document.withCorrections(const {}),
+      );
+      if (document.corrections.isNotEmpty && saved.corrections.isEmpty) {
+        await store.saveCorrections(
+          activityId: document.activityId,
+          segmentId: document.segmentId,
+          corrections: document.corrections,
+        );
+      }
+      return true;
+    } on StateError {
+      return false;
+    } on FileSystemException {
+      return false;
+    } on ArgumentError {
+      return false;
     }
   }
 
@@ -835,6 +923,12 @@ class _Act {
   final bookmarks = <_Bm>[];
   final interruptions = <_Gap>[];
   final cuts = <_Cut>[];
+  final transcriptParts = <_TranscriptPart>[];
+
+  int get transcriptLines => [
+    for (final part in transcriptParts)
+      if (part.segmentIn(segments) != null) part.lines.length,
+  ].fold(0, (n, l) => n + l);
 
   /// Start of the export's first recording, which the cut offsets count
   /// from.
@@ -888,6 +982,75 @@ class _Gap {
   late DateTime start;
   DateTime? end;
   bool autoResumed = false;
+}
+
+/// One recording's lines from `transcript.json` (ADR-077).
+class _TranscriptPart {
+  String? segmentId;
+
+  /// The exported audio file, from the export root.
+  String? file;
+  String? modelId;
+  DateTime? createdAt;
+
+  /// (start, end) in the exported file, machine text, owner's text.
+  final lines = <(int, int, String, String)>[];
+
+  /// The imported recording these lines belong to: the same file, else
+  /// the same recording ID.
+  _Seg? segmentIn(List<_Seg> segments) {
+    for (final s in segments) {
+      if (file != null && s.file == file) return s;
+    }
+    for (final s in segments) {
+      if (segmentId != null && s.id == segmentId) return s;
+    }
+    return null;
+  }
+
+  /// The saved transcript for the imported recording, or null when no line
+  /// is valid. Times are positions in the imported file, which is the
+  /// exported file (a trimmed copy imports as the recording, ADR-049).
+  TranscriptDocument? toDocument({
+    required String activityId,
+    required String segmentId,
+    required Duration segmentOffset,
+    required DateTime fallbackCreatedAt,
+  }) {
+    final sorted = [...lines]..sort((x, y) => x.$1.compareTo(y.$1));
+    final spans = <TranscriptSpan>[];
+    final corrections = <int, String>{};
+    for (final (start, end, machine, text) in sorted) {
+      try {
+        spans.add(
+          TranscriptSpan(
+            start: Duration(milliseconds: start),
+            end: Duration(milliseconds: end),
+            text: machine,
+          ),
+        );
+      } on ArgumentError {
+        continue;
+      }
+      if (text != machine && !text.contains('\u0000')) {
+        corrections[spans.length - 1] = text;
+      }
+    }
+    if (spans.isEmpty) return null;
+    try {
+      return TranscriptDocument(
+        activityId: activityId,
+        segmentId: segmentId,
+        machineSpans: spans,
+        corrections: corrections,
+        createdAt: createdAt ?? fallbackCreatedAt,
+        segmentOffset: segmentOffset.isNegative ? Duration.zero : segmentOffset,
+        modelId: modelId,
+      );
+    } on ArgumentError {
+      return null;
+    }
+  }
 }
 
 class _Cut {
@@ -1021,6 +1184,9 @@ class _Reader {
         }
       }
       if (conf.audioMode == 'trimmed') a.cuts.clear();
+      if (has('$folder/$transcriptJsonFileName')) {
+        await _transcript(conf, a, folder);
+      }
       conf.activities.add(a);
     }
     if (conf.audioMode == 'trimmed' &&
@@ -1031,6 +1197,62 @@ class _Reader {
       );
     }
     return conf;
+  }
+
+  /// `transcript.json` (ADR-077). A transcript that cannot be read never
+  /// blocks the import: the recordings and notes still come in.
+  Future<void> _transcript(_Conf conf, _Act a, String folder) async {
+    Map<String, Object?> j;
+    try {
+      j = await json('$folder/$transcriptJsonFileName');
+    } on ExportImportException {
+      conf.warnings.add(
+        '"${a.title}": the transcript could not be read, so it will not be '
+        'restored.',
+      );
+      return;
+    }
+    final version = _int(j['schema_version']);
+    if (version == null || version > transcriptJsonSchemaVersion) {
+      conf.warnings.add(
+        '"${a.title}": the transcript was made by a newer version of '
+        'Attenlume, so it will not be restored.',
+      );
+      return;
+    }
+    var unattached = false;
+    for (final part in _list(j['parts'])) {
+      if (part is! Map) continue;
+      final file = _str(part['audio_file']);
+      final t = _TranscriptPart()
+        ..segmentId = _str(part['segment_id'])
+        ..file = file != null && isSafeRelativePath(file)
+            ? '$folder/$file'
+            : null
+        ..modelId = _str(part['model_id'])
+        ..createdAt = _time(part['created_at_utc']);
+      for (final line in _list(part['lines'])) {
+        if (line is! Map) continue;
+        final start = _int(line['audio_start_ms']);
+        final end = _int(line['audio_end_ms']);
+        final machine = _str(line['machine_text']);
+        if (start == null || end == null || machine == null) continue;
+        t.lines.add((start, end, machine, _str(line['text']) ?? machine));
+      }
+      if (t.lines.isEmpty) {
+        // Lines with no audio times: the export had no audio for them.
+        if (_list(part['lines']).isNotEmpty) unattached = true;
+        continue;
+      }
+      a.transcriptParts.add(t);
+    }
+    if (unattached ||
+        a.transcriptParts.any((t) => t.segmentIn(a.segments) == null)) {
+      conf.warnings.add(
+        '"${a.title}": the transcript belongs to recordings that are not in '
+        'this export, so that part will not be restored.',
+      );
+    }
   }
 
   Future<void> _fromActivityJson(_Conf conf, _Act a, String folder) async {
