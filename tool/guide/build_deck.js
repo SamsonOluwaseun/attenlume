@@ -74,11 +74,15 @@ function stepSlide(section, step) {
 
   s.addText(step.title, { x: 0.5, y: 0.95, w: textW, h: 0.85, fontFace: FONT, fontSize: textW < 4.3 ? 24 : 28, bold: true, color: C.blue, margin: 0, valign: 'top', isTextBox: true });
 
+  // Long steps step the text down so they stay inside the 3-inch box
+  // (characters per inch of text width, measured on Montserrat renders).
+  const density = step.points.join(' ').length / textW;
+  const fontSize = density > 165 ? 11 : density > 135 ? 12 : density > 105 ? 13 : 14;
   const items = step.points.map((p, i) => ({
     text: p,
-    options: { bullet: { indent: 15 }, breakLine: i < step.points.length - 1, paraSpaceAfter: 10 },
+    options: { bullet: { indent: 15 }, breakLine: i < step.points.length - 1, paraSpaceAfter: fontSize < 13 ? 6 : 10 },
   }));
-  s.addText(items, { x: 0.5, y: 1.95, w: textW, h: 3.0, fontFace: FONT, fontSize: 14, color: C.navy, valign: 'top', margin: 0, isTextBox: true });
+  s.addText(items, { x: 0.5, y: 1.95, w: textW, h: 3.0, fontFace: FONT, fontSize, color: C.navy, valign: 'top', margin: 0, isTextBox: true });
 
   if (step.link) s.addText(step.link.label, { x: 0.5, y: 5.0, w: textW, h: 0.25, fontFace: FONT, fontSize: 11, color: C.blue, margin: 0, hyperlink: { url: step.link.url } });
   let x = 9.5 - total + 0.07;

@@ -89,7 +89,7 @@ module.exports = {
             'Every activity appears on the conference page with its length, photos and bookmarks.',
             'On a wide tablet or Windows window, select a conference to see its overview beside the list: activities, photos, bookmarks and storage used. Search activities by title, speaker or room. Open conference gives you the full start and edit controls.',
             'Tap one to see its notes, bookmarks and photos.',
-            'Import photos adds pictures from your gallery taken during the session.',
+            'Import photos adds pictures from your gallery. On Android, choose them in the photo picker: Attenlume reads when each was taken, places it on the timeline and marks any taken outside the session. On iPhone and Windows, it lists the photos taken during the session.',
           ],
         },
         {
@@ -149,6 +149,7 @@ module.exports = {
             'Open Settings > Optional transcription. It is off by default. Read the conditions before enabling it, then choose Download model (about 31 MB).',
             'For English audio up to 10 minutes per clip, choose audio here or open a saved activity and tap Optional transcription. Activities with audio cuts are not supported yet: import their exported trimmed audio instead. Setup alone never starts transcription.',
             'Review the generated text, correct errors, copy it or share transcript.txt for Notepad, or timestamped transcript.md. Private activity text needs a separate opt-in to copy or share.',
+            'Exports with notes include the transcript, with times that match the exported audio. Text from parts you cut is left out of trimmed copies.',
             'Switching off stops processing and keeps audio and saved text. Keep the model for offline use, or explicitly remove it. Live captions will follow this after-recording pilot. If setup fails, read the reason and use Retry setup. A 32-bit Android system is not supported by this pilot.',
           ],
         },
@@ -177,7 +178,7 @@ module.exports = {
           points: [
             'Export the conference, then copy the ZIP to the new device.',
             'On the new device, open Library, then Import an export.',
-            'Every file is checked first, and nothing already in the app is overwritten.',
+            'Every file is checked first, and nothing already in the app is overwritten. Transcripts in the export are restored with their recordings.',
           ],
         },
       ],
