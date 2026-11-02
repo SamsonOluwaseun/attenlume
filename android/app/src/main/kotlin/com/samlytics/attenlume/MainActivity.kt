@@ -11,6 +11,7 @@ import io.flutter.embedding.engine.FlutterEngine
 // device credential prompt as a fragment (FR-PRI-06, ADR-041).
 class MainActivity : FlutterFragmentActivity() {
     private var supportLinkChannel: MethodChannel? = null
+    private var policyLinkChannel: MethodChannel? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         val coldStart = !ShortcutChannel.activityEverCreated
         ShortcutChannel.activityEverCreated = true
@@ -51,9 +52,35 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
         }
+        // Opens only the published privacy policy (FR-PRI-07), in every build,
+        // including Play builds where the support link is disabled.
+        policyLinkChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.samlytics.attenlume/policy_link"
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                if (call.method != "open") {
+                    result.notImplemented()
+                } else if (call.arguments as? String != PRIVACY_POLICY_URL) {
+                    result.success(false)
+                } else {
+                    try {
+                        startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))
+                                .addCategory(Intent.CATEGORY_BROWSABLE)
+                        )
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+            }
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        policyLinkChannel?.setMethodCallHandler(null)
+        policyLinkChannel = null
         supportLinkChannel?.setMethodCallHandler(null)
         supportLinkChannel = null
         BatteryChannel.detach()
@@ -77,5 +104,11 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onPause() {
         ShortcutChannel.visibleActivities--
         super.onPause()
+    }
+
+    private companion object {
+        // Must match privacyPolicyUrl in lib/features/privacy/privacy_policy_link.dart.
+        const val PRIVACY_POLICY_URL =
+            "https://www.samlytics.co.uk/attenlume-policy/attenlume-privacy.html"
     }
 }

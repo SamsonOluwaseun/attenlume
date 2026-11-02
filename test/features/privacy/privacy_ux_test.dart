@@ -9,12 +9,14 @@ import 'package:attenlume/features/capture/recording_banner.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/conferences/conference_list_screen.dart';
 import 'package:attenlume/features/privacy/app_lock_controller.dart';
+import 'package:attenlume/features/privacy/privacy_policy_link.dart';
 import 'package:attenlume/features/privacy/privacy_screen.dart';
 import 'package:attenlume/features/privacy/recording_privacy_check.dart';
 import 'package:attenlume/features/privacy/sensitive_export_warning.dart';
 import 'package:attenlume/platform/device_auth/device_authenticator.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -144,6 +146,102 @@ void main() {
         isFalse,
       );
       expect(find.textContaining('Set one up in your device'), findsOneWidget);
+    });
+  });
+
+  group('FR-PRI-07 privacy policy link', () {
+    Future<void> showPolicy(
+      WidgetTester tester, {
+      required Future<bool> Function() opener,
+    }) async {
+      tester.view.physicalSize = const Size(1080, 4000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        app(
+          const PrivacyScreen(),
+          overrides: [privacyPolicyOpenerProvider.overrideWithValue(opener)],
+        ),
+      );
+      await settle(tester);
+      await tester.ensureVisible(find.byKey(const Key('privacy-policy-copy')));
+      await settle(tester);
+    }
+
+    test('FR-PRI-07 the app and the Android channel use the published '
+        'address', () {
+      expect(
+        privacyPolicyUrl,
+        'https://www.samlytics.co.uk/attenlume-policy/attenlume-privacy.html',
+      );
+      final kotlin = File(
+        'android/app/src/main/kotlin/com/samlytics/attenlume/MainActivity.kt',
+      ).readAsStringSync();
+      expect(kotlin, contains('"$privacyPolicyUrl"'));
+      expect(
+        File('docs/legal/attenlume-privacy.html').existsSync(),
+        isTrue,
+        reason: 'the policy source is kept with the app',
+      );
+    });
+
+    testWidgets('FR-PRI-07 Privacy shows the policy address and opens it', (
+      tester,
+    ) async {
+      var opened = 0;
+      await showPolicy(
+        tester,
+        opener: () async {
+          opened++;
+          return true;
+        },
+      );
+
+      expect(find.text('Privacy policy'), findsOneWidget);
+      expect(find.byKey(const Key('privacy-policy-url')), findsOneWidget);
+      expect(find.text(privacyPolicyUrl), findsOneWidget);
+
+      // Widget tests run on the desktop host, where Open is offered.
+      await tester.tap(find.byKey(const Key('privacy-policy-open')));
+      await settle(tester);
+      expect(opened, 1);
+      expect(find.textContaining('could not be opened'), findsNothing);
+    });
+
+    testWidgets('FR-PRI-07 when the browser cannot open, the screen says to '
+        'copy the link', (tester) async {
+      await showPolicy(tester, opener: () async => false);
+
+      await tester.tap(find.byKey(const Key('privacy-policy-open')));
+      await settle(tester);
+      expect(find.textContaining('could not be opened'), findsOneWidget);
+    });
+
+    testWidgets('FR-PRI-07 Copy link puts the address on the clipboard', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await showPolicy(tester, opener: () async => true);
+
+      await tester.tap(find.byKey(const Key('privacy-policy-copy')));
+      await settle(tester);
+      expect(copied, privacyPolicyUrl);
+      expect(find.text('Privacy policy link copied.'), findsOneWidget);
     });
   });
 

@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/tokens.dart';
 import 'app_lock_controller.dart';
+import 'privacy_policy_link.dart';
 
 /// One permission and why Attenlume asks for it (FR-PRI-04).
 class PermissionExplanation {
@@ -21,8 +23,9 @@ class PermissionExplanation {
   final IconData icon;
 }
 
-/// Privacy: where data lives, what is asked for and why, and the optional
-/// app lock (FR-PRI-03, FR-PRI-04, FR-PRI-06, ADR-041).
+/// Privacy: where data lives, what is asked for and why, the optional app
+/// lock and the published policy (FR-PRI-03, FR-PRI-04, FR-PRI-06,
+/// FR-PRI-07, ADR-041, ADR-073).
 ///
 /// Opened from Settings (P1-25), which links here rather than repeating it.
 class PrivacyScreen extends ConsumerWidget {
@@ -147,11 +150,83 @@ class PrivacyScreen extends ConsumerWidget {
                 'own legal obligations, for example under UK GDPR.',
                 style: theme.textTheme.bodyMedium,
               ),
+              heading('Privacy policy'),
+              const _PolicyLink(),
               const SizedBox(height: TokenSpace.space6),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The published privacy policy, with Open (Android and Windows) and Copy
+/// link everywhere (FR-PRI-07). Google Play requires it inside the app.
+class _PolicyLink extends ConsumerWidget {
+  const _PolicyLink();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    Future<void> open() async {
+      final opened = await ref.read(privacyPolicyOpenerProvider)();
+      if (!opened) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The privacy policy could not be opened. Copy the link and '
+              'open it in your browser.',
+            ),
+          ),
+        );
+      }
+    }
+
+    Future<void> copy() async {
+      await Clipboard.setData(const ClipboardData(text: privacyPolicyUrl));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Privacy policy link copied.')),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'The full policy explains what Attenlume stores, the optional '
+          'transcription download and how to contact us.',
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: TokenSpace.space2),
+        SelectableText(
+          privacyPolicyUrl,
+          key: const Key('privacy-policy-url'),
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: TokenSpace.space2),
+        Wrap(
+          spacing: TokenSpace.space2,
+          runSpacing: TokenSpace.space2,
+          children: [
+            if (canOpenPrivacyPolicy)
+              FilledButton.icon(
+                key: const Key('privacy-policy-open'),
+                onPressed: open,
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('Open privacy policy'),
+              ),
+            OutlinedButton.icon(
+              key: const Key('privacy-policy-copy'),
+              onPressed: copy,
+              icon: const Icon(Icons.copy_rounded),
+              label: const Text('Copy link'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
