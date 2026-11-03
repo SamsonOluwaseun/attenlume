@@ -59,3 +59,4 @@ tool/guide/guide.html
 graphify-out/
 .graphifyignore
 tool/graph_refresh.ps1
+tool/feature_map.py
