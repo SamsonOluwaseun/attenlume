@@ -278,13 +278,11 @@ class RecordingForegroundService : Service() {
     }
 
     private fun notifyTile(context: android.content.Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            try {
-                android.service.quicksettings.TileService.requestListeningState(
-                    context,
-                    android.content.ComponentName(context, RecordTileService::class.java),
-                )
-            } catch (_: Exception) {}
-        }
+        try {
+            android.service.quicksettings.TileService.requestListeningState(
+                context,
+                android.content.ComponentName(context, RecordTileService::class.java),
+            )
+        } catch (_: Exception) {}
     }
 }
