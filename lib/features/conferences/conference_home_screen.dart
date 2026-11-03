@@ -8,10 +8,14 @@ import '../../data/repositories/repository_providers.dart';
 import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
+import '../../domain/models/planned_session.dart';
 import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/consent_check_dialog.dart';
+import '../agenda/agenda_import_screen.dart';
+import '../agenda/agenda_providers.dart';
+import '../agenda/agenda_section.dart';
 import '../capture/recording_banner.dart';
 import '../capture/recording_screen.dart';
 import '../export/export_sheet.dart';
@@ -50,6 +54,7 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
   List<Goal> _goals = [];
   ConferenceStats _stats = ConferenceStats.zero;
   List<ActivitySummary> _activities = [];
+  List<PlannedSession> _planned = [];
   bool _isLoading = true;
 
   @override
@@ -75,6 +80,9 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     final activities = await actRepo.listSummariesForConference(
       widget.conferenceId,
     );
+    final planned = await ref
+        .read(plannedSessionRepositoryProvider)
+        .listFor(widget.conferenceId);
 
     if (mounted) {
       setState(() {
@@ -82,6 +90,7 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
         _goals = goals;
         _stats = stats;
         _activities = activities;
+        _planned = planned;
         _isLoading = false;
       });
     }
@@ -161,10 +170,67 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
     }
   }
 
-  Future<void> _openStartActivitySheet() async {
+  /// Import an agenda file (ADR-082) [P2-07].
+  Future<void> _importAgenda() async {
+    final conf = _conference;
+    if (conf == null) return;
+    final saved = await AgendaImportScreen.open(context, conf);
+    if (!mounted) return;
+    await _loadConference();
+    if (!mounted || saved == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          saved == 1
+              ? '1 session added to the agenda.'
+              : '$saved sessions added to the agenda.',
+        ),
+      ),
+    );
+  }
+
+  /// Remove every planned session, after a confirmation. Activities keep
+  /// the details they were started with.
+  Future<void> _clearAgenda() async {
+    final count = _planned.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear the agenda?'),
+        content: Text(
+          'This removes ${count == 1 ? 'the 1 planned session' : 'all $count planned sessions'} '
+          'from this conference. Activities you started from them keep '
+          'their details, and you can import the file again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('agenda-clear-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear agenda'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref
+        .read(plannedSessionRepositoryProvider)
+        .deleteAllFor(widget.conferenceId);
+    if (!mounted) return;
+    await _loadConference();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Agenda cleared.')));
+  }
+
+  Future<void> _openStartActivitySheet({PlannedSession? from}) async {
     final created = await StartActivitySheet.show(
       context,
       conferenceId: widget.conferenceId,
+      initialSession: from,
     );
     if (created != null && mounted) {
       await _loadConference();
@@ -546,6 +612,18 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                           ],
                         ),
                       ],
+                    ),
+
+                    const SizedBox(height: TokenSpace.space4),
+
+                    // Imported agenda (ADR-082) [P2-07]
+                    AgendaSection(
+                      sessions: _planned,
+                      timezone: conf.timezone,
+                      nowUtc: ref.read(agendaClockProvider)(),
+                      onImport: _importAgenda,
+                      onClear: _clearAgenda,
+                      onStart: (s) => _openStartActivitySheet(from: s),
                     ),
 
                     const SizedBox(height: TokenSpace.space4),

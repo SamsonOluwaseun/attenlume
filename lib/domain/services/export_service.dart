@@ -15,6 +15,7 @@ import '../../data/repositories/conference_repository.dart';
 import '../../data/repositories/cut_range_repository.dart';
 import '../../data/repositories/export_job_repository.dart';
 import '../../data/repositories/media_asset_repository.dart';
+import '../../data/repositories/planned_session_repository.dart';
 import '../../data/repositories/repository_support.dart';
 import '../../data/transcription/transcript_store.dart';
 import '../../platform/storage/free_space_probe.dart';
@@ -22,6 +23,7 @@ import '../models/activity.dart';
 import '../models/conference.dart';
 import '../models/enums.dart';
 import '../models/media.dart';
+import '../models/planned_session.dart';
 import '../transcription/transcript.dart';
 import 'activity_title.dart';
 import 'cut_range_math.dart';
@@ -189,6 +191,7 @@ class ExportContext {
   const ExportContext({
     required this.conference,
     required this.goals,
+    this.plannedSessions = const [],
     required this.request,
     required this.exportedAtUtc,
     required this.activities,
@@ -198,6 +201,9 @@ class ExportContext {
 
   final Conference conference;
   final List<Goal> goals;
+
+  /// The conference's imported agenda, in time order (ADR-082).
+  final List<PlannedSession> plannedSessions;
   final ExportRequest request;
   final DateTime exportedAtUtc;
   final List<ExportedActivity> activities;
@@ -401,6 +407,7 @@ class ExportService {
     this.contributors = const [ExportPackageContributor()],
     this.clock = systemUtcClock,
     this.transcriptStore,
+    this.plannedSessions,
   });
 
   final ConferenceRepository conferences;
@@ -423,6 +430,9 @@ class ExportService {
   /// for exports with notes and details; reading never loads a model or
   /// starts transcription (FR-TRN-01).
   final Future<TranscriptStore> Function()? transcriptStore;
+
+  /// The imported agenda (ADR-082). Null leaves it out of `conference.json`.
+  final PlannedSessionRepository? plannedSessions;
 
   /// Calendar days (conference timezone) that have activities, for the
   /// one-day scope.
@@ -768,6 +778,8 @@ class ExportService {
     final context = ExportContext(
       conference: conference,
       goals: await conferences.goalsFor(conference.id),
+      plannedSessions:
+          await plannedSessions?.listFor(conference.id) ?? const [],
       request: request,
       exportedAtUtc: now,
       activities: exported,

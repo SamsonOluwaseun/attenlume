@@ -5,6 +5,7 @@ import 'package:attenlume/data/repositories/conference_repository.dart';
 import 'package:attenlume/data/repositories/cut_range_repository.dart';
 import 'package:attenlume/data/repositories/export_job_repository.dart';
 import 'package:attenlume/data/repositories/media_asset_repository.dart';
+import 'package:attenlume/data/repositories/planned_session_repository.dart';
 import 'package:attenlume/data/repositories/settings_repository.dart';
 import 'package:attenlume/domain/models/activity.dart';
 import 'package:attenlume/domain/models/conference.dart';
@@ -56,6 +57,11 @@ class TestData {
     media = MediaAssetRepository(db, clock: clock.call, newId: ids.call);
     cuts = CutRangeRepository(db, clock: clock.call, newId: ids.call);
     exports = ExportJobRepository(db, clock: clock.call, newId: ids.call);
+    plannedSessions = PlannedSessionRepository(
+      db,
+      clock: clock.call,
+      newId: ids.call,
+    );
   }
 
   final AppDatabase db;
@@ -67,6 +73,7 @@ class TestData {
   late final MediaAssetRepository media;
   late final CutRangeRepository cuts;
   late final ExportJobRepository exports;
+  late final PlannedSessionRepository plannedSessions;
 
   Future<void> close() => db.close();
 
