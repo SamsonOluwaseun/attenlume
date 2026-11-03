@@ -111,6 +111,21 @@ class TranscriptionController extends ChangeNotifier {
     _upsert(saved);
   }
 
+  /// Re-reads saved transcripts of [activityIds] after a permanent trim or
+  /// split moved them to other recordings (ADR-081): ones no longer saved
+  /// under those activities leave the list.
+  Future<void> reloadActivities(Set<String> activityIds) async {
+    final saved = [
+      for (final id in activityIds)
+        ...await store.listDocuments(activityId: id),
+    ];
+    if (_disposed) return;
+    documents = List.unmodifiable(
+      documents.where((d) => !activityIds.contains(d.activityId)),
+    );
+    _upsert(saved);
+  }
+
   Future<void> setEnabled(bool value) async {
     if (_disposed) return;
     if (value && _removing) {

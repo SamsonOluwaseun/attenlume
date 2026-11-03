@@ -48,6 +48,7 @@ void main() {
         capturePlatformProvider.overrideWithValue(CapturePlatform.android),
         mediaFreeBytesProvider.overrideWith((ref) async => null),
         mediaRootProvider.overrideWithValue(() async => root),
+        transcriptCarrierProvider.overrideWithValue(null),
         audioPlaybackEngineFactoryProvider.overrideWithValue(() => engine),
       ],
       child: MaterialApp(theme: AppTheme.light(), home: child),

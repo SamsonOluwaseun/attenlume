@@ -8,6 +8,7 @@ import '../../domain/services/activity_title.dart';
 import '../../domain/services/recording_profile_rules.dart';
 import '../../domain/services/review_timeline.dart';
 import '../../domain/services/timeline_offset.dart';
+import '../../domain/transcription/transcript_carry.dart';
 import '../local_database/app_database.dart';
 import 'repository_support.dart';
 
@@ -18,6 +19,8 @@ class ActivitySplitResult {
     required this.part1,
     required this.part2,
     required this.segmentMoves,
+    this.sharedSplitMs,
+    this.transcripts = TranscriptCarryReport.none,
   });
 
   final Activity part1;
@@ -26,6 +29,23 @@ class ActivitySplitResult {
   /// Segment id in the first part to its id in the second part, for each
   /// segment that moved or was shared. Waveform summaries follow these.
   final Map<String, String> segmentMoves;
+
+  /// Where the split falls inside the shared segment, in ms from its start;
+  /// null when the split is not inside a segment.
+  final int? sharedSplitMs;
+
+  /// Saved transcripts moved with the split (ADR-081), filled in by
+  /// `ActivitySplitter`.
+  final TranscriptCarryReport transcripts;
+
+  ActivitySplitResult withTranscripts(TranscriptCarryReport report) =>
+      ActivitySplitResult(
+        part1: part1,
+        part2: part2,
+        segmentMoves: segmentMoves,
+        sharedSplitMs: sharedSplitMs,
+        transcripts: report,
+      );
 }
 
 /// Activity and activity type storage (BUILD_GUIDE 9.3
@@ -678,6 +698,7 @@ class ActivityRepository {
       part1: (await get(activityId))!,
       part2: (await get(part2Id))!,
       segmentMoves: moved,
+      sharedSplitMs: shared?.splitOffsetWithinSegmentMs,
     );
   });
 

@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/tokens.dart';
+import '../../data/filesystem/app_data_directory.dart';
 import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/repository_providers.dart';
+import '../../data/transcription/transcript_store.dart';
 import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
@@ -14,6 +16,7 @@ import '../../domain/models/media.dart';
 import '../../domain/services/activity_splitter.dart';
 import '../../domain/services/permanent_trim_service.dart';
 import '../../domain/services/review_timeline.dart';
+import '../../domain/services/transcript_carrier.dart';
 import '../../platform/audio_playback/audio_playback_engine.dart';
 import '../../platform/audio_playback/audioplayers_playback_engine.dart';
 import '../../platform/audio_trimmer/mp4_sample_trimmer.dart';
@@ -21,6 +24,7 @@ import '../../shared/utilities/date_formatters.dart';
 import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_providers.dart';
 import '../photos/activity_photos_section.dart';
+import '../transcription/transcription_providers.dart';
 import 'review_header.dart';
 import 'review_moments.dart';
 import 'review_player_controller.dart';
@@ -36,10 +40,21 @@ final audioPlaybackEngineFactoryProvider =
       (ref) => AudioplayersPlaybackEngine.new,
     );
 
+/// Moves saved transcripts with a permanent trim or split (ADR-081). The
+/// same folder the transcription screen uses; opening it loads no model.
+/// Null leaves transcripts where they are.
+final transcriptCarrierProvider = Provider<TranscriptCarrier?>(
+  (ref) => TranscriptCarrier(
+    store: () async => TranscriptStore(await appDataDirectory()),
+    media: ref.watch(mediaAssetRepositoryProvider),
+  ),
+);
+
 final activitySplitterProvider = Provider<ActivitySplitter>(
   (ref) => ActivitySplitter(
     activities: ref.watch(activityRepositoryProvider),
     mediaRoot: ref.watch(mediaRootProvider),
+    transcripts: ref.watch(transcriptCarrierProvider),
   ),
 );
 
@@ -52,6 +67,7 @@ final permanentTrimServiceProvider = Provider<PermanentTrimService>(
     trimmer: const Mp4SampleTrimmer(),
     mediaRoot: ref.watch(mediaRootProvider),
     freeSpace: ref.watch(freeSpaceProbeProvider),
+    transcripts: ref.watch(transcriptCarrierProvider),
   ),
 );
 
@@ -310,8 +326,38 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
       _loading = true;
     });
     await _load();
+    await _reloadTranscripts({widget.activityId, result.part2.id});
     if (!mounted) return;
-    _say('Split. "${result.part2.title}" is now in the activity list.');
+    _say(
+      'Split. "${result.part2.title}" is now in the activity list.'
+      '${_transcriptNote(result.transcripts)}',
+    );
+  }
+
+  /// Says when saved transcripts could not follow a trim or split
+  /// (ADR-081); empty when they did, or there were none.
+  String _transcriptNote(TranscriptCarryReport report) {
+    if (report.unchecked) {
+      return ' Saved transcripts could not be checked, so any are left as '
+          'they were.';
+    }
+    if (report.notCarried == 0) return '';
+    return report.notCarried == 1
+        ? ' A saved transcript could not be moved and is left as it was.'
+        : ' ${report.notCarried} saved transcripts could not be moved and '
+              'are left as they were.';
+  }
+
+  /// The transcription screen keeps transcripts in memory; refresh it only
+  /// if it is already open, so this never loads a model (ADR-081).
+  Future<void> _reloadTranscripts(Set<String> activityIds) async {
+    if (!ref.exists(transcriptionControllerProvider)) return;
+    try {
+      final controller = ref.read(transcriptionControllerProvider).value;
+      await controller?.reloadActivities(activityIds);
+    } on Object {
+      // Shown again the next time the app starts.
+    }
   }
 
   Future<void> _applyPermanently() async {
@@ -353,13 +399,15 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
       return;
     }
     await _load();
+    await _reloadTranscripts({widget.activityId});
     if (!mounted) return;
+    final note = _transcriptNote(result.transcripts);
     if (result.originals.isEmpty) {
       _say(
         result.sharedOriginals > 0
             ? 'Trims applied. The original recording is kept because '
-                  'another activity still uses it.'
-            : 'Trims applied.',
+                  'another activity still uses it.$note'
+            : 'Trims applied.$note',
       );
       return;
     }
@@ -373,12 +421,12 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
       if (!mounted) return;
       _say(
         removed == result.originals.length
-            ? 'Trims applied. Originals removed.'
+            ? 'Trims applied. Originals removed.$note'
             : 'Trims applied. Some originals could not be removed and are '
-                  'still on this device.',
+                  'still on this device.$note',
       );
     } else {
-      _say('Trims applied. Your originals are kept.');
+      _say('Trims applied. Your originals are kept.$note');
     }
   }
 

@@ -21,6 +21,8 @@ class TranscriptLoadResult {
 ///
 /// Owns only `root/transcripts-v1/<activity>/<segment>.json`. There is deliberately
 /// no delete operation and no relationship to model removal or audio writes.
+/// [carry] renames transcripts a trim or split replaced to
+/// `<segment>.json.superseded-<ms>` beside them (ADR-081); they are kept.
 /// Atomic replacement uses a sibling temporary file, flushed before rename.
 /// App-process writers serialize, including separate store instances; arbitrary
 /// external writers/processes are not supported. A failed write keeps old text.
@@ -212,6 +214,115 @@ class TranscriptStore {
       await _write(file, updated);
       return updated;
     });
+  }
+
+  /// Moves saved transcripts to the recordings a permanent trim or a split
+  /// made (FR-TRN-08, ADR-081) [P2-09b].
+  ///
+  /// [documents] are written whole, machine text and corrections. [retire]
+  /// names the transcripts they replace. Nothing is deleted: a retired
+  /// transcript is renamed beside itself (`<segment>.json.superseded-<ms>`),
+  /// which listings ignore, and one whose key a new document reuses is
+  /// first copied there when its text changes. A document may only reuse a
+  /// key that holds no transcript or one named in [retire].
+  ///
+  /// Order keeps the old text readable on any failure: every key is checked
+  /// first, then new keys are written, then reused keys are replaced
+  /// (atomic, each after its copy), and retired transcripts are renamed
+  /// last. A failure throws; transcripts not yet replaced or renamed stay
+  /// where they were.
+  Future<void> carry({
+    required List<TranscriptDocument> documents,
+    required List<(String, String)> retire,
+  }) async {
+    final retired = {for (final (a, s) in retire) _key(a, s)};
+    final written = {
+      for (final d in documents) _key(d.activityId, d.segmentId),
+    };
+    if (written.length != documents.length) {
+      throw ArgumentError('Each carried transcript needs its own recording');
+    }
+    final fresh = <TranscriptDocument>[];
+    final reused = <TranscriptDocument>[];
+    for (final document in documents) {
+      if (retired.contains(_key(document.activityId, document.segmentId))) {
+        reused.add(document);
+        continue;
+      }
+      final existing = await load(
+        activityId: document.activityId,
+        segmentId: document.segmentId,
+      );
+      if (existing.state != TranscriptLoadState.missing) {
+        throw StateError('Another transcript already uses this recording');
+      }
+      fresh.add(document);
+    }
+    for (final document in fresh) {
+      final file = _file(document.activityId, document.segmentId);
+      await _serialized(file, () async {
+        final existing = await load(
+          activityId: document.activityId,
+          segmentId: document.segmentId,
+        );
+        if (existing.state != TranscriptLoadState.missing) {
+          throw StateError('Another transcript already uses this recording');
+        }
+        await _write(file, document);
+      });
+    }
+    for (final document in reused) {
+      final file = _file(document.activityId, document.segmentId);
+      await _serialized(file, () async {
+        final existing = await load(
+          activityId: document.activityId,
+          segmentId: document.segmentId,
+        );
+        if (existing.state == TranscriptLoadState.ready &&
+            _contentKey(existing.document!) != _contentKey(document)) {
+          await _checkPath(file);
+          await file.copy(await _supersededPath(file));
+        } else if (existing.state != TranscriptLoadState.ready &&
+            existing.state != TranscriptLoadState.missing) {
+          throw StateError('Existing transcript cannot be safely replaced');
+        }
+        await _write(file, document);
+      });
+    }
+    for (final (activityId, segmentId) in retire) {
+      if (written.contains(_key(activityId, segmentId))) continue;
+      final file = _file(activityId, segmentId);
+      await _serialized(file, () async {
+        await _checkPath(file);
+        if (!await file.exists()) return;
+        await file.rename(await _supersededPath(file));
+      });
+    }
+  }
+
+  String _key(String activityId, String segmentId) =>
+      '${validateTranscriptId(activityId)}/${validateTranscriptId(segmentId)}';
+
+  String _contentKey(TranscriptDocument document) => jsonEncode({
+    'spans': document.machineSpans.map((span) => span.toJson()).toList(),
+    'corrections': {
+      for (final e in document.corrections.entries) '${e.key}': e.value,
+    },
+    'model': document.modelId,
+  });
+
+  Future<String> _supersededPath(File file) async {
+    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    var path = '${file.path}.superseded-$stamp';
+    for (
+      var n = 2;
+      await FileSystemEntity.type(path, followLinks: false) !=
+          FileSystemEntityType.notFound;
+      n++
+    ) {
+      path = '${file.path}.superseded-$stamp-$n';
+    }
+    return path;
   }
 
   String _originalKey(TranscriptDocument document) => jsonEncode({
