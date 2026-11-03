@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.net.Uri
@@ -341,6 +344,47 @@ class RecordingForegroundService : Service() {
             )
             isActive = true
         }
+        claimMediaButtons()
+    }
+
+    /**
+     * Android sends headset buttons to the app that most recently played
+     * audio, and a recorder plays none. A fifth of a second of silence makes
+     * this session the media button session. No audio focus is requested,
+     * so other apps are not paused and recording is unaffected; an app that
+     * plays audio later takes the buttons back [P2-06].
+     */
+    private fun claimMediaButtons() {
+        Thread {
+            try {
+                val rate = 16000
+                val samples = rate / 5
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build(),
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(rate)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build(),
+                    )
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .setBufferSizeInBytes(samples * 2)
+                    .build()
+                track.write(ShortArray(samples), 0, samples)
+                track.play()
+                Thread.sleep(300)
+                track.stop()
+                track.release()
+            } catch (_: Exception) {
+                // Buttons then reach Attenlume only while no other app claims them.
+            }
+        }.start()
     }
 
     private fun notifyTile(context: android.content.Context) {
