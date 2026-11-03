@@ -25,6 +25,7 @@ import androidx.core.app.ServiceCompat
 class RecordingForegroundService : Service() {
 
     companion object {
+        var isRunning: Boolean = false
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "attenlume_recording_channel"
 
@@ -57,6 +58,8 @@ class RecordingForegroundService : Service() {
 
         when (action) {
             ACTION_START -> {
+                isRunning = true
+                notifyTile(this)
                 currentActivityId = intent.getStringExtra(EXTRA_ACTIVITY_ID)
                 currentTitle = intent.getStringExtra(EXTRA_TITLE) ?: ""
                 currentState = intent.getStringExtra(EXTRA_STATE) ?: "recording"
@@ -94,6 +97,8 @@ class RecordingForegroundService : Service() {
             }
 
             ACTION_STOP_SERVICE -> {
+                isRunning = false
+                notifyTile(this)
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -264,5 +269,22 @@ class RecordingForegroundService : Service() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    override fun onDestroy() {
+        isRunning = false
+        notifyTile(this)
+        super.onDestroy()
+    }
+
+    private fun notifyTile(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                android.service.quicksettings.TileService.requestListeningState(
+                    context,
+                    android.content.ComponentName(context, RecordTileService::class.java),
+                )
+            } catch (_: Exception) {}
+        }
     }
 }

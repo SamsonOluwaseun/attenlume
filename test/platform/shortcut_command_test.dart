@@ -15,6 +15,10 @@ void main() {
   group('P0-13 FR-HF-05 deep link parsing', () {
     test('every documented URI maps to its action', () {
       expect(
+        _parse('attenlume://record')?.action,
+        ShortcutAction.startRecording,
+      );
+      expect(
         _parse('attenlume://record/start')?.action,
         ShortcutAction.startRecording,
       );
@@ -45,7 +49,6 @@ void main() {
     test('anything else is dropped, never guessed at', () {
       expect(_parse('conferencecompanion://record/start'), isNull);
       expect(_parse('https://attenlume.app/record/start'), isNull);
-      expect(_parse('attenlume://record'), isNull);
       expect(_parse('attenlume://record/delete'), isNull);
       expect(_parse('attenlume://record/start/now'), isNull);
       expect(_parse('attenlume://bookmark/extra'), isNull);
@@ -68,6 +71,10 @@ void main() {
       expect(
         _parse('attenlume://record/stop?source=app_shortcut')?.source,
         ShortcutSource.appShortcut,
+      );
+      expect(
+        _parse('attenlume://record/start?source=assistant')?.source,
+        ShortcutSource.assistant,
       );
       expect(
         _parse('attenlume://record/stop?source=somewhere')?.source,

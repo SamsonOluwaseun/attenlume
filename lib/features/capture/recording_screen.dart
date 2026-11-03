@@ -38,12 +38,14 @@ class RecordingScreen extends ConsumerStatefulWidget {
     this.onBack,
     this.clock = DateTime.now,
     this.enableTicker = true,
+    this.autoStart = false,
   });
 
   final String activityId;
   final VoidCallback? onBack;
   final DateTime Function() clock;
   final bool enableTicker;
+  final bool autoStart;
 
   @override
   ConsumerState<RecordingScreen> createState() => _RecordingScreenState();
@@ -53,6 +55,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   Activity? _activity;
   Conference? _conference;
   bool _isLoading = true;
+  bool _autoStarted = false;
 
   Timer? _ticker;
   Duration _priorSegmentsDuration = Duration.zero;
@@ -153,6 +156,13 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         _inputDeviceLabel = deviceLabel;
         _isLoading = false;
       });
+      if (widget.autoStart && !_autoStarted) {
+        _autoStarted = true;
+        final status = ref.read(recordingStatusProvider).asData?.value;
+        if (status == null || !status.state.holdsActivity) {
+          unawaited(_handleStartRecord());
+        }
+      }
     }
   }
 

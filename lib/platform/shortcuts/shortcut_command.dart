@@ -34,7 +34,8 @@ enum ShortcutSource {
   appShortcut('app_shortcut'),
   appIntent('app_intent'),
   notification('notification'),
-  deepLink('deep_link');
+  deepLink('deep_link'),
+  assistant('assistant');
 
   const ShortcutSource(this.key);
   final String key;
@@ -95,6 +96,7 @@ class ShortcutCommand {
       ('record', ['start']) => ShortcutAction.startRecording,
       ('record', ['stop']) => ShortcutAction.stopRecording,
       ('record', ['toggle']) => ShortcutAction.toggleRecording,
+      ('record', []) => ShortcutAction.startRecording,
       ('bookmark', []) => ShortcutAction.bookmark,
       ('photo', []) => ShortcutAction.takePhoto,
       ('conversation', ['new']) => ShortcutAction.newConversation,
