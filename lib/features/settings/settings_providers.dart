@@ -28,6 +28,12 @@ final photoKeepHighestQualitySettingProvider = FutureProvider<bool>(
   (ref) => ref.watch(settingsRepositoryProvider).photoKeepHighestQuality(),
 );
 
+/// "Headset button adds a bookmark" (P2-06). The foreground service reads
+/// the setting itself when a recording starts; this is for the Settings screen.
+final headsetBookmarkSettingProvider = FutureProvider<bool>(
+  (ref) => ref.watch(settingsRepositoryProvider).headsetBookmark(),
+);
+
 /// System, light or dark. The app follows the system until it has loaded.
 final themeModeSettingProvider = FutureProvider<ThemeMode>(
   (ref) => ref.watch(settingsRepositoryProvider).themeMode(),

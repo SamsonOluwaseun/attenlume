@@ -8,7 +8,9 @@ import '../../app/theme/tokens.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../domain/models/enums.dart';
+import '../../domain/services/capture_settings.dart';
 import '../capture/recording_banner.dart';
+import '../capture/recording_providers.dart' show capturePlatformProvider;
 import '../guide/quick_guide_screen.dart';
 import '../privacy/privacy_screen.dart';
 import '../storage_manager/storage_manager_screen.dart';
@@ -58,6 +60,9 @@ class SettingsScreen extends ConsumerWidget {
     final profile = ref.watch(defaultRecordingProfileSettingProvider).value;
     final safety = ref.watch(safetyThresholdsSettingProvider).value;
     final keepPhotos = ref.watch(photoKeepHighestQualitySettingProvider).value;
+    final headsetBookmark = ref.watch(headsetBookmarkSettingProvider).value;
+    final isAndroid =
+        ref.watch(capturePlatformProvider) == CapturePlatform.android;
     final themeMode = ref.watch(themeModeSettingProvider).value;
     final supportAvailable = ref.watch(supportAfterExportProvider).available;
 
@@ -152,6 +157,24 @@ class SettingsScreen extends ConsumerWidget {
                     safetyThresholdsSettingProvider,
                   ),
                 ),
+                if (isAndroid)
+                  SwitchListTile(
+                    key: const Key('settings-headset-bookmark'),
+                    secondary: const Icon(Icons.headset_mic_outlined),
+                    title: const Text('Headset button adds a bookmark'),
+                    subtitle: const Text(
+                      'While recording, a press of the play or call button on '
+                      'wired or Bluetooth headphones marks the moment. '
+                      'Applies from the next recording.',
+                    ),
+                    value: headsetBookmark ?? false,
+                    onChanged: headsetBookmark == null
+                        ? null
+                        : (on) => save(
+                            () => settings.setHeadsetBookmark(on),
+                            headsetBookmarkSettingProvider,
+                          ),
+                  ),
                 heading('Photos'),
                 _ChoiceTile<bool>(
                   key: const Key('settings-photo-quality'),

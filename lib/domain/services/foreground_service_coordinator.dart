@@ -7,6 +7,7 @@ import '../../platform/foreground_service/foreground_service_bridge.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../models/enums.dart';
 import 'interruption_coordinator.dart';
+import 'one_active_coordinator.dart';
 import 'recording_service.dart';
 import 'recording_state.dart';
 
@@ -34,6 +35,8 @@ class ForegroundServiceCoordinator implements InterruptionNoticeSink {
     required this.bridge,
     required this.inAppNotices,
     this.clock = systemUtcClock,
+    this.headsetBookmarksEnabled,
+    this.confirmations,
   });
 
   final RecordingService recorder;
@@ -42,6 +45,14 @@ class ForegroundServiceCoordinator implements InterruptionNoticeSink {
   final ForegroundServiceBridge bridge;
   final InterruptionNoticeSink inAppNotices;
   final UtcClock clock;
+
+  /// Reads "Headset button adds a bookmark" when a recording starts (P2-06).
+  final Future<bool> Function()? headsetBookmarksEnabled;
+
+  /// Shows the headset bookmark confirmation in the app (P2-06).
+  final TriggerConfirmationSink? confirmations;
+
+  bool _headsetBookmarks = false;
 
   StreamSubscription<RecordingStatus>? _statusSubscription;
   StreamSubscription<ForegroundServiceAction>? _actionSubscription;
@@ -84,6 +95,10 @@ class ForegroundServiceCoordinator implements InterruptionNoticeSink {
 
     final message = _buildMessage(status, elapsed);
 
+    if (!bridge.isRunning) {
+      _headsetBookmarks = await headsetBookmarksEnabled?.call() ?? false;
+    }
+
     final details = NotificationDetails(
       activityId: activityId,
       title: title,
@@ -91,6 +106,7 @@ class ForegroundServiceCoordinator implements InterruptionNoticeSink {
       elapsed: elapsed,
       baseTimeUtc: baseTimeUtc,
       message: message,
+      headsetBookmarks: _headsetBookmarks,
     );
 
     if (!bridge.isRunning) {
@@ -157,35 +173,55 @@ class ForegroundServiceCoordinator implements InterruptionNoticeSink {
       case ForegroundServiceAction.stop:
         await recorder.stop();
       case ForegroundServiceAction.bookmark:
-        final status = recorder.status;
-        final activityId = status.activityId;
-        if (status.state.holdsActivity && activityId != null) {
-          await media.addBookmark(
-            activityId: activityId,
-            source: BookmarkSource.notification,
-            atUtc: clock(),
+        await _bookmark(BookmarkSource.notification, 'Bookmark added');
+      case ForegroundServiceAction.headsetBookmark:
+        // Ignored if the setting was turned off after the recording started.
+        if (!_headsetBookmarks) return;
+        final added = await _bookmark(
+          BookmarkSource.headset,
+          'Bookmark added from headset',
+        );
+        if (added) {
+          await confirmations?.confirm(
+            RecordingTrigger.shortcut,
+            'Bookmark added from headset',
           );
-          if (bridge.isRunning) {
-            final activity = await activities.get(activityId);
-            final elapsed = await calculateElapsed(activityId, status);
-            await bridge.updateNotification(
-              NotificationDetails(
-                activityId: activityId,
-                title: activity?.title ?? 'Recording',
-                state: status.state,
-                elapsed: elapsed,
-                baseTimeUtc: status.state == RecordingState.recording
-                    ? clock().subtract(elapsed)
-                    : null,
-                message: 'Bookmark added',
-              ),
-            );
-          }
         }
       case ForegroundServiceAction.photo:
         // Photo action launches app camera via intent
         break;
     }
+  }
+
+  /// Adds a bookmark to the recording holding the recorder and says so in
+  /// the notification. False when nothing is recording.
+  Future<bool> _bookmark(BookmarkSource source, String message) async {
+    final status = recorder.status;
+    final activityId = status.activityId;
+    if (!status.state.holdsActivity || activityId == null) return false;
+    await media.addBookmark(
+      activityId: activityId,
+      source: source,
+      atUtc: clock(),
+    );
+    if (bridge.isRunning) {
+      final activity = await activities.get(activityId);
+      final elapsed = await calculateElapsed(activityId, status);
+      await bridge.updateNotification(
+        NotificationDetails(
+          activityId: activityId,
+          title: activity?.title ?? 'Recording',
+          state: status.state,
+          elapsed: elapsed,
+          baseTimeUtc: status.state == RecordingState.recording
+              ? clock().subtract(elapsed)
+              : null,
+          message: message,
+          headsetBookmarks: _headsetBookmarks,
+        ),
+      );
+    }
+    return true;
   }
 
   @override
@@ -207,6 +243,7 @@ class ForegroundServiceCoordinator implements InterruptionNoticeSink {
                 ? clock().subtract(elapsed)
                 : null,
             message: notice.message,
+            headsetBookmarks: _headsetBookmarks,
           ),
         );
       }

@@ -266,6 +266,46 @@ void main() {
       expect(find.byType(PrivacyScreen), findsOneWidget);
     });
 
+    testWidgets('P2-06 Android shows the headset bookmark switch, off until '
+        'turned on', (tester) async {
+      tallScreen(tester);
+      await tester.pumpWidget(
+        app(
+          const SettingsScreen(),
+          overrides: [
+            capturePlatformProvider.overrideWithValue(CapturePlatform.android),
+          ],
+        ),
+      );
+      await settle(tester);
+
+      final tile = find.byKey(const Key('settings-headset-bookmark'));
+      expect(tile, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(tile).value, isFalse);
+      await tester.tap(tile);
+      await settle(tester);
+
+      expect(await t.settings.headsetBookmark(), isTrue);
+      expect(tester.widget<SwitchListTile>(tile).value, isTrue);
+    });
+
+    testWidgets('P2-06 other platforms have no headset bookmark switch', (
+      tester,
+    ) async {
+      tallScreen(tester);
+      await tester.pumpWidget(
+        app(
+          const SettingsScreen(),
+          overrides: [
+            capturePlatformProvider.overrideWithValue(CapturePlatform.windows),
+          ],
+        ),
+      );
+      await settle(tester);
+
+      expect(find.byKey(const Key('settings-headset-bookmark')), findsNothing);
+    });
+
     testWidgets('FR-STO-05 5.11 Storage opens the Storage Manager', (
       tester,
     ) async {

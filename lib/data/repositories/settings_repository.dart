@@ -121,6 +121,16 @@ class SettingsRepository {
   Future<void> setPhotoKeepHighestQuality(bool keep) =>
       _db.writeSetting(photoKeepHighestQualityKey, keep ? 'true' : 'false');
 
+  static const headsetBookmarkKey = 'headset_bookmark';
+
+  /// "Headset button adds a bookmark" (Android, P2-06, ADR-079). Off unless
+  /// turned on: the button keeps its usual meaning for other apps.
+  Future<bool> headsetBookmark() async =>
+      await _db.readSetting(headsetBookmarkKey) == 'true';
+
+  Future<void> setHeadsetBookmark(bool on) =>
+      _db.writeSetting(headsetBookmarkKey, on ? 'true' : 'false');
+
   /// The [PhotoQuality] the photo service uses for the next photo.
   Future<PhotoQuality> photoQuality() async =>
       PhotoQuality(keepOriginal: await photoKeepHighestQuality());

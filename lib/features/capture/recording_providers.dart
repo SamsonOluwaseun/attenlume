@@ -157,6 +157,9 @@ final foregroundServiceCoordinatorProvider =
         media: ref.watch(mediaAssetRepositoryProvider),
         bridge: ref.watch(foregroundServiceBridgeProvider),
         inAppNotices: ref.watch(interruptionNoticesProvider),
+        headsetBookmarksEnabled: () =>
+            ref.read(settingsRepositoryProvider).headsetBookmark(),
+        confirmations: ref.watch(triggerConfirmationsProvider),
       )..start();
       ref.onDispose(coordinator.dispose);
       return coordinator;
