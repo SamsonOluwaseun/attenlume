@@ -39,14 +39,41 @@ class ShortcutCoordinator {
   /// Replaces navigation in tests.
   final void Function(Widget screen)? onNavigate;
 
+  Route<void>? _lastRoute;
+  String? _lastKey;
+
+  static String _keyOf(Widget screen) => screen is RecordingScreen
+      ? 'recording:${screen.activityId}'
+      : '${screen.runtimeType}';
+
+  /// Pushes [screen]. If an earlier shortcut opened the same screen and it is
+  /// still open, it is brought back to the top instead (it follows the
+  /// recording status itself), so repeated taps do not stack copies behind
+  /// Back. A prompt open over it, such as the privacy reminder, is left
+  /// alone [P2-03].
   void _push(Widget screen) {
     if (onNavigate != null) {
       onNavigate!(screen);
       return;
     }
-    navigatorKey.currentState?.push(
-      MaterialPageRoute<void>(builder: (_) => screen),
-    );
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+    final key = _keyOf(screen);
+    final last = _lastRoute;
+    if (last != null && last.isActive && _lastKey == key) {
+      Route<dynamic>? top;
+      navigator.popUntil((r) {
+        top ??= r;
+        return true;
+      });
+      if (top is PopupRoute) return;
+      navigator.popUntil((r) => r == last);
+      return;
+    }
+    final route = MaterialPageRoute<void>(builder: (_) => screen);
+    _lastRoute = route;
+    _lastKey = key;
+    navigator.push(route);
   }
 
   /// The activity holding the recorder, or null when nothing is recording.
