@@ -27,6 +27,7 @@ module.exports = {
             'Use the Settings gear at the top of the opening page to reach settings before creating a conference. Type a name, for example Samlytics Conference 2026.',
             'Tap Create conference. You can add dates and goals later.',
             'Prefer to fill everything in now? Tap Set up with wizard.',
+            'Have the programme as a CSV or calendar (ICS) file? Tap Import agenda on the conference page, then pick sessions from it when you start an activity.',
             'Later, tap Open previous to see My conferences. Search by name or place, and use the bar at the bottom (at the side on tablets and Windows) for Record, Library and Settings.',
             'While recording, the status banner and Stop action remain available in Settings as well as the other navigation pages.',
           ],
@@ -37,8 +38,7 @@ module.exports = {
           points: [
             'An activity is anything you capture: a keynote, panel, workshop, conversation or your own reflection.',
             'Tap Start activity, add a title if you like, then choose its type.',
-            'Quick start buttons create a Session, Conversation, Exhibit or Reflection in one tap.',
-          ],
+            'Quick start buttons create a Session, Conversation, Exhibit or Reflection in one tap.',          ],
         },
       ],
     },
@@ -53,8 +53,7 @@ module.exports = {
           points: [
             'Tap Record. The first time, allow microphone access.',
             'LIVE, the timer and the level meter show it is recording. The line under the timer shows how many hours your storage allows.',
-            'Pause or Stop at any time. Recording carries on with the screen locked, and Android shows Stop in the notification.',
-            'On Windows, minimise to keep recording. Use the tray to reopen, or stop, save and quit. Closing asks first. Shutdown cancels while saving; retry after Attenlume closes.',
+            'Pause or Stop at any time. Recording carries on with the screen locked, and Android shows Stop in the notification.',            'On Windows, minimise to keep recording. Use the tray to reopen, or stop, save and quit. Closing asks first. Shutdown cancels while saving; retry after Attenlume closes.',
           ],
         },
         {
@@ -64,6 +63,7 @@ module.exports = {
             'Tap a one-tap bookmark such as Important moment, Question or Follow-up. It is saved at that point in the recording.',
             'Tap Note to write a quick thought.',
             'Tick Mark as private reflection to keep it out of exports.',
+            'On Android, long-press the app icon to start, bookmark or stop without opening the app first, or add the Record tile to Quick Settings.',
           ],
         },
         {
@@ -139,6 +139,7 @@ module.exports = {
           points: [
             'Tap Settings in the navigation bar.',
             'Choose the default recording quality, when Attenlume checks in during long recordings, photo quality and the theme.',
+            'On Android, turn on Headset button adds a bookmark. While recording, a press of the play or call button on wired or Bluetooth headphones marks the moment without pausing.',
             'Privacy and app lock, the quick guide and About are here too.',
           ],
         },
