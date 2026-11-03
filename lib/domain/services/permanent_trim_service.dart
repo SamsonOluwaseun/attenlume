@@ -15,6 +15,7 @@ import '../models/enums.dart';
 import '../models/media.dart';
 import 'cut_range_math.dart';
 import 'review_timeline.dart';
+import 'transcript_carrier.dart';
 
 /// What a permanent trim does to one segment (FR-REV-06) [P1-19].
 class SegmentTrimChange {
@@ -127,9 +128,13 @@ class PermanentTrimResult {
     required this.filesWritten,
     required this.originals,
     required this.sharedOriginals,
+    this.transcripts = TranscriptCarryReport.none,
   });
 
   final int filesWritten;
+
+  /// Saved transcripts moved to the trimmed recordings (ADR-081).
+  final TranscriptCarryReport transcripts;
 
   /// Originals no row names any more, offered for removal.
   final List<KeptOriginal> originals;
@@ -169,6 +174,7 @@ class PermanentTrimService {
     this.reserveBytes = 100 * 1024 * 1024,
     this.minimumMs = 100,
     this.newId = uuidV4,
+    this.transcripts,
   });
 
   final ActivityRepository activities;
@@ -185,6 +191,10 @@ class PermanentTrimService {
   /// audio frames, so a re-trim must not chase a few milliseconds.
   final int minimumMs;
   final IdGenerator newId;
+
+  /// Moves saved transcripts to the trimmed recordings (ADR-081). Without
+  /// it they stay under the replaced recordings.
+  final TranscriptCarrier? transcripts;
 
   Future<PermanentTrimPlan> plan(String activityId) async {
     final segments = await media.segmentsFor(activityId);
@@ -246,6 +256,10 @@ class PermanentTrimService {
         'space and try again.',
       );
     }
+
+    // Saved transcripts are files, not rows: read them before anything
+    // changes so they can follow the new recordings (ADR-081).
+    final transcriptsBefore = await transcripts?.read(activityId);
 
     // 1. Write and verify every new file. Any failure removes them all.
     final written = <TrimmedSegment>[];
@@ -321,7 +335,13 @@ class PermanentTrimService {
       );
     }
 
-    // 3. Derived waveform summaries follow (ADR-034). Failures only mean
+    // 3. Saved transcripts follow, keeping the lines still in the kept
+    // audio. Never fails the trim: one that cannot move stays as it was.
+    final carried = transcriptsBefore == null
+        ? TranscriptCarryReport.none
+        : await transcripts!.afterTrim(transcriptsBefore, pieces: waveforms);
+
+    // Derived waveform summaries follow (ADR-034). Failures only mean
     // a flat line on the review screen.
     await _sliceWaveforms(
       root,
@@ -352,6 +372,7 @@ class PermanentTrimService {
       filesWritten: written.length,
       originals: originals,
       sharedOriginals: shared,
+      transcripts: carried,
     );
   }
 

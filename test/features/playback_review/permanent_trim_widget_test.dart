@@ -87,6 +87,7 @@ void main() {
         capturePlatformProvider.overrideWithValue(CapturePlatform.android),
         mediaFreeBytesProvider.overrideWith((ref) async => null),
         mediaRootProvider.overrideWithValue(() async => root),
+        transcriptCarrierProvider.overrideWithValue(null),
         freeSpaceProbeProvider.overrideWithValue(const UnknownFreeSpaceProbe()),
         audioPlaybackEngineFactoryProvider.overrideWithValue(
           FakePlaybackEngine.new,
