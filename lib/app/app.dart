@@ -5,15 +5,21 @@ import '../features/capture/crash_recovery_dialog.dart';
 import '../features/onboarding/welcome_screen.dart';
 import '../features/privacy/app_lock_gate.dart';
 import '../features/settings/settings_providers.dart';
+import '../features/shortcuts/shortcut_gate.dart';
+import '../features/shortcuts/shortcut_providers.dart';
 import '../presentation/components/focus_ring_overlay.dart';
 import 'theme/app_theme.dart';
 
 class AttenlumeApp extends ConsumerWidget {
-  const AttenlumeApp({super.key});
+  const AttenlumeApp({super.key, this.navigatorKey});
+
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final navKey = navigatorKey ?? ref.watch(appNavigatorKeyProvider);
     return MaterialApp(
+      navigatorKey: navKey,
       title: 'Attenlume',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
@@ -24,7 +30,9 @@ class AttenlumeApp extends ConsumerWidget {
       // (FR-PRI-06, ADR-041). Off by default.
       // The keyboard focus ring is drawn over every route (NFR-09, ADR-050).
       builder: (context, child) => FocusRingOverlay(
-        child: AppLockGate(child: child ?? const SizedBox.shrink()),
+        child: AppLockGate(
+          child: ShortcutGate(child: child ?? const SizedBox.shrink()),
+        ),
       ),
       // Crash recovery runs on every start (FR-REC-08).
       home: const CrashRecoveryGate(child: WelcomeScreen()),

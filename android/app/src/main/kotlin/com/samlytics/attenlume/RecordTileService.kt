@@ -22,7 +22,7 @@ class RecordTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         qsTile?.apply {
-            state = Tile.STATE_INACTIVE
+            state = if (RecordingForegroundService.isRunning) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             label = getString(R.string.tile_record_label)
             updateTile()
         }
