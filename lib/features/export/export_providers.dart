@@ -26,6 +26,7 @@ final exportServiceProvider = Provider<ExportService>(
     tempRoot: getTemporaryDirectory,
     freeSpace: ref.watch(freeSpaceProbeProvider),
     transcriptStore: _transcriptStore,
+    plannedSessions: ref.watch(plannedSessionRepositoryProvider),
   ),
 );
 

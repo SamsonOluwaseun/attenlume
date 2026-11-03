@@ -133,6 +133,7 @@ class A11yHarness {
     mediaAssetRepositoryProvider.overrideWithValue(t.media),
     cutRangeRepositoryProvider.overrideWithValue(t.cuts),
     exportJobRepositoryProvider.overrideWithValue(t.exports),
+    plannedSessionRepositoryProvider.overrideWithValue(t.plannedSessions),
     deviceTimezoneServiceProvider.overrideWithValue(const _LondonTimezone()),
     audioCaptureEngineProvider.overrideWithValue(engine),
     photoCameraProvider.overrideWithValue(camera),

@@ -7,6 +7,7 @@ import 'conference_repository.dart';
 import 'cut_range_repository.dart';
 import 'export_job_repository.dart';
 import 'media_asset_repository.dart';
+import 'planned_session_repository.dart';
 import 'settings_repository.dart';
 
 // Repository providers [P0-09]. Tests override appDatabaseProvider.
@@ -33,6 +34,11 @@ final cutRangeRepositoryProvider = Provider<CutRangeRepository>(
 
 final exportJobRepositoryProvider = Provider<ExportJobRepository>(
   (ref) => ExportJobRepository(ref.watch(appDatabaseProvider)),
+);
+
+/// The imported agenda (ADR-082) [P2-07].
+final plannedSessionRepositoryProvider = Provider<PlannedSessionRepository>(
+  (ref) => PlannedSessionRepository(ref.watch(appDatabaseProvider)),
 );
 
 final activeConferencesProvider = StreamProvider<List<Conference>>((ref) {

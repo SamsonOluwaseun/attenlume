@@ -489,6 +489,24 @@ String buildManifestJson(ExportContext context) {
         {'text': g.goalText, 'priority': g.priority},
     ],
     'requested_outputs': [for (final o in c.requestedOutputs) o.key],
+    // The imported agenda (ADR-082), only when there is one, so exports of
+    // conferences without an agenda are unchanged.
+    if (context.plannedSessions.isNotEmpty)
+      'planned_sessions': [
+        for (final p in context.plannedSessions)
+          {
+            'title': p.title,
+            'speakers': p.speakerNames,
+            'room': p.room,
+            'type': p.typeText,
+            'description': p.description,
+            'all_day': p.allDay,
+            'start_utc': _utcIso(p.startUtc),
+            'start_local': _localIso(p.startUtc, tz),
+            'end_utc': p.endUtc == null ? null : _utcIso(p.endUtc),
+            'end_local': p.endUtc == null ? null : _localIso(p.endUtc, tz),
+          },
+      ],
     'exported_at_utc': context.exportedAtUtc.toUtc().toIso8601String(),
     'exported_at_local': _localIso(context.exportedAtUtc, tz),
     'scope': context.request.toScopeJson(),

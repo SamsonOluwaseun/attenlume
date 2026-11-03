@@ -6,6 +6,7 @@ import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../domain/models/export_job.dart';
 import '../../domain/models/media.dart';
+import '../../domain/models/planned_session.dart';
 import '../filesystem/app_data_directory.dart';
 import 'app_database.steps.dart';
 import 'builtin_activity_types.dart';
@@ -21,6 +22,7 @@ part 'app_database.g.dart';
 /// Schema history:
 /// - v1 (P0-02): `app_settings`.
 /// - v2 (P0-09): the Phase 1 tables of section 9.4 and built-in types.
+/// - v3 (P2-07): `planned_sessions`, the imported agenda (ADR-082).
 @DriftDatabase(
   tables: [
     AppSettings,
@@ -34,6 +36,7 @@ part 'app_database.g.dart';
     Bookmarks,
     CutRanges,
     ExportJobs,
+    PlannedSessions,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -48,7 +51,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -65,6 +68,11 @@ class AppDatabase extends _$AppDatabase {
           if (entity == schema.appSettings) continue;
           await _createIfMissing(m, entity);
         }
+      },
+      from2To3: (m, schema) async {
+        // The imported agenda (P2-07, ADR-082). Nothing existing changes.
+        await _createIfMissing(m, schema.plannedSessions);
+        await _createIfMissing(m, schema.plannedSessionsConference);
       },
     ),
     beforeOpen: (details) async {

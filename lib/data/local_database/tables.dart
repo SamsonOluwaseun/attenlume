@@ -5,10 +5,12 @@ import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../domain/models/export_job.dart';
 import '../../domain/models/media.dart';
+import '../../domain/models/planned_session.dart';
 import 'converters.dart';
 
 // Drift tables for BUILD_GUIDE 9.4 [P0-09]. Phase 1.5 and 2 tables
 // (cloud_connections, cloud_export_files, transcripts) come with their phases.
+// planned_sessions arrived in schema v3 (P2-07, ADR-082).
 //
 // IDs are UUID v4 text. Instants are UTC ISO 8601 text (ADR-004). Rows map to
 // the plain domain classes in lib/domain/models via @UseRowClass.
@@ -261,6 +263,30 @@ class ExportJobs extends Table with Timestamps {
   TextColumn get verificationLevel =>
       text().map(const EnumKeyConverter(VerificationLevel.values))();
   TextColumn get lastError => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+/// Sessions on a conference's imported agenda (ADR-082) [P2-07]. Schema v3.
+/// Not activities: no media, no recording state.
+@UseRowClass(PlannedSession)
+@TableIndex(name: 'planned_sessions_conference', columns: {#conferenceId})
+class PlannedSessions extends Table with Timestamps {
+  TextColumn get id => text()();
+  TextColumn get conferenceId =>
+      text().references(Conferences, #id, onDelete: KeyAction.cascade)();
+  TextColumn get title => text()();
+  TextColumn get speakerNames => text().map(const StringListConverter())();
+  TextColumn get room => text().nullable()();
+  TextColumn get typeText => text().nullable()();
+  TextColumn get description => text().nullable()();
+  DateTimeColumn get startUtc => dateTime()();
+  DateTimeColumn get endUtc => dateTime().nullable()();
+  BoolColumn get allDay => boolean()();
+  TextColumn get source =>
+      text().map(const EnumKeyConverter(AgendaSource.values))();
+  TextColumn get sourceUid => text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};

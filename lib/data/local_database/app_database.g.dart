@@ -5599,6 +5599,567 @@ class ExportJobsCompanion extends UpdateCompanion<ExportJob> {
   }
 }
 
+class $PlannedSessionsTable extends PlannedSessions
+    with TableInfo<$PlannedSessionsTable, PlannedSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlannedSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _conferenceIdMeta = const VerificationMeta(
+    'conferenceId',
+  );
+  @override
+  late final GeneratedColumn<String> conferenceId = GeneratedColumn<String>(
+    'conference_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES conferences (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<List<String>, String>
+  speakerNames = GeneratedColumn<String>(
+    'speaker_names',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<List<String>>($PlannedSessionsTable.$converterspeakerNames);
+  static const VerificationMeta _roomMeta = const VerificationMeta('room');
+  @override
+  late final GeneratedColumn<String> room = GeneratedColumn<String>(
+    'room',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _typeTextMeta = const VerificationMeta(
+    'typeText',
+  );
+  @override
+  late final GeneratedColumn<String> typeText = GeneratedColumn<String>(
+    'type_text',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startUtcMeta = const VerificationMeta(
+    'startUtc',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startUtc = GeneratedColumn<DateTime>(
+    'start_utc',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endUtcMeta = const VerificationMeta('endUtc');
+  @override
+  late final GeneratedColumn<DateTime> endUtc = GeneratedColumn<DateTime>(
+    'end_utc',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _allDayMeta = const VerificationMeta('allDay');
+  @override
+  late final GeneratedColumn<bool> allDay = GeneratedColumn<bool>(
+    'all_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("all_day" IN (0, 1))',
+    ),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<AgendaSource, String> source =
+      GeneratedColumn<String>(
+        'source',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<AgendaSource>($PlannedSessionsTable.$convertersource);
+  static const VerificationMeta _sourceUidMeta = const VerificationMeta(
+    'sourceUid',
+  );
+  @override
+  late final GeneratedColumn<String> sourceUid = GeneratedColumn<String>(
+    'source_uid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    createdAt,
+    updatedAt,
+    id,
+    conferenceId,
+    title,
+    speakerNames,
+    room,
+    typeText,
+    description,
+    startUtc,
+    endUtc,
+    allDay,
+    source,
+    sourceUid,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'planned_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PlannedSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('conference_id')) {
+      context.handle(
+        _conferenceIdMeta,
+        conferenceId.isAcceptableOrUnknown(
+          data['conference_id']!,
+          _conferenceIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_conferenceIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('room')) {
+      context.handle(
+        _roomMeta,
+        room.isAcceptableOrUnknown(data['room']!, _roomMeta),
+      );
+    }
+    if (data.containsKey('type_text')) {
+      context.handle(
+        _typeTextMeta,
+        typeText.isAcceptableOrUnknown(data['type_text']!, _typeTextMeta),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('start_utc')) {
+      context.handle(
+        _startUtcMeta,
+        startUtc.isAcceptableOrUnknown(data['start_utc']!, _startUtcMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startUtcMeta);
+    }
+    if (data.containsKey('end_utc')) {
+      context.handle(
+        _endUtcMeta,
+        endUtc.isAcceptableOrUnknown(data['end_utc']!, _endUtcMeta),
+      );
+    }
+    if (data.containsKey('all_day')) {
+      context.handle(
+        _allDayMeta,
+        allDay.isAcceptableOrUnknown(data['all_day']!, _allDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_allDayMeta);
+    }
+    if (data.containsKey('source_uid')) {
+      context.handle(
+        _sourceUidMeta,
+        sourceUid.isAcceptableOrUnknown(data['source_uid']!, _sourceUidMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlannedSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlannedSession(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      conferenceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}conference_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      speakerNames: $PlannedSessionsTable.$converterspeakerNames.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}speaker_names'],
+        )!,
+      ),
+      room: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}room'],
+      ),
+      typeText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type_text'],
+      ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      startUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}start_utc'],
+      )!,
+      endUtc: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}end_utc'],
+      ),
+      allDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}all_day'],
+      )!,
+      source: $PlannedSessionsTable.$convertersource.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}source'],
+        )!,
+      ),
+      sourceUid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_uid'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PlannedSessionsTable createAlias(String alias) {
+    return $PlannedSessionsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<List<String>, String> $converterspeakerNames =
+      const StringListConverter();
+  static TypeConverter<AgendaSource, String> $convertersource =
+      const EnumKeyConverter(AgendaSource.values);
+}
+
+class PlannedSessionsCompanion extends UpdateCompanion<PlannedSession> {
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<String> id;
+  final Value<String> conferenceId;
+  final Value<String> title;
+  final Value<List<String>> speakerNames;
+  final Value<String?> room;
+  final Value<String?> typeText;
+  final Value<String?> description;
+  final Value<DateTime> startUtc;
+  final Value<DateTime?> endUtc;
+  final Value<bool> allDay;
+  final Value<AgendaSource> source;
+  final Value<String?> sourceUid;
+  final Value<int> rowid;
+  const PlannedSessionsCompanion({
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.id = const Value.absent(),
+    this.conferenceId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.speakerNames = const Value.absent(),
+    this.room = const Value.absent(),
+    this.typeText = const Value.absent(),
+    this.description = const Value.absent(),
+    this.startUtc = const Value.absent(),
+    this.endUtc = const Value.absent(),
+    this.allDay = const Value.absent(),
+    this.source = const Value.absent(),
+    this.sourceUid = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PlannedSessionsCompanion.insert({
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    required String id,
+    required String conferenceId,
+    required String title,
+    required List<String> speakerNames,
+    this.room = const Value.absent(),
+    this.typeText = const Value.absent(),
+    this.description = const Value.absent(),
+    required DateTime startUtc,
+    this.endUtc = const Value.absent(),
+    required bool allDay,
+    required AgendaSource source,
+    this.sourceUid = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       id = Value(id),
+       conferenceId = Value(conferenceId),
+       title = Value(title),
+       speakerNames = Value(speakerNames),
+       startUtc = Value(startUtc),
+       allDay = Value(allDay),
+       source = Value(source);
+  static Insertable<PlannedSession> custom({
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? id,
+    Expression<String>? conferenceId,
+    Expression<String>? title,
+    Expression<String>? speakerNames,
+    Expression<String>? room,
+    Expression<String>? typeText,
+    Expression<String>? description,
+    Expression<DateTime>? startUtc,
+    Expression<DateTime>? endUtc,
+    Expression<bool>? allDay,
+    Expression<String>? source,
+    Expression<String>? sourceUid,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (id != null) 'id': id,
+      if (conferenceId != null) 'conference_id': conferenceId,
+      if (title != null) 'title': title,
+      if (speakerNames != null) 'speaker_names': speakerNames,
+      if (room != null) 'room': room,
+      if (typeText != null) 'type_text': typeText,
+      if (description != null) 'description': description,
+      if (startUtc != null) 'start_utc': startUtc,
+      if (endUtc != null) 'end_utc': endUtc,
+      if (allDay != null) 'all_day': allDay,
+      if (source != null) 'source': source,
+      if (sourceUid != null) 'source_uid': sourceUid,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PlannedSessionsCompanion copyWith({
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<String>? id,
+    Value<String>? conferenceId,
+    Value<String>? title,
+    Value<List<String>>? speakerNames,
+    Value<String?>? room,
+    Value<String?>? typeText,
+    Value<String?>? description,
+    Value<DateTime>? startUtc,
+    Value<DateTime?>? endUtc,
+    Value<bool>? allDay,
+    Value<AgendaSource>? source,
+    Value<String?>? sourceUid,
+    Value<int>? rowid,
+  }) {
+    return PlannedSessionsCompanion(
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      id: id ?? this.id,
+      conferenceId: conferenceId ?? this.conferenceId,
+      title: title ?? this.title,
+      speakerNames: speakerNames ?? this.speakerNames,
+      room: room ?? this.room,
+      typeText: typeText ?? this.typeText,
+      description: description ?? this.description,
+      startUtc: startUtc ?? this.startUtc,
+      endUtc: endUtc ?? this.endUtc,
+      allDay: allDay ?? this.allDay,
+      source: source ?? this.source,
+      sourceUid: sourceUid ?? this.sourceUid,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (conferenceId.present) {
+      map['conference_id'] = Variable<String>(conferenceId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (speakerNames.present) {
+      map['speaker_names'] = Variable<String>(
+        $PlannedSessionsTable.$converterspeakerNames.toSql(speakerNames.value),
+      );
+    }
+    if (room.present) {
+      map['room'] = Variable<String>(room.value);
+    }
+    if (typeText.present) {
+      map['type_text'] = Variable<String>(typeText.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (startUtc.present) {
+      map['start_utc'] = Variable<DateTime>(startUtc.value);
+    }
+    if (endUtc.present) {
+      map['end_utc'] = Variable<DateTime>(endUtc.value);
+    }
+    if (allDay.present) {
+      map['all_day'] = Variable<bool>(allDay.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(
+        $PlannedSessionsTable.$convertersource.toSql(source.value),
+      );
+    }
+    if (sourceUid.present) {
+      map['source_uid'] = Variable<String>(sourceUid.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlannedSessionsCompanion(')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('id: $id, ')
+          ..write('conferenceId: $conferenceId, ')
+          ..write('title: $title, ')
+          ..write('speakerNames: $speakerNames, ')
+          ..write('room: $room, ')
+          ..write('typeText: $typeText, ')
+          ..write('description: $description, ')
+          ..write('startUtc: $startUtc, ')
+          ..write('endUtc: $endUtc, ')
+          ..write('allDay: $allDay, ')
+          ..write('source: $source, ')
+          ..write('sourceUid: $sourceUid, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5614,6 +6175,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BookmarksTable bookmarks = $BookmarksTable(this);
   late final $CutRangesTable cutRanges = $CutRangesTable(this);
   late final $ExportJobsTable exportJobs = $ExportJobsTable(this);
+  late final $PlannedSessionsTable plannedSessions = $PlannedSessionsTable(
+    this,
+  );
   late final Index goalsConference = Index(
     'goals_conference',
     'CREATE INDEX goals_conference ON goals (conference_id)',
@@ -5642,6 +6206,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'export_jobs_conference',
     'CREATE INDEX export_jobs_conference ON export_jobs (conference_id)',
   );
+  late final Index plannedSessionsConference = Index(
+    'planned_sessions_conference',
+    'CREATE INDEX planned_sessions_conference ON planned_sessions (conference_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5658,6 +6226,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     bookmarks,
     cutRanges,
     exportJobs,
+    plannedSessions,
     goalsConference,
     activitiesConference,
     interruptionsActivity,
@@ -5665,6 +6234,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     bookmarksActivity,
     cutRangesActivity,
     exportJobsConference,
+    plannedSessionsConference,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -5723,6 +6293,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('export_jobs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'conferences',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('planned_sessions', kind: UpdateKind.delete)],
     ),
   ]);
   @override
@@ -6017,6 +6594,26 @@ final class $$ConferencesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$PlannedSessionsTable, List<PlannedSession>>
+  _plannedSessionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.plannedSessions,
+    aliasName: 'conferences__id__planned_sessions__conference_id',
+  );
+
+  $$PlannedSessionsTableProcessedTableManager get plannedSessionsRefs {
+    final manager = $$PlannedSessionsTableTableManager(
+      $_db,
+      $_db.plannedSessions,
+    ).filter((f) => f.conferenceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _plannedSessionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ConferencesTableFilterComposer
@@ -6178,6 +6775,31 @@ class $$ConferencesTableFilterComposer
           }) => $$ExportJobsTableFilterComposer(
             $db: $db,
             $table: $db.exportJobs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> plannedSessionsRefs(
+    Expression<bool> Function($$PlannedSessionsTableFilterComposer f) f,
+  ) {
+    final $$PlannedSessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.plannedSessions,
+      getReferencedColumn: (t) => t.conferenceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlannedSessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.plannedSessions,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6413,6 +7035,31 @@ class $$ConferencesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> plannedSessionsRefs<T extends Object>(
+    Expression<T> Function($$PlannedSessionsTableAnnotationComposer a) f,
+  ) {
+    final $$PlannedSessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.plannedSessions,
+      getReferencedColumn: (t) => t.conferenceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PlannedSessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.plannedSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ConferencesTableTableManager
@@ -6432,6 +7079,7 @@ class $$ConferencesTableTableManager
             bool goalsRefs,
             bool activitiesRefs,
             bool exportJobsRefs,
+            bool plannedSessionsRefs,
           })
         > {
   $$ConferencesTableTableManager(_$AppDatabase db, $ConferencesTable table)
@@ -6532,6 +7180,7 @@ class $$ConferencesTableTableManager
                 goalsRefs = false,
                 activitiesRefs = false,
                 exportJobsRefs = false,
+                plannedSessionsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -6539,6 +7188,7 @@ class $$ConferencesTableTableManager
                     if (goalsRefs) db.goals,
                     if (activitiesRefs) db.activities,
                     if (exportJobsRefs) db.exportJobs,
+                    if (plannedSessionsRefs) db.plannedSessions,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -6603,6 +7253,26 @@ class $$ConferencesTableTableManager
                           referencedColumn: 'conference_id',
                           typedResults: items,
                         ),
+                      if (plannedSessionsRefs)
+                        await $_getPrefetchedDataByColumns<
+                          Conference,
+                          $ConferencesTable,
+                          PlannedSession,
+                          $PlannedSessionsTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ConferencesTableReferences
+                              ._plannedSessionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ConferencesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).plannedSessionsRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'conference_id',
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -6627,6 +7297,7 @@ typedef $$ConferencesTableProcessedTableManager =
         bool goalsRefs,
         bool activitiesRefs,
         bool exportJobsRefs,
+        bool plannedSessionsRefs,
       })
     >;
 typedef $$GoalsTableCreateCompanionBuilder = GoalsCompanion Function({
@@ -11398,6 +12069,507 @@ typedef $$ExportJobsTableProcessedTableManager =
       ExportJob,
       PrefetchHooks Function({bool conferenceId})
     >;
+typedef $$PlannedSessionsTableCreateCompanionBuilder =
+    PlannedSessionsCompanion Function({
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      required String id,
+      required String conferenceId,
+      required String title,
+      required List<String> speakerNames,
+      Value<String?> room,
+      Value<String?> typeText,
+      Value<String?> description,
+      required DateTime startUtc,
+      Value<DateTime?> endUtc,
+      required bool allDay,
+      required AgendaSource source,
+      Value<String?> sourceUid,
+      Value<int> rowid,
+    });
+typedef $$PlannedSessionsTableUpdateCompanionBuilder =
+    PlannedSessionsCompanion Function({
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<String> id,
+      Value<String> conferenceId,
+      Value<String> title,
+      Value<List<String>> speakerNames,
+      Value<String?> room,
+      Value<String?> typeText,
+      Value<String?> description,
+      Value<DateTime> startUtc,
+      Value<DateTime?> endUtc,
+      Value<bool> allDay,
+      Value<AgendaSource> source,
+      Value<String?> sourceUid,
+      Value<int> rowid,
+    });
+
+final class $$PlannedSessionsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $PlannedSessionsTable, PlannedSession> {
+  $$PlannedSessionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ConferencesTable _conferenceIdTable(_$AppDatabase db) => db
+      .conferences
+      .createAlias('planned_sessions__conference_id__conferences__id');
+
+  $$ConferencesTableProcessedTableManager get conferenceId {
+    final $_column = $_itemColumn<String>('conference_id')!;
+
+    final manager = $$ConferencesTableTableManager(
+      $_db,
+      $_db.conferences,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_conferenceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PlannedSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $PlannedSessionsTable> {
+  $$PlannedSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String>
+  get speakerNames => $composableBuilder(
+    column: $table.speakerNames,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get room => $composableBuilder(
+    column: $table.room,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get typeText => $composableBuilder(
+    column: $table.typeText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startUtc => $composableBuilder(
+    column: $table.startUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endUtc => $composableBuilder(
+    column: $table.endUtc,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<AgendaSource, AgendaSource, String>
+  get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get sourceUid => $composableBuilder(
+    column: $table.sourceUid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ConferencesTableFilterComposer get conferenceId {
+    final $$ConferencesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.conferenceId,
+      referencedTable: $db.conferences,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConferencesTableFilterComposer(
+            $db: $db,
+            $table: $db.conferences,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlannedSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PlannedSessionsTable> {
+  $$PlannedSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get speakerNames => $composableBuilder(
+    column: $table.speakerNames,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get room => $composableBuilder(
+    column: $table.room,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get typeText => $composableBuilder(
+    column: $table.typeText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startUtc => $composableBuilder(
+    column: $table.startUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endUtc => $composableBuilder(
+    column: $table.endUtc,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get allDay => $composableBuilder(
+    column: $table.allDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceUid => $composableBuilder(
+    column: $table.sourceUid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ConferencesTableOrderingComposer get conferenceId {
+    final $$ConferencesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.conferenceId,
+      referencedTable: $db.conferences,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConferencesTableOrderingComposer(
+            $db: $db,
+            $table: $db.conferences,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlannedSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PlannedSessionsTable> {
+  $$PlannedSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<List<String>, String> get speakerNames =>
+      $composableBuilder(
+        column: $table.speakerNames,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<String> get room =>
+      $composableBuilder(column: $table.room, builder: (column) => column);
+
+  GeneratedColumn<String> get typeText =>
+      $composableBuilder(column: $table.typeText, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get startUtc =>
+      $composableBuilder(column: $table.startUtc, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endUtc =>
+      $composableBuilder(column: $table.endUtc, builder: (column) => column);
+
+  GeneratedColumn<bool> get allDay =>
+      $composableBuilder(column: $table.allDay, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<AgendaSource, String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceUid =>
+      $composableBuilder(column: $table.sourceUid, builder: (column) => column);
+
+  $$ConferencesTableAnnotationComposer get conferenceId {
+    final $$ConferencesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.conferenceId,
+      referencedTable: $db.conferences,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ConferencesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.conferences,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PlannedSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PlannedSessionsTable,
+          PlannedSession,
+          $$PlannedSessionsTableFilterComposer,
+          $$PlannedSessionsTableOrderingComposer,
+          $$PlannedSessionsTableAnnotationComposer,
+          $$PlannedSessionsTableCreateCompanionBuilder,
+          $$PlannedSessionsTableUpdateCompanionBuilder,
+          (PlannedSession, $$PlannedSessionsTableReferences),
+          PlannedSession,
+          PrefetchHooks Function({bool conferenceId})
+        > {
+  $$PlannedSessionsTableTableManager(
+    _$AppDatabase db,
+    $PlannedSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlannedSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlannedSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PlannedSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> conferenceId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<List<String>> speakerNames = const Value.absent(),
+                Value<String?> room = const Value.absent(),
+                Value<String?> typeText = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<DateTime> startUtc = const Value.absent(),
+                Value<DateTime?> endUtc = const Value.absent(),
+                Value<bool> allDay = const Value.absent(),
+                Value<AgendaSource> source = const Value.absent(),
+                Value<String?> sourceUid = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PlannedSessionsCompanion(
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                id: id,
+                conferenceId: conferenceId,
+                title: title,
+                speakerNames: speakerNames,
+                room: room,
+                typeText: typeText,
+                description: description,
+                startUtc: startUtc,
+                endUtc: endUtc,
+                allDay: allDay,
+                source: source,
+                sourceUid: sourceUid,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                required String id,
+                required String conferenceId,
+                required String title,
+                required List<String> speakerNames,
+                Value<String?> room = const Value.absent(),
+                Value<String?> typeText = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                required DateTime startUtc,
+                Value<DateTime?> endUtc = const Value.absent(),
+                required bool allDay,
+                required AgendaSource source,
+                Value<String?> sourceUid = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PlannedSessionsCompanion.insert(
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                id: id,
+                conferenceId: conferenceId,
+                title: title,
+                speakerNames: speakerNames,
+                room: room,
+                typeText: typeText,
+                description: description,
+                startUtc: startUtc,
+                endUtc: endUtc,
+                allDay: allDay,
+                source: source,
+                sourceUid: sourceUid,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PlannedSessionsTable, PlannedSession>(table),
+                  $$PlannedSessionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({conferenceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (conferenceId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.conferenceId,
+                        referencedTable: $$PlannedSessionsTableReferences
+                            ._conferenceIdTable(db),
+                        referencedColumn: $$PlannedSessionsTableReferences
+                            ._conferenceIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PlannedSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PlannedSessionsTable,
+      PlannedSession,
+      $$PlannedSessionsTableFilterComposer,
+      $$PlannedSessionsTableOrderingComposer,
+      $$PlannedSessionsTableAnnotationComposer,
+      $$PlannedSessionsTableCreateCompanionBuilder,
+      $$PlannedSessionsTableUpdateCompanionBuilder,
+      (PlannedSession, $$PlannedSessionsTableReferences),
+      PlannedSession,
+      PrefetchHooks Function({bool conferenceId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -11424,4 +12596,6 @@ class $AppDatabaseManager {
       $$CutRangesTableTableManager(_db, _db.cutRanges);
   $$ExportJobsTableTableManager get exportJobs =>
       $$ExportJobsTableTableManager(_db, _db.exportJobs);
+  $$PlannedSessionsTableTableManager get plannedSessions =>
+      $$PlannedSessionsTableTableManager(_db, _db.plannedSessions);
 }
