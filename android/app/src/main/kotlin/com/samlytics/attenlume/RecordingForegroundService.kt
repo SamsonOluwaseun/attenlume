@@ -376,11 +376,14 @@ class RecordingForegroundService : Service() {
                     .setTransferMode(AudioTrack.MODE_STATIC)
                     .setBufferSizeInBytes(samples * 2)
                     .build()
-                track.write(ShortArray(samples), 0, samples)
-                track.play()
-                Thread.sleep(300)
-                track.stop()
-                track.release()
+                try {
+                    track.write(ShortArray(samples), 0, samples)
+                    track.play()
+                    Thread.sleep(300)
+                    track.stop()
+                } finally {
+                    track.release()
+                }
             } catch (_: Exception) {
                 // Buttons then reach Attenlume only while no other app claims them.
             }
