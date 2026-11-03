@@ -236,7 +236,9 @@ void main() {
       expect(activity, isNotNull);
       expect(activity!.conferenceId, conf.id);
       final types = await t.activities.types();
-      final convType = types.firstWhere((t) => t.key == 'business_conversation');
+      final convType = types.firstWhere(
+        (t) => t.key == 'business_conversation',
+      );
       expect(activity.typeId, convType.id);
     });
   });
@@ -297,6 +299,34 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(find.byType(RecordingScreen), findsOneWidget);
+    });
+
+    testWidgets('P2-03 repeated trigger for the same recording does not stack '
+        'a second screen', (tester) async {
+      final conf = await t.conference(name: 'Samlytics Conference 2026');
+      final act = await t.activity(conf.id, title: 'Keynote');
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(t.db),
+            shortcutBridgeProvider.overrideWithValue(fakeBridge),
+            crashRecoveryReportProvider.overrideWith(
+              (ref) async => RecoveryReport.empty,
+            ),
+          ],
+          child: const AttenlumeApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final link = Uri.parse('attenlume://record/start?activity=${act.id}');
+      fakeBridge.send(ShortcutCommand.parse(link)!);
+      await tester.pumpAndSettle();
+      fakeBridge.send(ShortcutCommand.parse(link)!);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RecordingScreen, skipOffstage: false), findsOneWidget);
     });
   });
 }
