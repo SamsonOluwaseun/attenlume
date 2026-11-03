@@ -44,6 +44,9 @@ object ForegroundServiceChannel {
                             elapsedMs?.let { putExtra(RecordingForegroundService.EXTRA_ELAPSED_MS, it) }
                             baseTimeMs?.let { putExtra(RecordingForegroundService.EXTRA_BASE_TIME_MS, it) }
                             putExtra(RecordingForegroundService.EXTRA_MESSAGE, call.argument<String>("message"))
+                            call.argument<Boolean>("headsetBookmarks")?.let {
+                                putExtra(RecordingForegroundService.EXTRA_HEADSET_BOOKMARKS, it)
+                            }
                         }
 
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -68,6 +71,9 @@ object ForegroundServiceChannel {
                             elapsedMs?.let { putExtra(RecordingForegroundService.EXTRA_ELAPSED_MS, it) }
                             baseTimeMs?.let { putExtra(RecordingForegroundService.EXTRA_BASE_TIME_MS, it) }
                             putExtra(RecordingForegroundService.EXTRA_MESSAGE, call.argument<String>("message"))
+                            call.argument<Boolean>("headsetBookmarks")?.let {
+                                putExtra(RecordingForegroundService.EXTRA_HEADSET_BOOKMARKS, it)
+                            }
                         }
                         ctx.startService(intent)
                         result.success(null)

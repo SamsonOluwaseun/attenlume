@@ -10,7 +10,10 @@ enum ForegroundServiceAction {
   resume('resume'),
   stop('stop'),
   bookmark('bookmark'),
-  photo('photo');
+  photo('photo'),
+
+  /// A headset button press while recording (P2-06, ADR-079).
+  headsetBookmark('headset_bookmark');
 
   const ForegroundServiceAction(this.key);
   final String key;
@@ -34,6 +37,7 @@ class NotificationDetails {
     this.elapsed,
     this.baseTimeUtc,
     this.message,
+    this.headsetBookmarks = false,
   });
 
   final String activityId;
@@ -43,6 +47,9 @@ class NotificationDetails {
   final DateTime? baseTimeUtc;
   final String? message;
 
+  /// Listen for headset buttons while this recording runs (P2-06).
+  final bool headsetBookmarks;
+
   Map<String, Object?> toMap() => {
     'activityId': activityId,
     'title': title,
@@ -50,6 +57,7 @@ class NotificationDetails {
     'elapsedMs': elapsed?.inMilliseconds,
     'baseTimeMs': baseTimeUtc?.millisecondsSinceEpoch,
     'message': message,
+    'headsetBookmarks': headsetBookmarks,
   };
 
   @override

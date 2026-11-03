@@ -221,7 +221,10 @@ enum BookmarkSource implements KeyedEnum {
   notification('notification'),
   shortcut('shortcut'),
   hotkey('hotkey'),
-  voice('voice');
+  voice('voice'),
+
+  /// A wired or Bluetooth headset button while recording (P2-06).
+  headset('headset');
 
   const BookmarkSource(this.key);
   @override

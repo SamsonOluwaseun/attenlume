@@ -7,10 +7,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
@@ -45,11 +48,14 @@ class RecordingForegroundService : Service() {
         const val EXTRA_ELAPSED_MS = "elapsedMs"
         const val EXTRA_BASE_TIME_MS = "baseTimeMs"
         const val EXTRA_MESSAGE = "message"
+        const val EXTRA_HEADSET_BOOKMARKS = "headsetBookmarks"
     }
 
     private var currentTitle: String = ""
     private var currentState: String = "idle"
     private var currentActivityId: String? = null
+    /** Present only while recording with "Headset button adds a bookmark" on (P2-06). */
+    private var headsetSession: MediaSession? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -66,6 +72,9 @@ class RecordingForegroundService : Service() {
                 val elapsedMs = if (intent.hasExtra(EXTRA_ELAPSED_MS)) intent.getLongExtra(EXTRA_ELAPSED_MS, 0L) else null
                 val baseTimeMs = if (intent.hasExtra(EXTRA_BASE_TIME_MS)) intent.getLongExtra(EXTRA_BASE_TIME_MS, 0L) else null
                 val message = intent.getStringExtra(EXTRA_MESSAGE)
+                if (intent.hasExtra(EXTRA_HEADSET_BOOKMARKS)) {
+                    setHeadsetBookmarks(intent.getBooleanExtra(EXTRA_HEADSET_BOOKMARKS, false))
+                }
 
                 val notification = buildNotification(currentTitle, currentState, elapsedMs, baseTimeMs, message)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -87,6 +96,9 @@ class RecordingForegroundService : Service() {
                 val elapsedMs = if (intent.hasExtra(EXTRA_ELAPSED_MS)) intent.getLongExtra(EXTRA_ELAPSED_MS, 0L) else null
                 val baseTimeMs = if (intent.hasExtra(EXTRA_BASE_TIME_MS)) intent.getLongExtra(EXTRA_BASE_TIME_MS, 0L) else null
                 val message = intent.getStringExtra(EXTRA_MESSAGE)
+                if (intent.hasExtra(EXTRA_HEADSET_BOOKMARKS)) {
+                    setHeadsetBookmarks(intent.getBooleanExtra(EXTRA_HEADSET_BOOKMARKS, false))
+                }
 
                 val notification = buildNotification(currentTitle, currentState, elapsedMs, baseTimeMs, message)
                 try {
@@ -97,6 +109,7 @@ class RecordingForegroundService : Service() {
             }
 
             ACTION_STOP_SERVICE -> {
+                setHeadsetBookmarks(false)
                 isRunning = false
                 notifyTile(this)
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -272,9 +285,62 @@ class RecordingForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        setHeadsetBookmarks(false)
         isRunning = false
         notifyTile(this)
         super.onDestroy()
+    }
+
+    /**
+     * Turns the headset button listener on or off [P2-06, ADR-079]. A
+     * MediaSession receives play/pause and headset-hook presses; it never
+     * requests audio focus or plays audio, so recording is unaffected
+     * (ADR-043). Released when the recording stops.
+     */
+    private fun setHeadsetBookmarks(on: Boolean) {
+        if (!on) {
+            headsetSession?.run {
+                isActive = false
+                release()
+            }
+            headsetSession = null
+            return
+        }
+        if (headsetSession != null) return
+        headsetSession = MediaSession(this, "AttenlumeHeadsetBookmark").apply {
+            setCallback(object : MediaSession.Callback() {
+                override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+                    val event: KeyEvent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                    }
+                    when (event?.keyCode) {
+                        KeyEvent.KEYCODE_HEADSETHOOK,
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        KeyEvent.KEYCODE_MEDIA_PLAY,
+                        KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                                ForegroundServiceChannel.deliverAction("headset_bookmark", currentActivityId)
+                            }
+                            return true
+                        }
+                    }
+                    return false
+                }
+            })
+            setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(
+                        PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_PLAY or
+                            PlaybackState.ACTION_PAUSE,
+                    )
+                    .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+                    .build(),
+            )
+            isActive = true
+        }
     }
 
     private fun notifyTile(context: android.content.Context) {

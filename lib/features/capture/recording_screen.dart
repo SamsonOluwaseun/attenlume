@@ -66,6 +66,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   int _bookmarkCount = 0;
   StreamSubscription<String>? _hardStopSub;
   StreamSubscription<SafetyPrompt>? _safetySub;
+  StreamSubscription<String>? _confirmSub;
   SafetyPrompt? _safetyPrompt;
 
   @override
@@ -76,6 +77,18 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       if (!mounted || prompt.activityId != widget.activityId) return;
       unawaited(HapticFeedback.mediumImpact());
       setState(() => _safetyPrompt = prompt);
+    });
+    // Confirms shortcut and headset actions with a snack bar and a tick
+    // (FR-REC-04, P2-06).
+    _confirmSub = ref.read(triggerConfirmationsProvider).messages.listen((
+      message,
+    ) {
+      if (!mounted) return;
+      unawaited(HapticFeedback.mediumImpact());
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      );
+      unawaited(_loadData());
     });
     _hardStopSub = ref
         .read(storageBudgetServiceProvider)
@@ -98,6 +111,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   @override
   void dispose() {
     _safetySub?.cancel();
+    _confirmSub?.cancel();
     _hardStopSub?.cancel();
     _ticker?.cancel();
     super.dispose();
