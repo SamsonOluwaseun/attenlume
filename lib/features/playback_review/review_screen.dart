@@ -9,6 +9,7 @@ import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/activity_repository.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/transcription/transcript_store.dart';
+import '../../domain/ai/session_material.dart' show MaterialBookmark;
 import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
@@ -24,7 +25,9 @@ import '../../shared/utilities/date_formatters.dart';
 import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_providers.dart';
 import '../photos/activity_photos_section.dart';
+import '../summaries/summary_section.dart';
 import '../transcription/transcription_providers.dart';
+import '../transcription/transcription_screen.dart';
 import 'review_header.dart';
 import 'review_moments.dart';
 import 'review_player_controller.dart';
@@ -91,6 +94,7 @@ class ReviewScreen extends ConsumerStatefulWidget {
 /// The review screen's tabs, in order (ADR-053).
 enum ReviewTab {
   highlights('Highlights'),
+  summary('Summary'),
   timeline('Timeline'),
   photos('Photos'),
   notes('Notes');
@@ -113,6 +117,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
   ReviewPlayerController? _player;
   WaveformPager? _pager;
   List<CutRange> _cuts = const [];
+
+  /// Bookmarks on the timeline, for the Summary tab (P3-02). Built once per
+  /// load so playback rebuilds do not reload the summary.
+  List<MaterialBookmark> _summaryBookmarks = const [];
   int? _markedStartMs;
   bool _loading = true;
 
@@ -129,12 +137,17 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
     final media = ref.read(mediaAssetRepositoryProvider);
     final id = widget.activityId;
     final photos = await media.photosFor(id);
+    final bookmarks = await media.bookmarksFor(id);
     final timeline = ReviewTimeline.build(
       segments: await media.segmentsFor(id),
       interruptions: await media.interruptionsFor(id),
       photos: photos,
-      bookmarks: await media.bookmarksFor(id),
+      bookmarks: bookmarks,
     );
+    final bookmarkOffsets = {
+      for (final m in timeline.markers)
+        if (m.kind == TimelineMarkerKind.bookmark) m.id: m.offsetMs,
+    };
     final cuts = await ref.read(cutRangeRepositoryProvider).activeFor(id);
     final conference = activity == null
         ? null
@@ -152,6 +165,11 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
       _root = root;
       _timeline = timeline;
       _cuts = cuts;
+      _summaryBookmarks = [
+        for (final b in bookmarks)
+          if (bookmarkOffsets[b.id] case final offset?)
+            (offsetMs: offset, label: b.label, note: b.note),
+      ];
       _markedStartMs = null;
       _player = ReviewPlayerController(
         timeline: timeline,
@@ -509,6 +527,23 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
         onPlayFrom: _playFrom,
         onShowOnTimeline: _showOnTimeline,
         onOpenPhoto: _openPhoto,
+      ),
+      ReviewTab.summary => SummarySection(
+        activityId: widget.activityId,
+        title: _activity?.title ?? '',
+        notesMd: _activity?.notesMd,
+        bookmarks: _summaryBookmarks,
+        cuts: _cuts,
+        canPlay: player.canPlay,
+        onPlayFrom: _playFrom,
+        onOpenTranscription: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => TranscriptionScreen(
+              activityId: widget.activityId,
+              isPrivate: _activity?.isPrivate ?? false,
+            ),
+          ),
+        ),
       ),
       ReviewTab.timeline => Column(
         key: const Key('review-tab-timeline'),
