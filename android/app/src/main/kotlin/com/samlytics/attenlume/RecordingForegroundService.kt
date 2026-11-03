@@ -277,7 +277,7 @@ class RecordingForegroundService : Service() {
         super.onDestroy()
     }
 
-    private fun notifyTile(context: Context) {
+    private fun notifyTile(context: android.content.Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
                 android.service.quicksettings.TileService.requestListeningState(
