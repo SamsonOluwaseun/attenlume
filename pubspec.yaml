@@ -57,7 +57,7 @@ dependencies:
   share_plus: ^13.3.1
   flutter_whisper_ggml: 0.0.2
   audio_decoder: 0.8.1
-  fllama_cpp: ^0.1.0
+  fllama_cpp: 0.1.0
 
 dev_dependencies:
   flutter_test:
