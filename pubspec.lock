@@ -217,6 +217,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.0+1"
+  change_case:
+    dependency: transitive
+    description:
+      name: change_case
+      sha256: e41ef3df58521194ef8d7649928954805aeb08061917cf658322305e61568003
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   characters:
     dependency: transitive
     description:
@@ -261,10 +269,10 @@ packages:
     dependency: transitive
     description:
       name: code_assets
-      sha256: "828110d598123b5ea96c00c9f3c72105bf79f8ee36c20a39b26209ade421ec57"
+      sha256: bf394f466ba9205f1812a0433b392d6af280f155f56651eda7c18cc32ed493b8
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.0"
+    version: "1.2.1"
   collection:
     dependency: transitive
     description:
@@ -441,6 +449,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  fllama_cpp:
+    dependency: "direct main"
+    description:
+      name: fllama_cpp
+      sha256: "79271d21e6092ccf2ff65e336ed5a9e70c4a4d4b830754744b4205dcc59b8b75"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -623,6 +639,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.12.0"
+  kiln:
+    dependency: transitive
+    description:
+      name: kiln
+      sha256: a7ab858f830d5457c2e6e78819e26aebe6702c95462343f079ed296e07814237
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   leak_tracker:
     dependency: transitive
     description:
@@ -755,18 +779,26 @@ packages:
     dependency: transitive
     description:
       name: native_toolchain_c
-      sha256: "90eaad8059ebc2004a63810a4696ea9acdb02473e47ed3b6b3bafb100ac77e31"
+      sha256: a1c26117c48cebe5677b0cf0e33a980a79a7c5577effc86f52e5a0d309cdcb60
       url: "https://pub.dev"
     source: hosted
-    version: "0.19.5"
+    version: "0.19.3"
+  native_toolchain_cmake:
+    dependency: transitive
+    description:
+      name: native_toolchain_cmake
+      sha256: de90e8952bad0684bdcff4d674c53d961f5cd1fdcf3a0255a669a35986c4ac1d
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.7"
   objective_c:
     dependency: transitive
     description:
       name: objective_c
-      sha256: "5c80c2ad6e2c0397de5db38c6d653e69616a3397e13aa7633bf39eb668f2041b"
+      sha256: b7fb95a6d9a4f009edd63dc5ac69f07420b23a16161c6dd8660290b59c602e8e
       url: "https://pub.dev"
     source: hosted
-    version: "9.6.2"
+    version: "9.5.0"
   package_config:
     dependency: transitive
     description:
