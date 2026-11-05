@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 
@@ -134,36 +135,50 @@ class VerifiedModelStore {
     return file;
   }
 
-  /// Returns the verified on-disk path of [descriptor], or `null` if not
-  /// present, size mismatch, or checksum mismatch.
+  /// Cheap installed check for Settings: trusts the download's checksum marker
+  /// and checks exact length, without reading model contents.
+  ///
+  /// Call [verifyInstalledPath] before first loading a model when full integrity
+  /// re-verification is required; this check cannot detect same-size tampering.
   Future<String?> installedPath(VerifiedModelDescriptor descriptor) async {
     final file = targetFile(descriptor);
-    if (!file.existsSync() || file.lengthSync() != descriptor.sizeBytes) {
+    final marker = File('${file.path}.sha256');
+    if (!file.existsSync() ||
+        file.lengthSync() != descriptor.sizeBytes ||
+        !marker.existsSync() ||
+        marker.lengthSync() != 64) {
       return null;
     }
-    // The marker is never evidence of model contents; hash actual bytes in chunks.
-    Digest? digest;
-    final sink = sha256.startChunkedConversion(
-      ChunkedConversionSink<Digest>.withCallback((values) {
-        digest = values.single;
-      }),
-    );
-    final raf = file.openSync(mode: FileMode.read);
-    try {
-      const chunkSize = 1024 * 1024;
-      while (true) {
-        final chunk = raf.readSync(chunkSize);
-        if (chunk.isEmpty) break;
-        sink.add(chunk);
-      }
-      sink.close();
-    } finally {
-      raf.closeSync();
-    }
-    targetFile(descriptor);
-    return digest?.toString().toLowerCase() == descriptor.sha256.toLowerCase()
+    return marker.readAsStringSync().toLowerCase() ==
+            descriptor.sha256.toLowerCase()
         ? file.path
         : null;
+  }
+
+  /// Explicitly hashes the real bytes in a worker isolate using a file stream.
+  /// Returns null and removes corrupt/partial model data and its marker on a
+  /// size or checksum mismatch. No model contents are read on the UI isolate.
+  Future<String?> verifyInstalledPath(
+    VerifiedModelDescriptor descriptor,
+  ) async {
+    final file = targetFile(descriptor);
+    if (!file.existsSync()) return null;
+    final path = file.path;
+    final expectedSize = descriptor.sizeBytes;
+    final expectedHash = descriptor.sha256.toLowerCase();
+    final valid = await Isolate.run(() async {
+      final model = File(path);
+      if (await model.length() != expectedSize) return false;
+      final digest = await sha256.bind(model.openRead()).first;
+      return digest.toString().toLowerCase() == expectedHash;
+    });
+    targetFile(descriptor);
+    if (!valid) {
+      await remove(descriptor);
+      return null;
+    }
+    File('$path.sha256').writeAsStringSync(descriptor.sha256, flush: true);
+    return path;
   }
 
   /// Explicitly downloads and verifies [descriptor], reporting progress in [0, 1].

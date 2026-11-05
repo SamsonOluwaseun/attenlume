@@ -212,7 +212,7 @@ void main() {
       File('${file.path}.sha256').writeAsStringSync(testSha256);
       expect(
         await WhisperModelStore(baseDirectory: tempDir)
-            .installedPath(testDescriptor),
+            .verifyInstalledPath(testDescriptor),
         isNull,
       );
     },

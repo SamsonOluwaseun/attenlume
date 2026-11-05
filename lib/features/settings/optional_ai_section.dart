@@ -262,12 +262,14 @@ class _OptionalAiCard extends StatelessWidget {
                           size: 20,
                         ),
                         const SizedBox(width: TokenSpace.space1),
-                        Text(
-                          'Installed and verified',
-                          key: const Key('optional-ai-installed-label'),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            'Installed and verified',
+                            key: const Key('optional-ai-installed-label'),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],

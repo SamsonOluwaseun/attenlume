@@ -412,6 +412,42 @@ void main() {
       },
     );
 
+    testWidgets(
+      'FR-AI-01 NFR-09 installed status wraps at phone width and 200 percent text',
+      (tester) async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 3;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final store = LanguageModelStore(baseDirectory: tempDir);
+        final probe = _FakeFreeSpaceProbe(10 * 1024 * 1024 * 1024);
+        final file = store.targetFile(testDescriptor);
+        file.writeAsBytesSync(testModelBytes);
+        File('${file.path}.sha256').writeAsStringSync(testSha256);
+        final controller = LanguageModelController(
+          store: store,
+          freeSpaceProbe: probe,
+          descriptor: testDescriptor,
+        );
+        await controller.refresh();
+        await tester.pumpWidget(
+          pumpSection(
+            store: store,
+            probe: probe,
+            controller: controller,
+            textScale: 2.0,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Installed and verified'), findsOneWidget);
+        expect(
+          find.byKey(const Key('optional-ai-delete-button')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('NFR-09 200 percent text scale fits without layout overflow', (
       tester,
     ) async {

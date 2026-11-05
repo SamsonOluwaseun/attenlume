@@ -137,12 +137,13 @@ void main() {
         '${tempDir.path}${Platform.pathSeparator}${testDescriptor.fileName}',
       );
       file.writeAsBytesSync([1, 2, 3]); // Wrong size
+      File('${file.path}.sha256').writeAsStringSync(testSha256);
       final path = await store.installedPath(testDescriptor);
       expect(path, isNull);
     });
 
     test(
-      'installedPath returns path only after verification of actual file bytes',
+      'FR-AI-01 installedPath returns path with expected marker and size',
       () async {
         final store = LanguageModelStore(baseDirectory: tempDir);
         final file = File(
@@ -154,23 +155,47 @@ void main() {
 
         final path = await store.installedPath(testDescriptor);
         expect(path, equals(file.path));
+        expect(await store.verifyInstalledPath(testDescriptor), file.path);
       },
     );
 
+    test('FR-AI-01 cheap check skips contents; full verification removes same-size corruption', () async {
+      final store = LanguageModelStore(baseDirectory: tempDir);
+      final file = File(
+        '${tempDir.path}${Platform.pathSeparator}${testDescriptor.fileName}',
+      );
+      file.writeAsBytesSync(
+        Uint8List(testModelBytes.length),
+      ); // Same length, wrong content
+      File('${file.path}.sha256').writeAsStringSync(testSha256);
+
+      final path = await store.installedPath(testDescriptor);
+      expect(path, file.path);
+      expect(await store.verifyInstalledPath(testDescriptor), isNull);
+      expect(file.existsSync(), isFalse);
+      expect(File('${file.path}.sha256').existsSync(), isFalse);
+      expect(await store.installedPath(testDescriptor), isNull);
+    });
+
+    test('FR-AI-01 cheap check requires the expected marker', () async {
+      final store = LanguageModelStore(baseDirectory: tempDir);
+      final file = store.targetFile(testDescriptor);
+      file.writeAsBytesSync(testModelBytes);
+      expect(await store.installedPath(testDescriptor), isNull);
+      File('${file.path}.sha256').writeAsStringSync('0' * 64);
+      expect(await store.installedPath(testDescriptor), isNull);
+    });
+
     test(
-      'same-size tampering cannot pass verification even with forged marker',
+      'FR-AI-01 full verification removes wrong-size partial files',
       () async {
         final store = LanguageModelStore(baseDirectory: tempDir);
-        final file = File(
-          '${tempDir.path}${Platform.pathSeparator}${testDescriptor.fileName}',
-        );
-        file.writeAsBytesSync(
-          Uint8List(testModelBytes.length),
-        ); // Same length, wrong content
+        final file = store.targetFile(testDescriptor);
+        file.writeAsBytesSync([1, 2, 3]);
         File('${file.path}.sha256').writeAsStringSync(testSha256);
-
-        final path = await store.installedPath(testDescriptor);
-        expect(path, isNull);
+        expect(await store.verifyInstalledPath(testDescriptor), isNull);
+        expect(file.existsSync(), isFalse);
+        expect(File('${file.path}.sha256').existsSync(), isFalse);
       },
     );
 
