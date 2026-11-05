@@ -56,6 +56,7 @@ final installedLanguageModelPathProvider = FutureProvider<String?>((ref) async {
 final aiModelPathProvider = installedLanguageModelPathProvider;
 
 enum LanguageModelStatus {
+  checkingInstalled,
   notInstalled,
   checkingSpace,
   downloading,
@@ -97,7 +98,9 @@ class LanguageModelController extends ChangeNotifier {
   final VoidCallback? onStateChanged;
 
   LanguageModelState _state = const LanguageModelState(
-    status: LanguageModelStatus.notInstalled,
+    // Only inspect the stored file here; loading the inference engine belongs
+    // to an explicit AI action, never opening Settings.
+    status: LanguageModelStatus.checkingInstalled,
   );
 
   LanguageModelState get state => _state;

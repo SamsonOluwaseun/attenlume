@@ -27,7 +27,9 @@ class OptionalAiSection extends ConsumerWidget {
     return controllerAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(TokenSpace.space4),
-        child: Center(child: CircularProgressIndicator.adaptive()),
+        // Storage discovery may remain pending (for example while a platform
+        // directory lookup is unavailable). It must not keep Settings animating.
+        child: Text('Checking installed model…'),
       ),
       error: (e, _) => Padding(
         padding: const EdgeInsets.symmetric(
@@ -214,7 +216,9 @@ class _OptionalAiCard extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: TokenSpace.space4),
-              if (state.isDownloading) ...[
+              if (state.status == LanguageModelStatus.checkingInstalled) ...[
+                const Text('Checking installed model…'),
+              ] else if (state.isDownloading) ...[
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

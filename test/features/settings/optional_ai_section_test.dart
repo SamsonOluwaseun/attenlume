@@ -42,6 +42,20 @@ class _HangingHttpClient extends Fake implements HttpClient {
   }
 }
 
+class _PendingInstalledModelStore extends LanguageModelStore {
+  _PendingInstalledModelStore(Directory directory)
+    : super(baseDirectory: directory);
+
+  final check = Completer<String?>();
+  int checks = 0;
+
+  @override
+  Future<String?> installedPath(VerifiedModelDescriptor descriptor) {
+    checks++;
+    return check.future;
+  }
+}
+
 void main() {
   late Directory tempDir;
   late Uint8List testModelBytes;
@@ -110,6 +124,63 @@ void main() {
   }
 
   group('P3-10 FR-AI-01: Optional AI Settings UI states', () {
+    testWidgets('pending storage discovery settles without offering Download', (
+      tester,
+    ) async {
+      final directory = Completer<Directory>();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            languageModelDirectoryProvider.overrideWith(
+              (ref) => directory.future,
+            ),
+            installedLanguageModelPathProvider.overrideWith(
+              (ref) =>
+                  throw StateError('Settings must not request an AI model'),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const Scaffold(body: OptionalAiSection()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Checking installed model…'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(directory.isCompleted, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pending installed-file check settles then shows Download', (
+      tester,
+    ) async {
+      final store = _PendingInstalledModelStore(tempDir);
+      final probe = _FakeFreeSpaceProbe(10 * 1024 * 1024 * 1024);
+      final controller = LanguageModelController(
+        store: store,
+        freeSpaceProbe: probe,
+        descriptor: testDescriptor,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        pumpSection(store: store, probe: probe, controller: controller),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Checking installed model…'), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(store.checks, 1);
+
+      store.check.complete(null);
+      await tester.pumpAndSettle();
+      expect(find.text('Checking installed model…'), findsNothing);
+      expect(
+        find.byKey(const Key('optional-ai-download-button')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets(
       'displays model name, size, licence, privacy notice and Download button by default',
       (tester) async {
