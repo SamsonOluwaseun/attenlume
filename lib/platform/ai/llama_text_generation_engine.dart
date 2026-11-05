@@ -65,10 +65,11 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
        _cancelRunner = cancelRunner ?? fllamaCancelInference,
        _contextLengthResolver =
            contextLengthResolver ?? fllamaTrainedContextLength {
-    if (!Platform.isAndroid && inferenceRunner == null) {
+    if (!(Platform.isAndroid || Platform.isWindows) &&
+        inferenceRunner == null) {
       throw UnsupportedError(
         'LlamaTextGenerationEngine on-device native inference is currently '
-        'enabled for Android. iOS and Windows require native runtime packaging.',
+        'enabled for Android and Windows. iOS requires native runtime packaging.',
       );
     }
 
@@ -101,9 +102,7 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
   late final int _contextTokens;
 
   bool _isDisposed = false;
-  bool _isGenerating = false;
-  bool _isCancelled = false;
-  int? _activeRequestId;
+  _ActiveGeneration? _activeGeneration;
 
   @override
   String get modelId => _modelId;
@@ -112,7 +111,7 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
   int get contextTokens => _contextTokens;
 
   bool get isDisposed => _isDisposed;
-  bool get isGenerating => _isGenerating;
+  bool get isGenerating => _activeGeneration != null;
 
   /// Formats prompt turns according to Gemma's chat template.
   static String formatGemmaChat({
@@ -142,16 +141,15 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
     if (_isDisposed) {
       throw StateError('LlamaTextGenerationEngine has been disposed.');
     }
-    if (_isGenerating) {
+    if (_activeGeneration != null) {
       throw StateError(
         'A generation request is already active on this engine instance.',
       );
     }
 
-    _isGenerating = true;
-    _isCancelled = false;
+    final generation = _ActiveGeneration();
+    _activeGeneration = generation;
 
-    final completer = Completer<String>();
     final maxTokens = request.maxOutputTokens;
     int tokenCount = 0;
 
@@ -176,16 +174,30 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
         bool done,
         FllamaError? error,
       ) {
-        if (_isCancelled) {
-          if (!completer.isCompleted) {
-            completer.completeError(const TextGenerationCancelledException());
+        if (generation.terminalCompleter.isCompleted) {
+          return;
+        }
+
+        final isTerminal = done || error != null;
+
+        if (generation.isCancelled) {
+          if (!generation.completer.isCompleted) {
+            generation.completer.completeError(
+              const TextGenerationCancelledException(),
+            );
+          }
+          if (isTerminal && !generation.terminalCompleter.isCompleted) {
+            generation.terminalCompleter.complete();
           }
           return;
         }
 
         if (error != null) {
-          if (!completer.isCompleted) {
-            completer.completeError(_mapFllamaError(error));
+          if (!generation.completer.isCompleted) {
+            generation.completer.completeError(_mapFllamaError(error));
+          }
+          if (!generation.terminalCompleter.isCompleted) {
+            generation.terminalCompleter.complete();
           }
           return;
         }
@@ -196,25 +208,37 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
           onProgress(progress);
         }
 
-        if (done && !completer.isCompleted) {
-          completer.complete(response.trim());
+        if (done) {
+          if (!generation.completer.isCompleted) {
+            generation.completer.complete(response.trim());
+          }
+          if (!generation.terminalCompleter.isCompleted) {
+            generation.terminalCompleter.complete();
+          }
         }
       });
 
-      _activeRequestId = reqId;
+      generation.nativeRequestId = reqId;
 
-      if (_isCancelled) {
-        _cancelRunner(reqId);
-        if (!completer.isCompleted) {
-          completer.completeError(const TextGenerationCancelledException());
+      if (generation.isCancelled) {
+        try {
+          _cancelRunner(reqId);
+        } catch (_) {}
+        if (!generation.completer.isCompleted) {
+          generation.completer.completeError(
+            const TextGenerationCancelledException(),
+          );
         }
       }
 
-      return await completer.future;
+      return await generation.completer.future;
     } on TextGenerationCancelledException {
       rethrow;
     } catch (e, st) {
-      if (_isCancelled) {
+      if (!generation.terminalCompleter.isCompleted) {
+        generation.terminalCompleter.complete();
+      }
+      if (generation.isCancelled) {
         throw const TextGenerationCancelledException();
       }
       if (e is LlamaTextGenerationException) {
@@ -229,30 +253,55 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
         st,
       );
     } finally {
-      _isGenerating = false;
-      _activeRequestId = null;
+      if (!generation.terminalCompleter.isCompleted) {
+        try {
+          await generation.terminalCompleter.future;
+        } catch (_) {}
+      }
+      if (identical(_activeGeneration, generation)) {
+        _activeGeneration = null;
+      }
     }
   }
 
   @override
   Future<void> cancel() async {
-    _isCancelled = true;
-    final activeId = _activeRequestId;
-    if (activeId != null) {
-      try {
-        _cancelRunner(activeId);
-      } catch (_) {
-        // Suppress cancel runner dispatch errors on teardown
+    final active = _activeGeneration;
+    if (active != null) {
+      active.isCancelled = true;
+      final activeId = active.nativeRequestId;
+      if (activeId != null) {
+        try {
+          _cancelRunner(activeId);
+        } catch (_) {
+          // Suppress cancel runner dispatch errors on teardown
+        }
       }
-      _activeRequestId = null;
     }
   }
 
+  /// Disposes the engine instance, cancelling any active generation request
+  /// and dropping internal references.
+  ///
+  /// Resident memory limit note:
+  /// fllama_cpp 0.1.0 does not expose an explicit native model unload or server
+  /// shutdown API. Native server contexts and cached model weights (e.g. in
+  /// `ServerManager`) remain resident in memory after [dispose] returns until
+  /// process termination or eviction by subsequent operations. Therefore,
+  /// disposal stops active inference and frees Dart-side references, but does
+  /// not claim to immediately free native resident model memory.
   @override
   Future<void> dispose() async {
     if (_isDisposed) return;
     _isDisposed = true;
     await cancel();
+    final active = _activeGeneration;
+    if (active != null && !active.terminalCompleter.isCompleted) {
+      try {
+        await active.terminalCompleter.future;
+      } catch (_) {}
+    }
+    _activeGeneration = null;
   }
 
   static String _deriveModelId(String path) {
@@ -293,4 +342,11 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
         );
     }
   }
+}
+
+class _ActiveGeneration {
+  final Completer<String> completer = Completer<String>();
+  final Completer<void> terminalCompleter = Completer<void>();
+  bool isCancelled = false;
+  int? nativeRequestId;
 }

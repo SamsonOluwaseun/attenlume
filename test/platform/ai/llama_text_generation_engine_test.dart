@@ -313,5 +313,71 @@ void main() {
         throwsA(isA<StateError>()),
       );
     });
+
+    test('P3-02b ignores stale callbacks after cancel and drains terminal callback before next generation', () async {
+      late FllamaInferenceCallback savedCallback;
+      final progressValues = <double>[];
+
+      final engine = LlamaTextGenerationEngine(
+        modelPath: 'test_model.gguf',
+        inferenceRunner: (req, cb) async {
+          savedCallback = cb;
+          return 777;
+        },
+        cancelRunner: (id) {
+          // Native cancel received, but callbacks still pending
+        },
+        contextLengthResolver: (p) => 2048,
+      );
+
+      final genFuture1 = engine.generate(
+        const TextGenerationRequest(
+          system: '',
+          prompt: 'Prompt 1',
+          maxOutputTokens: 10,
+        ),
+        onProgress: progressValues.add,
+      );
+
+      // Give event loop time to set up
+      await Future<void>.delayed(Duration.zero);
+
+      // Emit first valid token
+      savedCallback('Tok1', '', false, null);
+      expect(progressValues, [0.1]);
+
+      // Now cancel
+      await engine.cancel();
+
+      // Emit a stale streaming token callback while cancelled but before terminal callback
+      savedCallback('Tok1 Tok2', '', false, null);
+      // Stale callback must NOT trigger onProgress!
+      expect(progressValues.length, 1);
+
+      // Attempting a second generation while terminal callback is still pending must throw StateError
+      expect(
+        () => engine.generate(
+          const TextGenerationRequest(system: '', prompt: 'Prompt 2'),
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      // Now emit terminal callback
+      savedCallback('', '', true, null);
+
+      // genFuture1 must complete with TextGenerationCancelledException
+      await expectLater(
+        genFuture1,
+        throwsA(isA<TextGenerationCancelledException>()),
+      );
+
+      // Now that the old request has reached terminal completion, a new generation can start and succeed
+      final genFuture2 = engine.generate(
+        const TextGenerationRequest(system: '', prompt: 'Prompt 2'),
+      );
+      savedCallback('Success 2', '', true, null);
+      final result2 = await genFuture2;
+      expect(result2, 'Success 2');
+    });
   });
 }
