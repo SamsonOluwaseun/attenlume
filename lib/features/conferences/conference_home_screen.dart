@@ -191,12 +191,16 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
   }
 
   /// Save or share the CSV agenda template (FR-ACT-10) [P2-07a].
-  Future<void> _downloadAgendaTemplate() async {
+  Future<void> _downloadAgendaTemplate(Rect? origin) async {
     String? message;
     try {
       message = await ref
           .read(agendaTemplateSaverProvider)
-          .save(agendaTemplateFileName, agendaCsvTemplateBytes());
+          .save(
+            agendaTemplateFileName,
+            agendaCsvTemplateBytes(),
+            origin: origin,
+          );
     } catch (_) {
       message = 'The template could not be saved. Try another folder.';
     }

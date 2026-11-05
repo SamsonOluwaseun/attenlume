@@ -39,13 +39,15 @@ class FakeAgendaPicker implements AgendaFilePicker {
 class FakeTemplateSaver implements AgendaTemplateSaver {
   String? fileName;
   List<int>? bytes;
+  Rect? origin;
   String? reply = 'Template saved to agenda.csv';
   Object? error;
 
   @override
-  Future<String?> save(String fileName, List<int> bytes) async {
+  Future<String?> save(String fileName, List<int> bytes, {Rect? origin}) async {
     this.fileName = fileName;
     this.bytes = bytes;
+    this.origin = origin;
     if (error case final e?) throw e;
     return reply;
   }
@@ -454,6 +456,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(saver.fileName, agendaTemplateFileName);
       expect(saver.bytes, agendaCsvTemplateBytes());
+      // The button's bounds anchor the iPad share popover.
+      expect(saver.origin, isNotNull);
+      expect(saver.origin!.isEmpty, isFalse);
       expect(find.text('Template saved to agenda.csv'), findsOneWidget);
     });
 

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show Rect;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,7 +77,8 @@ final agendaFilePickerProvider = Provider<AgendaFilePicker>(
 abstract interface class AgendaTemplateSaver {
   /// Saves or shares [bytes] as [fileName]. Returns what to tell the user,
   /// or null when they cancelled. Throws when the file could not be saved.
-  Future<String?> save(String fileName, List<int> bytes);
+  /// [origin] anchors the share sheet popover on iPad.
+  Future<String?> save(String fileName, List<int> bytes, {Rect? origin});
 }
 
 /// Windows: the system Save dialog. Android and iOS: the share sheet, so
@@ -85,7 +87,7 @@ class PlatformAgendaTemplateSaver implements AgendaTemplateSaver {
   const PlatformAgendaTemplateSaver();
 
   @override
-  Future<String?> save(String fileName, List<int> bytes) async {
+  Future<String?> save(String fileName, List<int> bytes, {Rect? origin}) async {
     if (Platform.isAndroid || Platform.isIOS) {
       final dir = await getTemporaryDirectory();
       final file = File(p.join(dir.path, fileName));
@@ -93,6 +95,7 @@ class PlatformAgendaTemplateSaver implements AgendaTemplateSaver {
       final outcome = await const SharePlusExportSharer().shareFile(
         file.path,
         subject: 'Attenlume agenda template',
+        origin: origin,
       );
       return outcome == ExportShareOutcome.dismissed
           ? null

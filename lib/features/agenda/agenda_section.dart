@@ -92,8 +92,9 @@ class AgendaSection extends StatefulWidget {
   final VoidCallback onClear;
   final ValueChanged<PlannedSession> onStart;
 
-  /// Saves the CSV template (FR-ACT-10) [P2-07a]. No button when null.
-  final VoidCallback? onDownloadTemplate;
+  /// Saves the CSV template (FR-ACT-10) [P2-07a], given the button's
+  /// bounds for the iPad share popover. No button when null.
+  final ValueChanged<Rect?>? onDownloadTemplate;
 
   /// Sessions shown before "Show all".
   static const collapsedCount = 5;
@@ -191,14 +192,24 @@ class _AgendaSectionState extends State<AgendaSection> {
                   onPressed: widget.onImport,
                 ),
                 if (widget.onDownloadTemplate case final onDownload?)
-                  TextButton.icon(
-                    key: const Key('agenda-template-button'),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(0, TokenSize.tapMin),
+                  Builder(
+                    builder: (buttonContext) => TextButton.icon(
+                      key: const Key('agenda-template-button'),
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, TokenSize.tapMin),
+                      ),
+                      icon: const Icon(Icons.download_outlined, size: 18),
+                      label: const Text('Download CSV template'),
+                      onPressed: () {
+                        final box =
+                            buttonContext.findRenderObject() as RenderBox?;
+                        onDownload(
+                          box == null || !box.hasSize
+                              ? null
+                              : box.localToGlobal(Offset.zero) & box.size,
+                        );
+                      },
                     ),
-                    icon: const Icon(Icons.download_outlined, size: 18),
-                    label: const Text('Download CSV template'),
-                    onPressed: onDownload,
                   ),
                 if (sessions.isNotEmpty)
                   TextButton.icon(
