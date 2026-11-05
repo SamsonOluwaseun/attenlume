@@ -569,16 +569,50 @@ void main() {
 
     tearDown(() => u.close());
 
-    ExportImportService importer({bool withStore = true}) =>
-        ExportImportService(
-          db: u.db,
-          activities: u.activities,
-          mediaRoot: () async => newMediaRoot,
-          freeSpace: FakeFreeSpaceProbe(64 << 30),
-          reserveBytes: 0,
-          clock: () => DateTime.utc(2026, 12, 1, 10),
-          transcriptStore: withStore ? () async => newStore : null,
+    ExportImportService importer({
+      bool withStore = true,
+      bool failStore = false,
+    }) => ExportImportService(
+      db: u.db,
+      activities: u.activities,
+      mediaRoot: () async => newMediaRoot,
+      freeSpace: FakeFreeSpaceProbe(64 << 30),
+      reserveBytes: 0,
+      clock: () => DateTime.utc(2026, 12, 1, 10),
+      transcriptStore: withStore
+          ? () async {
+              if (failStore) throw const FileSystemException('Cannot open');
+              return newStore;
+            }
+          : null,
+    );
+
+    test('P2-09 FR-TRN-08 transcript-store initialisation failure returns '
+        'a successful import with a warning', () async {
+      final (id, a, _, _) = await twoPartTalk();
+      final out = await export(id);
+      final service = importer(failStore: true);
+      final prepared = await service.prepare(out.outputPath);
+
+      final summary = await service.commit(prepared);
+
+      expect(summary.conferenceId, id);
+      expect(summary.segments, 2);
+      expect(summary.transcripts, 0);
+      expect(summary.warnings, contains(contains('2 transcripts were not')));
+      expect(await u.conferences.get(id), isNotNull);
+      final recordings = await u.media.segmentsFor(a.id);
+      expect(recordings, hasLength(2));
+      for (final recording in recordings) {
+        expect(
+          MediaPaths.resolve(newMediaRoot, recording.filePath).existsSync(),
+          isTrue,
         );
+      }
+      expect(await newStore.listDocuments(activityId: a.id), isEmpty);
+      await expectLater(service.commit(prepared), throwsStateError);
+      expect(await u.db.select(u.db.conferences).get(), hasLength(1));
+    });
 
     test('FR-EXP-11 FR-TRN-08 an export with transcripts restores them with '
         'the corrections and original machine text', () async {

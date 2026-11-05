@@ -683,9 +683,14 @@ class ExportImportService {
       await discard(prepared);
       var restored = 0;
       if (transcripts.isNotEmpty && transcriptStore != null) {
-        final store = await transcriptStore!();
-        for (final document in transcripts) {
-          if (await _restoreTranscript(store, document)) restored++;
+        try {
+          final store = await transcriptStore!();
+          for (final document in transcripts) {
+            if (await _restoreTranscript(store, document)) restored++;
+          }
+        } catch (_) {
+          // The import is committed. Store initialisation failures must
+          // report unrestored transcripts, just like individual write failures.
         }
       }
       final notRestored = transcriptsDropped + transcripts.length - restored;
