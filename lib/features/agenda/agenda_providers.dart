@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../data/repositories/repository_support.dart';
 import '../../domain/services/activity_title.dart';
+import '../../platform/share/export_sharer.dart';
 
 /// An agenda file the user picked: its name and bytes (ADR-082) [P2-07].
 class PickedAgendaFile {
@@ -64,6 +69,52 @@ class FileSelectorAgendaPicker implements AgendaFilePicker {
 
 final agendaFilePickerProvider = Provider<AgendaFilePicker>(
   (ref) => const FileSelectorAgendaPicker(),
+);
+
+/// How the CSV agenda template reaches the user (FR-ACT-10) [P2-07a].
+/// Tests override it.
+abstract interface class AgendaTemplateSaver {
+  /// Saves or shares [bytes] as [fileName]. Returns what to tell the user,
+  /// or null when they cancelled. Throws when the file could not be saved.
+  Future<String?> save(String fileName, List<int> bytes);
+}
+
+/// Windows: the system Save dialog. Android and iOS: the share sheet, so
+/// the file can go to Files, Drive or a spreadsheet app (ADR-042).
+class PlatformAgendaTemplateSaver implements AgendaTemplateSaver {
+  const PlatformAgendaTemplateSaver();
+
+  @override
+  Future<String?> save(String fileName, List<int> bytes) async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      final dir = await getTemporaryDirectory();
+      final file = File(p.join(dir.path, fileName));
+      await file.writeAsBytes(bytes, flush: true);
+      final outcome = await const SharePlusExportSharer().shareFile(
+        file.path,
+        subject: 'Attenlume agenda template',
+      );
+      return outcome == ExportShareOutcome.dismissed
+          ? null
+          : 'Template ready. Fill it in, save it as CSV, then import it.';
+    }
+    final location = await getSaveLocation(
+      suggestedName: fileName,
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'CSV', extensions: ['csv']),
+      ],
+      confirmButtonText: 'Save',
+    );
+    if (location == null) return null;
+    var path = location.path;
+    if (p.extension(path).toLowerCase() != '.csv') path = '$path.csv';
+    await File(path).writeAsBytes(bytes, flush: true);
+    return 'Template saved to $path';
+  }
+}
+
+final agendaTemplateSaverProvider = Provider<AgendaTemplateSaver>(
+  (ref) => const PlatformAgendaTemplateSaver(),
 );
 
 /// "Now" for ordering the agenda (sessions near now first). Tests set it.

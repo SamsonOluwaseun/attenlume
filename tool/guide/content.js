@@ -27,7 +27,7 @@ module.exports = {
             'Use the Settings gear at the top of the opening page to reach settings before creating a conference. Type a name, for example Samlytics Conference 2026.',
             'Tap Create conference. You can add dates and goals later.',
             'Prefer to fill everything in now? Tap Set up with wizard.',
-            'Have the programme as a CSV or calendar (ICS) file? Tap Import agenda on the conference page, then pick sessions from it when you start an activity.',
+            'Have the programme as a CSV or calendar (ICS) file? Tap Import agenda on the conference page (Download CSV template gives you the columns to fill in), then pick sessions from it when you start an activity.',
             'Later, tap Open previous to see My conferences. Search by name or place, and use the bar at the bottom (at the side on tablets and Windows) for Record, Library and Settings.',
             'While recording, the status banner and Stop action remain available in Settings as well as the other navigation pages.',
           ],
