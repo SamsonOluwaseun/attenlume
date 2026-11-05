@@ -9,6 +9,7 @@ import '../../domain/models/enums.dart';
 import '../../domain/services/recording_service.dart';
 import '../../domain/services/recording_state.dart';
 import '../../platform/shortcuts/shortcut_command.dart';
+import '../capture/camera_screen.dart';
 import '../capture/recording_screen.dart';
 import '../conferences/conference_wizard_screen.dart';
 
@@ -39,11 +40,14 @@ class ShortcutCoordinator {
   /// Replaces navigation in tests.
   final void Function(Widget screen)? onNavigate;
 
-  Route<void>? _lastRoute;
+  Route<dynamic>? _lastRoute;
   String? _lastKey;
+  Object? _pendingStart;
 
   static String _keyOf(Widget screen) => screen is RecordingScreen
       ? 'recording:${screen.activityId}'
+      : screen is CameraScreen
+      ? 'camera:${screen.activityId}'
       : '${screen.runtimeType}';
 
   /// Pushes [screen]. If an earlier shortcut opened the same screen and it is
@@ -51,16 +55,21 @@ class ShortcutCoordinator {
   /// recording status itself), so repeated taps do not stack copies behind
   /// Back. A prompt open over it, such as the privacy reminder, is left
   /// alone [P2-03].
-  void _push(Widget screen) {
+  void _push(Widget screen, {VoidCallback? onClosed}) {
     if (onNavigate != null) {
       onNavigate!(screen);
       return;
     }
     final navigator = navigatorKey.currentState;
-    if (navigator == null) return;
+    if (navigator == null) {
+      onClosed?.call();
+      return;
+    }
     final key = _keyOf(screen);
     final last = _lastRoute;
     if (last != null && last.isActive && _lastKey == key) {
+      // No new screen will mount to report this attempt's outcome.
+      onClosed?.call();
       Route<dynamic>? top;
       navigator.popUntil((r) {
         top ??= r;
@@ -70,10 +79,10 @@ class ShortcutCoordinator {
       navigator.popUntil((r) => r == last);
       return;
     }
-    final route = MaterialPageRoute<void>(builder: (_) => screen);
+    final route = MaterialPageRoute<dynamic>(builder: (_) => screen);
     _lastRoute = route;
     _lastKey = key;
-    navigator.push(route);
+    navigator.push(route).whenComplete(() => onClosed?.call());
   }
 
   /// The activity holding the recorder, or null when nothing is recording.
@@ -95,7 +104,7 @@ class ShortcutCoordinator {
         await _bookmark();
       case ShortcutAction.takePhoto:
         final held = _heldActivityId;
-        if (held != null) _push(RecordingScreen(activityId: held));
+        if (held != null) _push(CameraScreen(activityId: held));
     }
   }
 
@@ -103,30 +112,52 @@ class ShortcutCoordinator {
   /// [activityId], or a new activity in the most recent conference, or opens
   /// "New conference" when there is none [P2-03].
   Future<void> _startIn(String? activityId, {required String typeKey}) async {
+    // Covers repository work, screen loading and privacy/consent prompts.
+    if (_pendingStart != null) return;
     final held = _heldActivityId;
     if (held != null) {
       _push(RecordingScreen(activityId: held));
       return;
     }
-    if (activityId != null && activityId.isNotEmpty) {
-      _push(RecordingScreen(activityId: activityId, autoStart: true));
-      return;
+    final pending = Object();
+    _pendingStart = pending;
+    void complete() {
+      if (identical(_pendingStart, pending)) _pendingStart = null;
     }
-    final recent = await conferenceRepository.getRecent(limit: 1);
-    if (recent.isEmpty) {
-      _push(const ConferenceWizardScreen());
-      return;
+
+    void openRecording(String id) => _push(
+      RecordingScreen(
+        activityId: id,
+        autoStart: true,
+        onAutoStartComplete: complete,
+      ),
+      onClosed: complete,
+    );
+
+    try {
+      if (activityId != null && activityId.isNotEmpty) {
+        openRecording(activityId);
+        return;
+      }
+      final recent = await conferenceRepository.getRecent(limit: 1);
+      if (recent.isEmpty) {
+        _push(const ConferenceWizardScreen(), onClosed: complete);
+        return;
+      }
+      final types = await activityRepository.types();
+      final type = types.firstWhere(
+        (t) => t.key == typeKey,
+        orElse: () => types.first,
+      );
+      final activity = await activityRepository.create(
+        conferenceId: recent.first.id,
+        typeId: type.id,
+      );
+      openRecording(activity.id);
+    } catch (_) {
+      complete();
+      rethrow;
     }
-    final types = await activityRepository.types();
-    final type = types.firstWhere(
-      (t) => t.key == typeKey,
-      orElse: () => types.first,
-    );
-    final activity = await activityRepository.create(
-      conferenceId: recent.first.id,
-      typeId: type.id,
-    );
-    _push(RecordingScreen(activityId: activity.id, autoStart: true));
   }
 
   Future<void> _stop() async {

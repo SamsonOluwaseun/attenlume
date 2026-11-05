@@ -61,6 +61,50 @@ void main() {
 
   group('P2-03 ShortcutCoordinator routing', () {
     test(
+      'P2-03 coalesces concurrent starts through pending screen outcome',
+      () async {
+        final conf = await t.conference();
+        final screens = <RecordingScreen>[];
+        final coordinator = ShortcutCoordinator(
+          navigatorKey: navKey,
+          conferenceRepository: t.conferences,
+          activityRepository: t.activities,
+          mediaRepository: t.media,
+          recordingService: recordingService,
+          onNavigate: (screen) => screens.add(screen as RecordingScreen),
+        );
+        final command = ShortcutCommand.parse(Uri.parse('attenlume://record'))!;
+        await Future.wait(
+          List.generate(5, (_) => coordinator.handleCommand(command)),
+        );
+        expect(screens, hasLength(1));
+        // Repository queries finished, but screen loading/privacy is still pending.
+        await coordinator.handleCommand(command);
+        expect(screens, hasLength(1));
+        expect(
+          await t.activities.listSummariesForConference(conf.id),
+          hasLength(1),
+        );
+
+        // Cancellation permits a later attempt; a stale callback cannot release it.
+        screens.first.onAutoStartComplete!();
+        await coordinator.handleCommand(command);
+        expect(screens, hasLength(2));
+        screens.first.onAutoStartComplete!();
+        await coordinator.handleCommand(command);
+        expect(screens, hasLength(2));
+        screens.last.onAutoStartComplete!();
+        await recordingService.start(screens.last.activityId);
+        await coordinator.handleCommand(command);
+        expect(screens.last.activityId, screens[1].activityId);
+        expect(
+          await t.activities.listSummariesForConference(conf.id),
+          hasLength(2),
+        );
+      },
+    );
+
+    test(
       'P2-03 startRecording with no conference opens ConferenceWizardScreen',
       () async {
         Widget? navigatedScreen;
@@ -244,6 +288,54 @@ void main() {
   });
 
   group('P2-03 AttenlumeApp end-to-end shortcut processing', () {
+    testWidgets(
+      'P2-03 pending start coalesces repeated taps during privacy prompt and releases on cancellation',
+      (tester) async {
+        final conf = await t.conference();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appDatabaseProvider.overrideWithValue(t.db),
+              shortcutBridgeProvider.overrideWithValue(fakeBridge),
+              crashRecoveryReportProvider.overrideWith(
+                (ref) async => RecoveryReport.empty,
+              ),
+            ],
+            child: const AttenlumeApp(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final command = ShortcutCommand.parse(Uri.parse('attenlume://record'))!;
+        fakeBridge.send(command);
+        fakeBridge.send(command);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('policy-reminder-dialog')), findsOneWidget);
+        fakeBridge.send(command);
+        await tester.pumpAndSettle();
+        expect(
+          find.byType(RecordingScreen, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(
+          await t.activities.listSummariesForConference(conf.id),
+          hasLength(1),
+        );
+
+        await tester.tap(find.byKey(const Key('policy-reminder-cancel')));
+        await tester.pumpAndSettle();
+        fakeBridge.send(command);
+        await tester.pumpAndSettle();
+        expect(
+          await t.activities.listSummariesForConference(conf.id),
+          hasLength(2),
+        );
+        expect(find.byKey(const Key('policy-reminder-dialog')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('policy-reminder-cancel')));
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
     testWidgets(
       'P2-03 cold start with initial shortcut command opens ConferenceWizardScreen when no conference exists',
       (tester) async {

@@ -39,6 +39,7 @@ class RecordingScreen extends ConsumerStatefulWidget {
     this.clock = DateTime.now,
     this.enableTicker = true,
     this.autoStart = false,
+    this.onAutoStartComplete,
   });
 
   final String activityId;
@@ -46,6 +47,9 @@ class RecordingScreen extends ConsumerStatefulWidget {
   final DateTime Function() clock;
   final bool enableTicker;
   final bool autoStart;
+
+  /// Releases a shortcut start after recording starts or its prompt is cancelled.
+  final VoidCallback? onAutoStartComplete;
 
   @override
   ConsumerState<RecordingScreen> createState() => _RecordingScreenState();
@@ -114,6 +118,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     _confirmSub?.cancel();
     _hardStopSub?.cancel();
     _ticker?.cancel();
+    widget.onAutoStartComplete?.call();
     super.dispose();
   }
 
@@ -174,9 +179,19 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
         _autoStarted = true;
         final status = ref.read(recordingStatusProvider).asData?.value;
         if (status == null || !status.state.holdsActivity) {
-          unawaited(_handleStartRecord());
+          unawaited(_autoStartRecording());
+        } else {
+          widget.onAutoStartComplete?.call();
         }
       }
+    }
+  }
+
+  Future<void> _autoStartRecording() async {
+    try {
+      await _handleStartRecord();
+    } finally {
+      widget.onAutoStartComplete?.call();
     }
   }
 
