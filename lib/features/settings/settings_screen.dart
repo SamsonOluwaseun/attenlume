@@ -16,6 +16,7 @@ import '../privacy/privacy_screen.dart';
 import '../storage_manager/storage_manager_screen.dart';
 import '../support/support_after_export.dart';
 import '../transcription/transcription_screen.dart';
+import 'optional_ai_section.dart';
 import 'settings_providers.dart';
 
 /// Settings (BUILD_GUIDE 5.11, ADR-048) [P1-25].
@@ -219,6 +220,8 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                heading('Optional AI'),
+                const OptionalAiSection(),
                 heading('Storage'),
                 ListTile(
                   key: const Key('settings-storage'),
