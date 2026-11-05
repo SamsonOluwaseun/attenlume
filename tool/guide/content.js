@@ -155,6 +155,16 @@ module.exports = {
           ],
         },
         {
+          title: 'Optional AI',
+          images: ['18-settings'],
+          points: [
+            'Open Settings > Optional AI. It is off by default: the core app requires no AI model, API key or account.',
+            'Download Gemma 4 E2B (2.65 GB, Apache 2.0 licence) to run summaries on-device. Nothing you record is sent anywhere.',
+            'Attenlume asks you to confirm with the download size and advises using Wi-Fi. Free storage is checked first (model size plus 1 GB safety margin).',
+            'Progress is shown with a Cancel option. Once installed and verified with its SHA-256 checksum, Delete model removes it at any time.',
+          ],
+        },
+        {
           title: 'Storage manager',
           images: ['19-storage'],
           points: [
