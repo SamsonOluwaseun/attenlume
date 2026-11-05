@@ -68,9 +68,10 @@ void main() {
   late FakeAgendaPicker picker;
   late FakeTemplateSaver saver;
   // 10:10 London time on the first day: the talk at 10:00 is on now.
-  final now = DateTime.utc(2026, 11, 4, 10, 10);
+  late DateTime now;
 
   setUp(() {
+    now = DateTime.utc(2026, 11, 4, 10, 10);
     t = TestData();
     saver = FakeTemplateSaver();
     picker = FakeAgendaPicker(
@@ -360,6 +361,36 @@ void main() {
   });
 
   group('P2-07 conference page', () {
+    testWidgets(
+      'P2-07 refreshes stale On now labels every minute and on resume',
+      (tester) async {
+        phone(tester);
+        final c = await conference();
+        await importCsv(c);
+        await tester.pumpWidget(app(ConferenceHomeScreen(conferenceId: c.id)));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('On now'), findsOneWidget);
+
+        // Change the injected clock without any user action or provider rebuild.
+        now = DateTime.utc(2026, 11, 4, 10, 46);
+        await tester.pump(const Duration(minutes: 1));
+        expect(find.textContaining('On now'), findsNothing);
+
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        now = DateTime.utc(2026, 11, 4, 18, 10);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pump();
+        expect(find.textContaining('On now'), findsOneWidget);
+
+        // Disposing removes both the periodic timer and lifecycle observer.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(minutes: 2));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('P2-07 lists planned sessions; tapping one opens Start '
         'activity with it picked; Clear agenda asks first', (tester) async {
       phone(tester);

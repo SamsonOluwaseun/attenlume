@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -50,18 +52,43 @@ class ConferenceHomeScreen extends ConsumerStatefulWidget {
       _ConferenceHomeScreenState();
 }
 
-class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
+class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen>
+    with WidgetsBindingObserver {
   Conference? _conference;
   List<Goal> _goals = [];
   ConferenceStats _stats = ConferenceStats.zero;
   List<ActivitySummary> _activities = [];
   List<PlannedSession> _planned = [];
   bool _isLoading = true;
+  Timer? _agendaTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _agendaTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _refreshAgendaClock(),
+    );
     _loadConference();
+  }
+
+  // Read agendaClockProvider again on the next build, including after a
+  // suspended app resumes before its next timer tick [P2-07].
+  void _refreshAgendaClock() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAgendaClock();
+  }
+
+  @override
+  void dispose() {
+    _agendaTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _loadConference() async {
