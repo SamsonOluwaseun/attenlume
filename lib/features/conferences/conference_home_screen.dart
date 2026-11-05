@@ -9,6 +9,7 @@ import '../../domain/models/activity.dart';
 import '../../domain/models/conference.dart';
 import '../../domain/models/enums.dart';
 import '../../domain/models/planned_session.dart';
+import '../../domain/services/agenda_template.dart';
 import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
@@ -187,6 +188,25 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
         ),
       ),
     );
+  }
+
+  /// Save or share the CSV agenda template (FR-ACT-10) [P2-07a].
+  Future<void> _downloadAgendaTemplate(Rect? origin) async {
+    String? message;
+    try {
+      message = await ref
+          .read(agendaTemplateSaverProvider)
+          .save(
+            agendaTemplateFileName,
+            agendaCsvTemplateBytes(),
+            origin: origin,
+          );
+    } catch (_) {
+      message = 'The template could not be saved. Try another folder.';
+    }
+    if (!mounted || message == null) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Remove every planned session, after a confirmation. Activities keep
@@ -624,6 +644,7 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen> {
                       onImport: _importAgenda,
                       onClear: _clearAgenda,
                       onStart: (s) => _openStartActivitySheet(from: s),
+                      onDownloadTemplate: _downloadAgendaTemplate,
                     ),
 
                     const SizedBox(height: TokenSpace.space4),

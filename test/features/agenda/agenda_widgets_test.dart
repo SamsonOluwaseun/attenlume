@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:attenlume/app/theme/app_theme.dart';
 import 'package:attenlume/data/local_database/database_provider.dart';
@@ -7,6 +8,7 @@ import 'package:attenlume/domain/models/activity.dart';
 import 'package:attenlume/domain/models/conference.dart';
 import 'package:attenlume/domain/models/planned_session.dart';
 import 'package:attenlume/domain/services/agenda_parser.dart';
+import 'package:attenlume/domain/services/agenda_template.dart';
 import 'package:attenlume/features/activities/consent_check_dialog.dart';
 import 'package:attenlume/features/agenda/agenda_import_screen.dart';
 import 'package:attenlume/features/agenda/agenda_providers.dart';
@@ -32,6 +34,25 @@ class FakeAgendaPicker implements AgendaFilePicker {
   }
 }
 
+/// Records what would be saved instead of opening a Save dialog or the
+/// share sheet.
+class FakeTemplateSaver implements AgendaTemplateSaver {
+  String? fileName;
+  List<int>? bytes;
+  Rect? origin;
+  String? reply = 'Template saved to agenda.csv';
+  Object? error;
+
+  @override
+  Future<String?> save(String fileName, List<int> bytes, {Rect? origin}) async {
+    this.fileName = fileName;
+    this.bytes = bytes;
+    this.origin = origin;
+    if (error case final e?) throw e;
+    return reply;
+  }
+}
+
 const agendaCsv =
     'title,speaker,room,start,end,type\n'
     'Opening keynote,Samlytics Data Services,Main stage,'
@@ -45,11 +66,13 @@ const agendaCsv =
 void main() {
   late TestData t;
   late FakeAgendaPicker picker;
+  late FakeTemplateSaver saver;
   // 10:10 London time on the first day: the talk at 10:00 is on now.
   final now = DateTime.utc(2026, 11, 4, 10, 10);
 
   setUp(() {
     t = TestData();
+    saver = FakeTemplateSaver();
     picker = FakeAgendaPicker(
       PickedAgendaFile('agenda.csv', utf8.encode(agendaCsv)),
     );
@@ -64,6 +87,7 @@ void main() {
       mediaAssetRepositoryProvider.overrideWithValue(t.media),
       plannedSessionRepositoryProvider.overrideWithValue(t.plannedSessions),
       agendaFilePickerProvider.overrideWithValue(picker),
+      agendaTemplateSaverProvider.overrideWithValue(saver),
       agendaClockProvider.overrideWithValue(() => now),
     ],
     child: MaterialApp(theme: AppTheme.light(), home: home),
@@ -406,6 +430,67 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('Talk at 17'), 200);
       expect(find.text('Talk at 17'), findsOneWidget);
+    });
+  });
+
+  group('P2-07a CSV template', () {
+    testWidgets('FR-ACT-10 Download CSV template sits beside Import agenda and '
+        'saves the template', (tester) async {
+      phone(tester);
+      final c = await conference();
+      await tester.pumpWidget(
+        app(
+          ConferenceHomeScreen(
+            conferenceId: c.id,
+            openRecorder: (_, _) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.byKey(const Key('agenda-template-button'));
+      await tester.scrollUntilVisible(button, 200);
+      expect(find.text('Import agenda'), findsOneWidget);
+      expect(find.text('Download CSV template'), findsOneWidget);
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(saver.fileName, agendaTemplateFileName);
+      expect(saver.bytes, agendaCsvTemplateBytes());
+      // The button's bounds anchor the iPad share popover.
+      expect(saver.origin, isNotNull);
+      expect(saver.origin!.isEmpty, isFalse);
+      expect(find.text('Template saved to agenda.csv'), findsOneWidget);
+    });
+
+    testWidgets('FR-ACT-10 cancelling says nothing; a failed save says so', (
+      tester,
+    ) async {
+      phone(tester);
+      final c = await conference();
+      await tester.pumpWidget(
+        app(
+          ConferenceHomeScreen(
+            conferenceId: c.id,
+            openRecorder: (_, _) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = find.byKey(const Key('agenda-template-button'));
+      await tester.scrollUntilVisible(button, 200);
+
+      saver.reply = null;
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+
+      saver.error = const FileSystemException('denied');
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('The template could not be saved. Try another folder.'),
+        findsOneWidget,
+      );
     });
   });
 }

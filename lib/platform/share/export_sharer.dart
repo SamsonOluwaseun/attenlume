@@ -68,6 +68,7 @@ class SharePlusExportSharer implements ExportSharer {
   static String mimeTypeFor(String filePath) =>
       switch (p.extension(filePath).toLowerCase()) {
         '.zip' => 'application/zip',
+        '.csv' => 'text/csv',
         _ => 'application/octet-stream',
       };
 }
