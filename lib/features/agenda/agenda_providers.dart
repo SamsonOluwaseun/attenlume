@@ -110,7 +110,15 @@ class PlatformAgendaTemplateSaver implements AgendaTemplateSaver {
     );
     if (location == null) return null;
     var path = location.path;
-    if (p.extension(path).toLowerCase() != '.csv') path = '$path.csv';
+    if (p.extension(path).toLowerCase() != '.csv') {
+      // The dialog only checked overwrites for the name as typed, so an
+      // existing file with the added extension is never replaced.
+      final base = path;
+      path = '$base.csv';
+      for (var n = 2; File(path).existsSync(); n++) {
+        path = '$base ($n).csv';
+      }
+    }
     await File(path).writeAsBytes(bytes, flush: true);
     return 'Template saved to $path';
   }
