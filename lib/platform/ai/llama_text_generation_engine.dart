@@ -15,6 +15,19 @@ typedef LlamaCancelRunner = void Function(int requestId);
 
 typedef LlamaContextLengthResolver = int? Function(String modelPath);
 
+Future<int> _runNativeChat(
+  OpenAiRequest request,
+  FllamaInferenceCallback callback,
+) async {
+  if (Platform.isWindows) {
+    // fllama 0.1.0 reads ggml_time_ms before its first backend initialisation.
+    // On Windows the timer frequency is zero until llama_backend_init runs.
+    // This public API performs the package's idempotent backend initialisation.
+    await fllamaLoadedBackendFiles();
+  }
+  return fllamaChat(request, callback);
+}
+
 enum LlamaTextGenerationErrorType {
   modelNotFound,
   modelLoad,
@@ -61,7 +74,7 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
     LlamaInferenceRunner? inferenceRunner,
     LlamaCancelRunner? cancelRunner,
     LlamaContextLengthResolver? contextLengthResolver,
-  }) : _inferenceRunner = inferenceRunner ?? fllamaChat,
+  }) : _inferenceRunner = inferenceRunner ?? _runNativeChat,
        _cancelRunner = cancelRunner ?? fllamaCancelInference,
        _contextLengthResolver =
            contextLengthResolver ?? fllamaTrainedContextLength {

@@ -6,6 +6,70 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('P3-01b installer rejects conflicting ggml providers', () {
+    final source = File('tool/build_windows_installer.ps1').readAsStringSync();
+    final start = source.indexOf(
+      r"    $runner = 'build\windows\x64\runner\Release'",
+    );
+    final end = source.indexOf(r'    $version =', start);
+    expect(start, greaterThanOrEqualTo(0));
+    expect(end, greaterThan(start));
+    final guard = source.substring(start, end);
+    final fixture = Directory.systemTemp.createTempSync('p301b-installer-');
+    addTearDown(() => fixture.deleteSync(recursive: true));
+    final runner = Directory('${fixture.path}/build/windows/x64/runner/Release')
+      ..createSync(recursive: true);
+    final native =
+        File('${fixture.path}/build/native_assets/windows/ggml-base.dll')
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync('llama');
+    final base = File('${runner.path}/ggml-base.dll')
+      ..writeAsStringSync(native.readAsStringSync());
+    ProcessResult check() => Process.runSync('powershell', [
+      '-NoProfile',
+      '-Command',
+      guard,
+    ], workingDirectory: fixture.path);
+    expect(check().exitCode, 0);
+    final extra = File('${runner.path}/nested/ggml-base.dll')
+      ..parent.createSync()
+      ..writeAsStringSync('whisper');
+    expect(check().exitCode, isNot(0), reason: 'distinct nested DLL');
+    extra.deleteSync();
+    base.writeAsStringSync('whisper');
+    expect(check().exitCode, isNot(0), reason: 'overwritten runner DLL');
+    base.writeAsStringSync('llama');
+    File('${runner.path}/ggml-cpu.dll').writeAsStringSync('whisper');
+    expect(check().exitCode, isNot(0), reason: 'stale Whisper CPU DLL');
+  }, skip: !Platform.isWindows);
+
+  test('P3-01b Windows isolates static Whisper from llama native assets', () {
+    final cmake = File('windows/CMakeLists.txt').readAsStringSync();
+    final hook = File('windows/whisper_static.cmake').readAsStringSync();
+    expect(cmake, contains('CMAKE_PROJECT_whisper.cpp_INCLUDE'));
+    expect(
+      cmake.indexOf('CMAKE_PROJECT_whisper.cpp_INCLUDE'),
+      lessThan(cmake.indexOf('include(flutter/generated_plugins.cmake)')),
+    );
+    expect(cmake, contains('STREQUAL "STATIC_LIBRARY"'));
+    expect(cmake, contains('list(REMOVE_ITEM PLUGIN_BUNDLED_LIBRARIES'));
+    for (final setting in [
+      'BUILD_SHARED_LIBS OFF',
+      'GGML_STATIC ON',
+      'GGML_BACKEND_DL OFF',
+      'GGML_CPU ON',
+      'GGML_CPU_ALL_VARIANTS OFF',
+      'GGML_NATIVE OFF',
+    ]) {
+      expect(hook, contains(setting));
+    }
+    final installer = File('tool/build_windows_installer.ps1')
+        .readAsStringSync();
+    expect(installer, contains(r'$ggmlHashes.Count -ne 1'));
+    expect(installer, contains('does not match fllama native assets'));
+    expect(installer, contains('shared ggml-cpu.dll must not be packaged'));
+  });
+
   const workflowPath = '.github/workflows/release.yml';
 
   group('P1-28 GitHub Actions release pipeline', () {

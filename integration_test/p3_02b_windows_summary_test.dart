@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:attenlume/domain/ai/session_summary.dart';
+import 'package:attenlume/domain/ai/summary_prompt.dart';
 import 'package:attenlume/domain/ai/summary_quality.dart';
+import 'package:attenlume/domain/ai/text_generation_engine.dart';
 import 'package:attenlume/domain/services/session_summariser.dart';
 import 'package:attenlume/platform/ai/llama_text_generation_engine.dart';
 import 'package:flutter/foundation.dart';
@@ -38,7 +41,9 @@ void main() {
         'Model initialised in $loadTimeMs ms (context: ${engine.contextTokens} tokens)',
       );
 
-      final summariser = SessionSummariser(engine: engine);
+      final measured = _MeasuredEngine(engine);
+      final summariser = SessionSummariser(engine: measured);
+      final qualityFailures = <String>[];
 
       try {
         for (final testCase in summaryQualitySet) {
@@ -49,27 +54,26 @@ void main() {
           final material = testCase.material();
 
           int tokenUpdates = 0;
+          measured.answers.clear();
           final stopwatchGen = Stopwatch()..start();
-          final summary = await summariser.summarise(
-            material,
-            activityId: testCase.id,
-            onProgress: (_) => tokenUpdates++,
-          );
+          SessionSummary? summary;
+          try {
+            summary = await summariser.summarise(
+              material,
+              activityId: testCase.id,
+              onProgress: (_) => tokenUpdates++,
+            );
+          } on SummaryFormatException {
+            qualityFailures.add('${testCase.id}: unparseable model answer');
+          }
           stopwatchGen.stop();
 
           final genTimeMs = stopwatchGen.elapsedMilliseconds;
-          final totalOutputChars = [
-            summary.summary,
-            for (final p in summary.points) p.text,
-            for (final f in summary.followUps) f.text,
-            ...summary.questions,
-          ].join(' ').length;
+          final totalOutputChars = measured.answers.join(' ').length;
           final approxOutputTokens = (totalOutputChars / 4.0).round();
           final tps = genTimeMs > 0
               ? (approxOutputTokens / (genTimeMs / 1000.0))
               : 0.0;
-
-          final score = scoreSummary(summary, testCase);
 
           debugPrint('Case ID: ${testCase.id}');
           debugPrint('Title: ${testCase.title}');
@@ -80,16 +84,57 @@ void main() {
             'Approx output tokens: $approxOutputTokens (~$totalOutputChars characters)',
           );
           debugPrint('Output speed: ${tps.toStringAsFixed(2)} tokens/sec');
+          if (summary == null) {
+            debugPrint(
+              'Score: unavailable (unparseable answer; passes: false)',
+            );
+            for (final answer in measured.answers) {
+              debugPrint('Raw model answer: $answer');
+            }
+            continue;
+          }
+          final score = scoreSummary(summary, testCase);
           debugPrint('Score: $score (passes: ${score.passes})');
           debugPrint('Summary text: ${summary.summary}');
           debugPrint('Points count: ${summary.points.length}');
-          expect(score.passes, isTrue, reason: '${testCase.id}: $score');
+          if (!score.passes) {
+            qualityFailures.add('${testCase.id}: $score');
+          }
         }
       } finally {
         await engine.dispose();
         debugPrint('LLM engine disposed.');
       }
       debugPrint('=== [P3-02b BENCHMARK COMPLETE] ===');
+      expect(qualityFailures, isEmpty, reason: qualityFailures.join('\n'));
     });
   }, skip: !hasModel);
+}
+
+// Capture actual generated text even when summary parsing rejects it. The
+// native engine and its Windows initialisation remain on the production path.
+class _MeasuredEngine implements TextGenerationEngine {
+  _MeasuredEngine(this.delegate);
+
+  final TextGenerationEngine delegate;
+  final answers = <String>[];
+
+  @override
+  String get modelId => delegate.modelId;
+  @override
+  int get contextTokens => delegate.contextTokens;
+  @override
+  Future<String> generate(
+    TextGenerationRequest request, {
+    void Function(double progress)? onProgress,
+  }) async {
+    final answer = await delegate.generate(request, onProgress: onProgress);
+    answers.add(answer);
+    return answer;
+  }
+
+  @override
+  Future<void> cancel() => delegate.cancel();
+  @override
+  Future<void> dispose() => delegate.dispose();
 }
