@@ -8,6 +8,7 @@ import 'package:flutter_whisper_ggml/flutter_whisper.dart';
 
 import 'audio_to_wav_converter.dart';
 import 'transcription_exceptions.dart';
+import 'whisper_cpu.dart';
 
 const Duration kMaxPilotTranscriptionDuration = Duration(minutes: 10);
 const int kMaxPilotPcmBytes = 10 * 60 * 16000 * 2;
@@ -21,6 +22,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
     AudioToWavConverter? audioConverter,
     Future<AudioInfo> Function(String path)? audioInfoProvider,
     Future<FlutterWhisper> Function(String modelPath)? whisperLoader,
+    this.cpu = const PlatformWhisperCpu(),
   }) : _audioConverter = audioConverter ?? const NativeAudioToWavConverter(),
        _audioInfoProvider = audioInfoProvider ?? AudioDecoder.getAudioInfo,
        _whisperLoader =
@@ -31,6 +33,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
            ));
 
   final AudioToWavConverter _audioConverter;
+  final WhisperCpu cpu;
   final Future<AudioInfo> Function(String path) _audioInfoProvider;
   final Future<FlutterWhisper> Function(String modelPath) _whisperLoader;
   bool _isTranscribing = false;
@@ -70,6 +73,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
   ) async {
     Directory? temp;
     try {
+      requireWhisperCpu(cpu);
       final source = File(audioPath);
       if (!source.existsSync()) {
         throw const AudioDecodingException('Source audio file not found.');
@@ -156,6 +160,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
         throw const TranscriptionCancelledException();
       }
       if (error is AudioDecodingException ||
+          error is UnsupportedWhisperCpuException ||
           error is WhisperModelNotFoundException) {
         rethrow;
       }

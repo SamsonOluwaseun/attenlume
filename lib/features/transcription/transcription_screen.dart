@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../data/filesystem/app_data_directory.dart';
 import '../../domain/transcription/transcript.dart';
 import '../../platform/transcription/transcription_exceptions.dart';
+import '../../platform/transcription/whisper_cpu.dart';
 import 'transcription_controller.dart';
 import 'transcription_providers.dart';
 
@@ -140,6 +141,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
       body: data.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) {
+          final unsupportedCpu = error is UnsupportedWhisperCpuException;
           final unsupported =
               error is UnsupportedError &&
               error.message == 'The transcription pilot needs a 64-bit device.';
@@ -154,7 +156,9 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                   const Text('Transcription unavailable'),
                   const SizedBox(height: 12),
                   Text(
-                    unsupported
+                    unsupportedCpu
+                        ? UnsupportedWhisperCpuException.reason
+                        : unsupported
                         ? 'This pilot needs a 64-bit Android app and operating system. '
                               'Reinstalling the model will not change this. '
                               'Recording and export still work.'
@@ -166,7 +170,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                               'restart the app. Your recordings are unchanged.',
                     textAlign: TextAlign.center,
                   ),
-                  if (!unsupported) ...[
+                  if (!unsupported && !unsupportedCpu) ...[
                     const SizedBox(height: 16),
                     FilledButton(
                       key: const Key('transcription-setup-retry'),

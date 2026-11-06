@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../domain/transcription/transcription_engine.dart';
+import '../../platform/transcription/whisper_cpu.dart';
 import '../../platform/transcription/whisper_model_store.dart';
 import '../../platform/transcription/whisper_transcription_engine.dart';
 import 'transcription_controller.dart';
@@ -14,7 +15,11 @@ class NativeTranscriptionPilot {
   final TranscriptionEngine Function() createEngine;
 }
 
-Future<NativeTranscriptionPilot> createNativePilot(Directory root) async {
+Future<NativeTranscriptionPilot> createNativePilot(
+  Directory root, {
+  WhisperCpu cpu = const PlatformWhisperCpu(),
+}) async {
+  requireWhisperCpu(cpu);
   // This pinned Android runtime ships arm64/x86_64 only. Keep the free capture
   // core usable on 32-bit devices without offering an unusable model download.
   if (Platform.isAndroid && ffi.sizeOf<ffi.IntPtr>() != 8) {
@@ -29,7 +34,7 @@ Future<NativeTranscriptionPilot> createNativePilot(Directory root) async {
   );
   return NativeTranscriptionPilot(
     _PilotModels(store),
-    WhisperTranscriptionEngine.new,
+    () => WhisperTranscriptionEngine(cpu: cpu),
   );
 }
 

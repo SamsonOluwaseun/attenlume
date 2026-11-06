@@ -4,6 +4,7 @@ import 'package:attenlume/features/transcription/native_pilot.dart';
 import 'package:attenlume/features/transcription/transcription_providers.dart';
 import 'package:attenlume/features/transcription/transcription_screen.dart';
 import 'package:attenlume/platform/transcription/transcription_exceptions.dart';
+import 'package:attenlume/platform/transcription/whisper_cpu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,43 @@ class _PlatformAlias implements Directory {
 }
 
 void main() {
+  test(
+    'P3-01c FR-TRN-10 unsupported CPU blocks setup before storage access',
+    () async {
+      await expectLater(
+        createNativePilot(
+          Directory('does-not-exist'),
+          cpu: PlatformWhisperCpu(
+            isWindows: true,
+            featurePresent: (_) => false,
+          ),
+        ),
+        throwsA(isA<UnsupportedWhisperCpuException>()),
+      );
+    },
+  );
+
+  testWidgets(
+    'P3-01c FR-TRN-10 unsupported CPU shows reason without offering transcription',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            transcriptionControllerProvider.overrideWith((ref) async {
+              throw const UnsupportedWhisperCpuException();
+            }),
+          ],
+          child: const MaterialApp(home: TranscriptionScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(UnsupportedWhisperCpuException.reason), findsOneWidget);
+      expect(find.byKey(const Key('transcription-setup-retry')), findsNothing);
+      expect(find.byKey(const Key('transcribe-recording')), findsNothing);
+      expect(find.byKey(const Key('transcription-enabled')), findsNothing);
+    },
+  );
+
   test(
     'FR-TRN-01 P1-50 platform app-root alias permits fresh model setup',
     () async {

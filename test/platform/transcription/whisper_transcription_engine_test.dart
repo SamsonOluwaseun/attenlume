@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:attenlume/domain/transcription/transcription_engine.dart';
 import 'package:attenlume/platform/transcription/audio_to_wav_converter.dart';
 import 'package:attenlume/platform/transcription/transcription_exceptions.dart';
+import 'package:attenlume/platform/transcription/whisper_cpu.dart';
 import 'package:attenlume/platform/transcription/whisper_transcription_engine.dart';
 import 'package:audio_decoder/audio_decoder.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -159,6 +160,62 @@ void main() {
   }
 
   group('WhisperTranscriptionEngine', () {
+    test(
+      'P3-01c FR-TRN-10 unsupported CPU never decodes or loads Whisper',
+      () async {
+        final engine = WhisperTranscriptionEngine(
+          cpu: PlatformWhisperCpu(
+            isWindows: true,
+            featurePresent: (_) => false,
+          ),
+          audioConverter: audioConverter,
+          audioInfoProvider: (_) async => throw StateError('must not decode'),
+          whisperLoader: (_) async => throw StateError('must not load'),
+        );
+        await expectLater(
+          engine.transcribe(
+            audioPath: sourceAudioFile.path,
+            modelDirectory: modelFile.path,
+            onProgress: (_) {},
+          ),
+          throwsA(isA<UnsupportedWhisperCpuException>()),
+        );
+        expect(audioConverter.wasCalled, isFalse);
+        expect(sourceAudioFile.readAsStringSync(), 'dummy-audio-content');
+        await engine.dispose();
+      },
+    );
+
+    test(
+      'P3-01c FR-TRN-10 supported CPU permits model load and transcription',
+      () async {
+        var loaded = false;
+        final engine = WhisperTranscriptionEngine(
+          cpu: PlatformWhisperCpu(isWindows: true, featurePresent: (_) => true),
+          audioConverter: audioConverter,
+          audioInfoProvider: (_) async => const AudioInfo(
+            duration: Duration(seconds: 1),
+            sampleRate: 16000,
+            channels: 1,
+            bitRate: 256000,
+            format: 'wav',
+          ),
+          whisperLoader: (_) async {
+            loaded = true;
+            return FlutterWhisper.withBackend(whisperBackend);
+          },
+        );
+        final spans = await engine.transcribe(
+          audioPath: sourceAudioFile.path,
+          modelDirectory: modelFile.path,
+          onProgress: (_) {},
+        );
+        expect(loaded, isTrue);
+        expect(whisperBackend.wasTranscribeCalled, isTrue);
+        expect(spans.first.text, 'Hello world');
+        await engine.dispose();
+      },
+    );
     test(
       'transcribe successfully produces segment-relative TranscriptSpans',
       () async {

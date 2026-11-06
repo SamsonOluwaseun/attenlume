@@ -167,7 +167,7 @@ const quickGuide = QuickGuide(
             'For English audio up to 10 minutes per clip, choose audio here or open a saved activity and tap Optional transcription. Activities with audio cuts are not supported yet: import their exported trimmed audio instead. Setup alone never starts transcription.',
             'Review the generated text, correct errors, copy it or share transcript.txt for Notepad, or timestamped transcript.md. Private activity text needs a separate opt-in to copy or share.',
             'Exports with notes include the transcript, with times that match the exported audio. Text from parts you cut is left out of trimmed copies.',
-            'Switching off stops processing and keeps audio and saved text. Keep the model for offline use, or explicitly remove it. Live captions will follow this after-recording pilot. If setup fails, read the reason and use Retry setup. A 32-bit Android system is not supported by this pilot.',
+            'Switching off stops processing and keeps audio and saved text. Keep the model for offline use, or explicitly remove it. Live captions will follow this after-recording pilot. If setup fails, read the reason and use Retry setup. A 32-bit Android system is not supported by this pilot. Windows transcription needs a processor with AVX2 support (typically from 2013 onwards); older PCs can still record and use everything else.',
           ],
         ),
         GuideStep(
