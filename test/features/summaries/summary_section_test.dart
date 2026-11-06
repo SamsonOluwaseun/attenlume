@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:attenlume/app/theme/app_theme.dart';
@@ -44,13 +45,38 @@ TranscriptDocument _transcript() => TranscriptDocument(
   ],
 );
 
+class _OpeningModel implements SummaryModelAccess {
+  final opening = Completer<TextGenerationEngine>();
+  int opens = 0;
+
+  @override
+  Future<String?> unavailableReason() async => null;
+
+  @override
+  Future<TextGenerationEngine> open() {
+    opens++;
+    return opening.future;
+  }
+}
+
+class _CountingStore extends SummaryStore {
+  _CountingStore(super.root);
+  int saves = 0;
+
+  @override
+  Future<void> save(SessionSummary summary) async {
+    saves++;
+    await super.save(summary);
+  }
+}
+
 void main() {
   late Directory root;
-  late SummaryStore store;
+  late _CountingStore store;
 
   setUp(() {
     root = Directory.systemTemp.createTempSync('summary_section_test_');
-    store = SummaryStore(root);
+    store = _CountingStore(root);
   });
 
   tearDown(() => root.deleteSync(recursive: true));
@@ -60,6 +86,8 @@ void main() {
     List<TranscriptDocument>? transcripts,
     FakeTextGenerationEngine? engine,
     bool recording = false,
+    bool Function()? isRecording,
+    SummaryModelAccess? model,
   }) async {
     final played = <int>[];
     await tester.pumpWidget(
@@ -69,8 +97,10 @@ void main() {
             (_) async => transcripts ?? [_transcript()],
           ),
           summaryStoreProvider.overrideWithValue(() async => store),
-          summaryModelAccessProvider.overrideWithValue(_Model(engine)),
-          summaryBlockedByRecordingProvider.overrideWithValue(() => recording),
+          summaryModelAccessProvider.overrideWithValue(model ?? _Model(engine)),
+          summaryBlockedByRecordingProvider.overrideWithValue(
+            isRecording ?? () => recording,
+          ),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),
@@ -176,6 +206,49 @@ void main() {
     await settle(tester);
     expect(find.textContaining('A recording is running'), findsOneWidget);
     expect(engine.requests, isEmpty);
+  });
+
+  testWidgets('FR-AI-02 recording starts during verification: no inference', (
+    tester,
+  ) async {
+    var recording = false;
+    final model = _OpeningModel();
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    await pump(tester, model: model, isRecording: () => recording);
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await tester.pump();
+    expect(find.byKey(const Key('summary-progress')), findsOneWidget);
+    expect(engine.requests, isEmpty);
+    recording = true;
+    model.opening.complete(engine);
+    await settle(tester);
+    expect(find.textContaining('A recording is running'), findsOneWidget);
+    expect(engine.requests, isEmpty);
+    expect(engine.disposed, isTrue);
+    expect(store.saves, 0);
+    expect(find.byKey(const Key('summary-create')), findsOneWidget);
+  });
+
+  testWidgets('FR-AI-02 pending model opening allows one engine and one save', (
+    tester,
+  ) async {
+    final model = _OpeningModel();
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    await pump(tester, model: model);
+    final create = find.byKey(const Key('summary-create'));
+    // Two taps before a frame also exercise the synchronous operation guard.
+    await tester.tap(create);
+    await tester.tap(create);
+    await tester.pump();
+    expect(model.opens, 1);
+    expect(find.byKey(const Key('summary-progress')), findsOneWidget);
+    expect(create, findsNothing);
+    model.opening.complete(engine);
+    await settle(tester);
+    expect(model.opens, 1);
+    expect(engine.requests, hasLength(1));
+    expect(store.saves, 1);
+    expect(engine.disposed, isTrue);
   });
 
   testWidgets('P3-02 an unreadable answer keeps nothing and says so', (

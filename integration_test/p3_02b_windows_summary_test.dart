@@ -21,17 +21,8 @@ void main() {
   testWidgets('P3-02b [FR-AI-02] Windows real-model summary quality benchmark', (
     tester,
   ) async {
-    if (!hasModel) {
-      // ignore: avoid_print
-      print(
-        '=== [P3-02b SKIP] ATTENLUME_LLM_MODEL environment variable not set '
-        'or model file not found. Skipping Windows real-model summary quality benchmark. ===',
-      );
-      return;
-    }
-
     await tester.runAsync(() async {
-      final modelPath = envModelPath.trim();
+      final modelPath = envModelPath!.trim();
       debugPrint('=== [P3-02b BENCHMARK START] ===');
       debugPrint('Model path: $modelPath');
 
@@ -92,6 +83,7 @@ void main() {
           debugPrint('Score: $score (passes: ${score.passes})');
           debugPrint('Summary text: ${summary.summary}');
           debugPrint('Points count: ${summary.points.length}');
+          expect(score.passes, isTrue, reason: '${testCase.id}: $score');
         }
       } finally {
         await engine.dispose();
@@ -99,5 +91,5 @@ void main() {
       }
       debugPrint('=== [P3-02b BENCHMARK COMPLETE] ===');
     });
-  });
+  }, skip: !hasModel);
 }
