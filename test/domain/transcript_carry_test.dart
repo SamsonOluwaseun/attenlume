@@ -368,6 +368,47 @@ void main() {
       },
     );
 
+    test('FR-TRN-08 P2-09b fully removed recordings retire their transcripts '
+        'while another recording remains', () async {
+      final store = TranscriptStore(root);
+      final originalBytes = await MediaPaths.resolve(
+        root,
+        seg1.filePath,
+      ).readAsBytes();
+      // Together with the existing cuts, this removes the whole first
+      // recording, which therefore produces no kept pieces.
+      await t.cuts.add(activity.id, startOffsetMs: 0, endOffsetMs: 10100);
+
+      final result = await service(store).apply(activity.id);
+
+      expect(result.filesWritten, 0);
+      expect(result.transcripts.carried, 1);
+      expect(result.transcripts.hasProblem, isFalse);
+      expect((await t.media.segmentsFor(activity.id)).map((s) => s.id), [
+        seg2.id,
+      ]);
+      expect(
+        (await store.load(activityId: activity.id, segmentId: seg1.id)).state,
+        TranscriptLoadState.missing,
+      );
+      final visible = await store.listDocuments(activityId: activity.id);
+      expect(visible.map((d) => d.segmentId), [seg2.id]);
+      expect(_lines(visible.single), [(1000, 2000, 'second recording')]);
+      expect(visible.single.segmentOffset, Duration.zero);
+      expect(
+        _superseded(root, activity.id).single.readAsStringSync(),
+        contains('across the start cut'),
+      );
+      expect(
+        await MediaPaths.resolve(
+          root,
+          result.originals.single.relativePath,
+        ).readAsBytes(),
+        originalBytes,
+      );
+      expect(MediaPaths.resolve(root, seg2.filePath).existsSync(), isTrue);
+    });
+
     test('FR-TRN-08 P2-09b when the transcript cannot be moved the trim '
         'still succeeds and the old transcript stays as it was', () async {
       final result = await service(_FailingStore(root)).apply(activity.id);

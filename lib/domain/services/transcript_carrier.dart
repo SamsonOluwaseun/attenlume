@@ -69,17 +69,18 @@ class TranscriptCarrier {
     }
   }
 
-  /// After a permanent trim replaced recordings: each piece is (old segment
+  /// After a permanent trim: [replaced] contains every replaced segment ID,
+  /// including recordings removed entirely. Each piece is (old segment
   /// ID, new segment ID, the part of the old recording it holds, in ms
   /// from its start). Lines in removed audio are dropped and the rest are
   /// timed from their piece's start. Transcripts of recordings the trim did
   /// not touch only get their new place on the timeline. Never throws.
   Future<TranscriptCarryReport> afterTrim(
     TranscriptSnapshot before, {
+    required Set<String> replaced,
     required List<(String, String, TimeRange)> pieces,
   }) async {
     if (before.failed) return const TranscriptCarryReport(unchecked: true);
-    final replaced = {for (final (from, _, _) in pieces) from};
     final affected = replaced.where(before.ready.containsKey).toSet();
     final unreadable = replaced.where(before.unreadable.contains).length;
     if (before.ready.isEmpty) {

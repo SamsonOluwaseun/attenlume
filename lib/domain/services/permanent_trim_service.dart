@@ -339,7 +339,11 @@ class PermanentTrimService {
     // audio. Never fails the trim: one that cannot move stays as it was.
     final carried = transcriptsBefore == null
         ? TranscriptCarryReport.none
-        : await transcripts!.afterTrim(transcriptsBefore, pieces: waveforms);
+        : await transcripts!.afterTrim(
+            transcriptsBefore,
+            replaced: {for (final c in plan.changes) c.segment.id},
+            pieces: waveforms,
+          );
 
     // Derived waveform summaries follow (ADR-034). Failures only mean
     // a flat line on the review screen.
