@@ -98,6 +98,15 @@ final _item = RegExp(
   caseSensitive: false,
 );
 
+// Gemma 4 encloses private channels in <|channel>...<channel|>.
+// Also handle models using <think>. An unfinished block consumes the rest:
+// a truncated reasoning answer must fail parsing rather than expose thoughts.
+final _thinkingBlock = RegExp(
+  r'<\|channel>[\s\S]*?(?:<channel\|>|$)|'
+  r'<think>[\s\S]*?(?:</think>|$)',
+  caseSensitive: false,
+);
+
 /// Reads [answer]. [timestamps] are the material's times; a cited time is
 /// snapped to the nearest one within [citationTolerance], otherwise the item
 /// is dropped and counted in [ParsedSummary.leftOut]. Throws
@@ -127,7 +136,8 @@ ParsedSummary parseSummaryAnswer(
   final seen = <String>{};
   var leftOut = 0;
   var inSummary = false;
-  for (final raw in answer.split(RegExp(r'\r?\n'))) {
+  for (final raw
+      in answer.replaceAll(_thinkingBlock, '').split(RegExp(r'\r?\n'))) {
     final line = raw
         .replaceAll('**', '')
         .replaceFirst(RegExp(r'^\s*(?:[-*•]|\d+[.)])\s*'), '')
