@@ -6,6 +6,49 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('P3-01c FR-TRN-10 Whisper uses fixed AVX2 FMA F16C without native or AVX512', () {
+    final hook = File('windows/whisper_static.cmake').absolute.path;
+    final fixture = Directory.systemTemp.createTempSync('p301c-cmake-');
+    addTearDown(() => fixture.deleteSync(recursive: true));
+    // Evaluate the hook, rather than accepting option names in comments or
+    // an OFF loop as evidence that the required instructions are enabled.
+    final script = File('${fixture.path}/check.cmake')
+      ..writeAsStringSync('''
+include("${hook.replaceAll('\\', '/')}")
+foreach(option SSE42 AVX AVX2 FMA F16C BMI2)
+  if(NOT GGML_\${option})
+    message(FATAL_ERROR "Required instruction disabled: \${option}")
+  endif()
+endforeach()
+foreach(option NATIVE BACKEND_DL CPU_ALL_VARIANTS AVX_VNNI AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8 AMX_BF16)
+  if(GGML_\${option})
+    message(FATAL_ERROR "Forbidden setting enabled: \${option}")
+  endif()
+endforeach()
+if(BUILD_SHARED_LIBS OR NOT GGML_STATIC OR NOT GGML_CPU)
+  message(FATAL_ERROR "Whisper must use a static built-in CPU backend")
+endif()
+''');
+    var cmake = 'cmake';
+    if (Platform.isWindows) {
+      final discovery = Process.runSync(
+        '${Platform.environment['ProgramFiles(x86)']}/Microsoft Visual Studio/Installer/vswhere.exe',
+        [
+          '-latest',
+          '-products',
+          '*',
+          '-find',
+          'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe',
+        ],
+      );
+      expect(discovery.exitCode, 0, reason: '${discovery.stderr}');
+      final discovered = (discovery.stdout as String).trim();
+      if (discovered.isNotEmpty) cmake = discovered.split('\n').first.trim();
+    }
+    final result = Process.runSync(cmake, ['-P', script.path]);
+    expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+  });
+
   test('P3-01b installer rejects conflicting ggml providers', () {
     final source = File('tool/build_windows_installer.ps1').readAsStringSync();
     final start = source.indexOf(
