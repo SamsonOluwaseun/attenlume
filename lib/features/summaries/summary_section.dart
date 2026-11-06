@@ -54,7 +54,7 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
   double? _progress;
   String? _error;
 
-  bool get _running => _summariser != null;
+  bool _running = false;
 
   @override
   void initState() {
@@ -125,12 +125,21 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
     }
     TextGenerationEngine? engine;
     setState(() {
+      _running = true;
       _error = null;
       _progress = null;
     });
     try {
       engine = await ref.read(summaryModelAccessProvider).open();
       if (!mounted) return;
+      // Verification can take long enough for a recording to start.
+      if (ref.read(summaryBlockedByRecordingProvider)()) {
+        _fail(
+          'A recording is running. Summaries wait until it stops, so the '
+          'recording keeps the processor.',
+        );
+        return;
+      }
       final summariser = SessionSummariser(engine: engine);
       setState(() => _summariser = summariser);
       final summary = await summariser.summarise(
@@ -157,7 +166,12 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       );
     } finally {
       unawaited(engine?.dispose());
-      if (mounted) setState(() => _summariser = null);
+      if (mounted) {
+        setState(() {
+          _summariser = null;
+          _running = false;
+        });
+      }
     }
   }
 
@@ -239,7 +253,9 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       alignment: AlignmentDirectional.centerStart,
       child: TextButton(
         key: const Key('summary-cancel'),
-        onPressed: () => unawaited(_summariser?.cancel()),
+        onPressed: _summariser == null
+            ? null
+            : () => unawaited(_summariser?.cancel()),
         child: const Text('Stop'),
       ),
     ),
