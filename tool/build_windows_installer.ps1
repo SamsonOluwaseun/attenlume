@@ -43,6 +43,22 @@ try {
         finally { $ErrorActionPreference = $previousPreference }
         if ($buildExit -ne 0) { throw 'flutter build windows failed' }
     }
+    # Check all files that the recursive staging copy could package. Also compare
+    # the sole provider with native assets: an overwritten DLL hides a collision.
+    $runner = 'build\windows\x64\runner\Release'
+    $ggmlBases = @(Get-ChildItem -LiteralPath $runner -Recurse -Filter 'ggml-base.dll' -File)
+    $ggmlHashes = @($ggmlBases | Get-FileHash -Algorithm SHA256 | Select-Object -ExpandProperty Hash -Unique)
+    if ($ggmlHashes.Count -ne 1) {
+        throw "Expected one distinct ggml-base.dll before packaging; found $($ggmlHashes.Count)"
+    }
+    $nativeBase = 'build\native_assets\windows\ggml-base.dll'
+    if (-not (Test-Path -LiteralPath $nativeBase) -or
+        $ggmlHashes[0] -ne (Get-FileHash -LiteralPath $nativeBase -Algorithm SHA256).Hash) {
+        throw 'Runner ggml-base.dll does not match fllama native assets'
+    }
+    if (Get-ChildItem -LiteralPath $runner -Recurse -Filter 'ggml-cpu.dll' -File) {
+        throw "Whisper's shared ggml-cpu.dll must not be packaged"
+    }
     $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches[0].Groups[1].Value)
 
     # Stage the release build with the app-local Visual C++ runtime.

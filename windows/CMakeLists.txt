@@ -55,7 +55,21 @@ add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
+# The plugin forces BUILD_SHARED_LIBS=ON before adding whisper.cpp. Run our
+# settings at whisper.cpp's project() boundary, after that forced cache write.
+set("CMAKE_PROJECT_whisper.cpp_INCLUDE" "${CMAKE_CURRENT_SOURCE_DIR}/whisper_static.cmake")
 include(flutter/generated_plugins.cmake)
+unset("CMAKE_PROJECT_whisper.cpp_INCLUDE")
+
+# Static archives are linked into flutter_whisper_plugin.dll, never bundled.
+# Fail configuration if an upstream change reintroduces a shared dependency.
+foreach(_whisper_target whisper ggml ggml-base ggml-cpu)
+  get_target_property(_whisper_type ${_whisper_target} TYPE)
+  if(NOT _whisper_type STREQUAL "STATIC_LIBRARY")
+    message(FATAL_ERROR "Whisper dependency ${_whisper_target} must be static")
+  endif()
+  list(REMOVE_ITEM PLUGIN_BUNDLED_LIBRARIES "$<TARGET_FILE:${_whisper_target}>")
+endforeach()
 
 
 # === Installation ===
