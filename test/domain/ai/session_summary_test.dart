@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:attenlume/data/ai/summary_store.dart';
 
 import 'package:attenlume/domain/ai/session_material.dart';
 import 'package:attenlume/domain/ai/session_summary.dart';
@@ -196,6 +199,58 @@ Some chatter the model added.
         isTrue,
       );
     });
+  });
+
+  group('P3-02c [FR-AI-02] thinking never reaches summaries', () {
+    const answer = 'SUMMARY: Habits.\nPOINT [01:28]: Row counts.';
+    for (final block in [
+      '',
+      '<|channel>thought\nSUMMARY: PRIVATE THINKING\n'
+          'POINT [01:28]: PRIVATE THINKING<channel|>',
+      '<think>SUMMARY: PRIVATE THINKING</think>',
+    ]) {
+      test(
+        'P3-02c [FR-AI-02] parses and saves answer with block "$block"',
+        () async {
+          final root = Directory.systemTemp.createTempSync('p3_02c_');
+          addTearDown(() => root.deleteSync(recursive: true));
+          final engine = FakeTextGenerationEngine(
+            respond: (_) => '$block$answer',
+          );
+          final summary = await SessionSummariser(engine: engine)
+              .summarise(summaryQualitySet.first.material(), activityId: 'a1');
+          expect(summary.summary, 'Habits.');
+          expect(summary.points.single.text, 'Row counts.');
+          final store = SummaryStore(root);
+          await store.save(summary);
+          for (final file in root.listSync(recursive: true).whereType<File>()) {
+            expect(
+              await file.readAsString(),
+              isNot(contains('PRIVATE THINKING')),
+            );
+            expect(await file.readAsString(), isNot(contains('<|channel>')));
+          }
+        },
+      );
+    }
+    test(
+      'P3-02c [FR-AI-02] unfinished thinking cannot masquerade as an answer',
+      () {
+        for (final start in ['<|channel>thought', '<think>']) {
+          expect(
+            () => parseSummaryAnswer('$start\n$answer', [
+              const Duration(seconds: 88),
+            ]),
+            throwsA(isA<SummaryFormatException>()),
+          );
+          final parsed = parseSummaryAnswer(
+            'SUMMARY: Safe.\n$start\n$answer',
+            [],
+          );
+          expect(parsed.summary, 'Safe.');
+        }
+      },
+    );
   });
 
   group('P3-02 summariser', () {

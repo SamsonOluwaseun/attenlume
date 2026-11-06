@@ -177,6 +177,8 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
       contextSize: _contextTokens,
       maxTokens: maxTokens,
       temperature: request.temperature,
+      // Gemma 4 uses this template flag to omit the <|think|> switch.
+      enableThinking: false,
       messages: messages,
     );
 

@@ -96,43 +96,47 @@ void main() {
   });
 
   group('P3-01 Request execution, progress and error mapping', () {
-    test('P3-01 builds request with system, prompt and parameters', () async {
-      OpenAiRequest? capturedRequest;
+    test(
+      'P3-02c [FR-AI-02] disables thinking and preserves request parameters',
+      () async {
+        OpenAiRequest? capturedRequest;
 
-      final engine = LlamaTextGenerationEngine(
-        modelPath: 'test_model.gguf',
-        maxContextTokens: 2048,
-        inferenceRunner: (req, cb) async {
-          capturedRequest = req;
-          cb('Sample summary', '', true, null);
-          return 42;
-        },
-        contextLengthResolver: (p) => 2048,
-      );
+        final engine = LlamaTextGenerationEngine(
+          modelPath: 'test_model.gguf',
+          maxContextTokens: 2048,
+          inferenceRunner: (req, cb) async {
+            capturedRequest = req;
+            cb('Sample summary', '', true, null);
+            return 42;
+          },
+          contextLengthResolver: (p) => 2048,
+        );
 
-      final result = await engine.generate(
-        const TextGenerationRequest(
-          system: 'You are an summariser for Samlytics Data Services.',
-          prompt: 'Summarise the keynote.',
-          maxOutputTokens: 256,
-          temperature: 0.15,
-        ),
-      );
+        final result = await engine.generate(
+          const TextGenerationRequest(
+            system: 'You are an summariser for Samlytics Data Services.',
+            prompt: 'Summarise the keynote.',
+            maxOutputTokens: 256,
+            temperature: 0.15,
+          ),
+        );
 
-      expect(result, 'Sample summary');
-      expect(capturedRequest, isNotNull);
-      expect(capturedRequest!.messages.length, 2);
-      expect(capturedRequest!.messages[0].role, Role.system);
-      expect(
-        capturedRequest!.messages[0].text,
-        'You are an summariser for Samlytics Data Services.',
-      );
-      expect(capturedRequest!.messages[1].role, Role.user);
-      expect(capturedRequest!.messages[1].text, 'Summarise the keynote.');
-      expect(capturedRequest!.maxTokens, 256);
-      expect(capturedRequest!.temperature, 0.15);
-      expect(capturedRequest!.contextSize, 2048);
-    });
+        expect(result, 'Sample summary');
+        expect(capturedRequest, isNotNull);
+        expect(capturedRequest!.messages.length, 2);
+        expect(capturedRequest!.messages[0].role, Role.system);
+        expect(
+          capturedRequest!.messages[0].text,
+          'You are an summariser for Samlytics Data Services.',
+        );
+        expect(capturedRequest!.messages[1].role, Role.user);
+        expect(capturedRequest!.messages[1].text, 'Summarise the keynote.');
+        expect(capturedRequest!.enableThinking, isFalse);
+        expect(capturedRequest!.maxTokens, 256);
+        expect(capturedRequest!.temperature, 0.15);
+        expect(capturedRequest!.contextSize, 2048);
+      },
+    );
 
     test('P3-01 reports progress on token callback', () async {
       final progressValues = <double>[];
