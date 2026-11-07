@@ -55,7 +55,9 @@ class OnDeviceSummaryModelAccess implements SummaryModelAccess {
   final LlamaCancelRunner? cancelRunner;
   final LlamaContextLengthResolver? contextLengthResolver;
 
-  bool _verifiedFirstLoad = false;
+  /// Models fully checksummed since this access was created; each model is
+  /// verified before its own first load, also after switching (P3-11).
+  final _verified = <String>{};
 
   @override
   Future<String?> unavailableReason() async {
@@ -80,17 +82,17 @@ class OnDeviceSummaryModelAccess implements SummaryModelAccess {
     final descriptor = await getDescriptor();
 
     String? path;
-    if (!_verifiedFirstLoad) {
+    if (!_verified.contains(descriptor.id)) {
       path = await store.verifyInstalledPath(descriptor);
       if (path != null) {
-        _verifiedFirstLoad = true;
+        _verified.add(descriptor.id);
       }
     } else {
       path = await store.installedPath(descriptor);
     }
 
     if (path == null) {
-      _verifiedFirstLoad = false;
+      _verified.remove(descriptor.id);
       throw StateError('Download the AI model in Settings > Optional AI');
     }
 

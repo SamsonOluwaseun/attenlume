@@ -79,7 +79,11 @@ class OptionalAiSection extends ConsumerWidget {
           children: [
             _ModelChoice(
               active: controller.descriptor,
-              locked: controller.state.isDownloading,
+              // Locked from the free-space check to the end of the download,
+              // so the controller doing the work is never replaced.
+              locked:
+                  controller.state.isDownloading ||
+                  controller.state.status == LanguageModelStatus.checkingSpace,
             ),
             _OptionalAiCard(controller: controller),
           ],

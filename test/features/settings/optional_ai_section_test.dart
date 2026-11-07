@@ -23,6 +23,12 @@ class _Memory implements DeviceMemoryProbe {
   Future<int?> totalBytes() async => bytes;
 }
 
+class _PendingProbe implements FreeSpaceProbe {
+  final answer = Completer<FreeSpace?>();
+  @override
+  Future<FreeSpace?> query(String path) => answer.future;
+}
+
 class _FakeFreeSpaceProbe implements FreeSpaceProbe {
   _FakeFreeSpaceProbe(this.freeBytes);
   int freeBytes;
@@ -191,6 +197,42 @@ void main() {
       );
       await tester.tap(find.byKey(const Key('optional-ai-confirm-cancel')));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('the choice is locked from the space check onwards', (
+      tester,
+    ) async {
+      final store = LanguageModelStore(baseDirectory: tempDir);
+      final probe = _PendingProbe();
+      final controller = LanguageModelController(
+        store: store,
+        freeSpaceProbe: probe,
+        descriptor: testDescriptor,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        pumpSection(store: store, probe: probe, controller: controller),
+      );
+      await tester.pumpAndSettle();
+      bool enabled(LanguageModelDescriptor m) => tester
+          .widget<RadioListTile<String>>(
+            find.byKey(Key('optional-ai-choice-${m.id}')),
+          )
+          .enabled!;
+      expect(enabled(LanguageModelDescriptor.gemma3_1B), isTrue);
+
+      await tester.tap(find.byKey(const Key('optional-ai-download-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('optional-ai-confirm-download')));
+      await tester.pump();
+      expect(controller.state.status, LanguageModelStatus.checkingSpace);
+      expect(enabled(LanguageModelDescriptor.gemma3_1B), isFalse);
+      expect(enabled(LanguageModelDescriptor.gemma4E2B), isFalse);
+
+      // Not enough space ends the attempt and unlocks the choice.
+      probe.answer.complete(const FreeSpace(availableBytes: 1, totalBytes: 2));
+      await tester.pumpAndSettle();
+      expect(enabled(LanguageModelDescriptor.gemma3_1B), isTrue);
     });
 
     testWidgets(

@@ -129,6 +129,48 @@ void main() {
     });
 
     test(
+      'P3-11 switching models fully verifies the second model too',
+      () async {
+        installFakeModel();
+        // A second model whose file has the right size and marker but
+        // corrupted bytes: only a full checksum can catch it.
+        final other = LanguageModelDescriptor(
+          id: 'other_model',
+          name: 'Other',
+          sizeBytes: fakeModelBytes.length,
+          sha256: fakeModelSha256,
+          downloadUrl: 'https://example.com/other_model.gguf',
+          fileName: 'other_model.gguf',
+          licence: 'Gemma Terms of Use',
+          deviceNotice: 'Runs locally',
+        );
+        final corrupt = File(
+          '${tempDir.path}${Platform.pathSeparator}${other.fileName}',
+        );
+        corrupt.writeAsBytesSync(
+          List.filled(fakeModelBytes.length, 0x41),
+          flush: true,
+        );
+        File('${corrupt.path}.sha256').writeAsStringSync(other.sha256);
+
+        var active = testDescriptor;
+        final access = OnDeviceSummaryModelAccess(
+          getStore: () async => modelStore,
+          getDescriptor: () async => active,
+          isIos: false,
+          inferenceRunner: (req, cb) async => 1,
+          contextLengthResolver: (p) => 2048,
+        );
+        final first = await access.open();
+        await first.dispose();
+
+        active = other;
+        await expectLater(access.open(), throwsStateError);
+        expect(corrupt.existsSync(), isFalse);
+      },
+    );
+
+    test(
       'P3-02b [FR-AI-02] open treats full verification failure as no model',
       () async {
         // Write mismatched/corrupt file with marker
