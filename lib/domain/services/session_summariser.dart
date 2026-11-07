@@ -168,13 +168,15 @@ class SessionSummariser {
   }
 
   int _budget(String system, int answer) {
-    // The system prompt holds the user's instructions (P3-12), which may be
-    // token-dense (other scripts, emoji): count it the cautious way, as the
-    // editor's limit does, so the transcript never crowds the context.
-    final systemTokens = [
-      estimateTokens(system),
-      instructionTokenEstimate(system),
-    ].reduce((a, b) => a > b ? a : b);
+    // The user's own instructions (P3-12) may be token-dense (codes, other
+    // scripts, emoji): they are counted the cautious way, as the editor's
+    // limit does, so the transcript never crowds the context. The fixed
+    // prompt and the built-in defaults are known English text.
+    final own = instructions?.trim() ?? '';
+    final extra = own.isEmpty || isBuiltInSummaryInstructions(own)
+        ? 0
+        : instructionTokenEstimate(own) - estimateTokens(own);
+    final systemTokens = estimateTokens(system) + (extra > 0 ? extra : 0);
     final budget =
         engine.contextTokens - systemTokens - answer - _overheadTokens;
     if (budget < 128) {

@@ -32,19 +32,25 @@ const maxSummaryInstructionsChars = 2000;
 
 /// Most instruction tokens allowed, so the transcript and answer still fit
 /// the model's 2,048-token context. Measured with [instructionTokenEstimate].
-const maxSummaryInstructionTokens = 600;
+const maxSummaryInstructionTokens = 700;
 
-/// A cautious token count: about three English characters per token, and
-/// two tokens for any other character (for example Chinese or emoji), so
-/// it errs on the side of too many.
+/// A cautious token count for text the user wrote: two English characters
+/// per token (random codes split finely) and two tokens for any other
+/// character (for example Chinese or emoji), so it errs on the side of too
+/// many. The real tokenizer is not used: it may load the model's weights.
 int instructionTokenEstimate(String text) {
   var ascii = 0;
   var other = 0;
   for (final unit in text.runes) {
     unit < 128 ? ascii++ : other++;
   }
-  return (ascii / 3).ceil() + other * 2;
+  return (ascii / 2).ceil() + other * 2;
 }
+
+/// True for the shipped defaults, whose size is known.
+bool isBuiltInSummaryInstructions(String text) =>
+    text.trim() == defaultSummaryInstructions.trim() ||
+    text.trim() == compactSummaryInstructions.trim();
 
 /// The user's instructions are too long for the on-device model (P3-12).
 final class SummaryInstructionsTooLongException implements Exception {
@@ -82,7 +88,9 @@ These rules and the answer format below always take priority over the style inst
 String _instructions(String? custom) {
   final text = custom?.trim() ?? '';
   final chosen = text.isEmpty ? defaultSummaryInstructions : text;
-  if (instructionTokenEstimate(chosen) > maxSummaryInstructionTokens) {
+  // The built-in defaults are known; only other text is checked.
+  if (!isBuiltInSummaryInstructions(chosen) &&
+      instructionTokenEstimate(chosen) > maxSummaryInstructionTokens) {
     throw const SummaryInstructionsTooLongException();
   }
   return 'Style instructions (they guide tone and focus only):\n'

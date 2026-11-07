@@ -379,7 +379,7 @@ Some chatter the model added.
         respond: (_) => 'SUMMARY: x',
         // Room for the default prompt, the answer and some transcript.
         contextTokens:
-            instructionTokenEstimate(summarySystemPromptFor(null)) +
+            estimateTokens(summarySystemPromptFor(null)) +
             SessionSummariser.answerTokens +
             64 +
             160,
@@ -416,6 +416,57 @@ Some chatter the model added.
       await SessionSummariser(engine: engine)
           .summarise(material, activityId: 'a1');
       expect(engine.requests, hasLength(1));
+    });
+
+    test('instructions at the limit still leave every request inside the '
+        'context, even counted cautiously', () async {
+      // Random codes split into many tokens; 1,400 characters is the limit.
+      const chars = 'aZ9xQ7kP3mW2';
+      final own = List.generate(
+        1400,
+        (i) => chars[(i * 7) % chars.length],
+      ).join();
+      expect(instructionTokenEstimate(own), maxSummaryInstructionTokens);
+      final engine = FakeTextGenerationEngine(
+        respond: (_) => 'SUMMARY: x\nPOINT [00:00]: y',
+        contextTokens: 2048,
+      );
+      await SessionSummariser(engine: engine, instructions: own).summarise(
+        SessionMaterial.build(
+          title: 'Samlytics Conference 2026',
+          transcripts: [
+            TranscriptDocument(
+              activityId: 'a1',
+              segmentId: 's1',
+              createdAt: DateTime.utc(2026, 11, 7),
+              machineSpans: [
+                for (var i = 0; i < 120; i++)
+                  TranscriptSpan(
+                    start: Duration(seconds: i * 10),
+                    end: Duration(seconds: i * 10 + 9),
+                    text:
+                        'Samlytics Data Services explains sentence  of '
+                        'a long talk about data quality habits.',
+                  ),
+              ],
+            ),
+          ],
+          bookmarks: const [],
+          notesMd: null,
+          cuts: const [],
+        ),
+        activityId: 'a1',
+      );
+      expect(engine.requests.length, greaterThan(2)); // split into parts
+      final ownExtra = instructionTokenEstimate(own) - estimateTokens(own);
+      for (final r in engine.requests) {
+        final used =
+            estimateTokens(r.system) +
+            (r.system.contains(own) ? ownExtra : 0) +
+            estimateTokens(r.prompt) +
+            r.maxOutputTokens;
+        expect(used, lessThanOrEqualTo(2048));
+      }
     });
 
     test('the compact default keeps the adviser angle and the dimensions', () {
