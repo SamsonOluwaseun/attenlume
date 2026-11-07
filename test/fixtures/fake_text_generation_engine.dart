@@ -19,6 +19,12 @@ class FakeTextGenerationEngine implements TextGenerationEngine {
   @override
   final String modelId;
 
+  /// Tokens per text for [countTokens]; four characters a token by default.
+  int Function(String text) tokens = (text) => (text.length / 4).ceil();
+
+  @override
+  Future<int> countTokens(String text) async => tokens(text);
+
   final requests = <TextGenerationRequest>[];
   bool cancelled = false;
   bool disposed = false;

@@ -11,6 +11,10 @@ abstract interface class TextGenerationEngine {
   /// Callers size transcript chunks from this.
   int get contextTokens;
 
+  /// How many tokens [text] takes for this model, counted by its own
+  /// tokenizer (P3-12). Cheap: the tokenizer reads the vocabulary only.
+  Future<int> countTokens(String text);
+
   /// Generates an answer to [request]. [onProgress] gets finite values in
   /// [0, 1] when the engine can estimate them. Throws
   /// [TextGenerationCancelledException] after [cancel].

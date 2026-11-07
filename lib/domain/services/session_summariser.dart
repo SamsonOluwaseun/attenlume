@@ -39,6 +39,26 @@ class SessionSummariser {
 
   bool _cancelled = false;
 
+  /// Tokens the user's own instructions take beyond the plain estimate.
+  int _ownExtraTokens = 0;
+
+  /// Counts the user's own instructions with the model's tokenizer (P3-12),
+  /// so token-dense text (codes, other scripts, emoji) never crowds the
+  /// transcript out of the context. Falls back to the cautious estimate.
+  Future<void> _countOwnInstructions() async {
+    _ownExtraTokens = 0;
+    final own = instructions?.trim() ?? '';
+    if (own.isEmpty || isBuiltInSummaryInstructions(own)) return;
+    int real;
+    try {
+      real = await engine.countTokens(own);
+    } on Object {
+      real = instructionTokenEstimate(own);
+    }
+    final extra = real - estimateTokens(own);
+    _ownExtraTokens = extra > 0 ? extra : 0;
+  }
+
   /// Throws [NoSpeechToSummariseException] without a transcript,
   /// [SummaryFormatException] when the final answer is unreadable, and
   /// [TextGenerationCancelledException] after [cancel].
@@ -49,6 +69,7 @@ class SessionSummariser {
   }) async {
     if (!material.hasSpeech) throw const NoSpeechToSummariseException();
     _cancelled = false;
+    await _countOwnInstructions();
     final timestamps = material.timestamps;
     final chunks = material.chunks(
       _budget(partSystemPromptFor(99, 99, instructions), partAnswerTokens),
@@ -168,15 +189,9 @@ class SessionSummariser {
   }
 
   int _budget(String system, int answer) {
-    // The user's own instructions (P3-12) may be token-dense (codes, other
-    // scripts, emoji): they are counted the cautious way, as the editor's
-    // limit does, so the transcript never crowds the context. The fixed
+    // The user's own instructions are counted exactly (see below); the fixed
     // prompt and the built-in defaults are known English text.
-    final own = instructions?.trim() ?? '';
-    final extra = own.isEmpty || isBuiltInSummaryInstructions(own)
-        ? 0
-        : instructionTokenEstimate(own) - estimateTokens(own);
-    final systemTokens = estimateTokens(system) + (extra > 0 ? extra : 0);
+    final systemTokens = estimateTokens(system) + _ownExtraTokens;
     final budget =
         engine.contextTokens - systemTokens - answer - _overheadTokens;
     if (budget < 128) {

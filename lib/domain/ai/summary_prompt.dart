@@ -1,3 +1,5 @@
+import 'dart:convert' show utf8;
+
 import 'session_material.dart';
 import 'session_summary.dart';
 
@@ -32,19 +34,45 @@ const maxSummaryInstructionsChars = 2000;
 
 /// Most instruction tokens allowed, so the transcript and answer still fit
 /// the model's 2,048-token context. Measured with [instructionTokenEstimate].
-const maxSummaryInstructionTokens = 700;
+const maxSummaryInstructionTokens = 900;
 
-/// A cautious token count for text the user wrote: two English characters
-/// per token (random codes split finely) and two tokens for any other
-/// character (for example Chinese or emoji), so it errs on the side of too
-/// many. The real tokenizer is not used: it may load the model's weights.
+/// A cautious token count for text the user wrote, used by the editor's
+/// limit (summaries count with the model's own tokenizer): a run of English
+/// letters counts one token per one and a half letters (random letters
+/// measured 1.7 a token), every digit and punctuation mark one
+/// token, and any other character one token per UTF-8 byte (the model's
+/// worst case). The real tokenizer is not used: it may load the weights.
 int instructionTokenEstimate(String text) {
-  var ascii = 0;
-  var other = 0;
-  for (final unit in text.runes) {
-    unit < 128 ? ascii++ : other++;
+  var tokens = 0;
+  var letters = 0;
+  void endWord() {
+    tokens += (letters / 1.5).ceil();
+    letters = 0;
   }
-  return (ascii / 2).ceil() + other * 2;
+
+  bool isLetter(int rune) =>
+      (rune >= 65 && rune <= 90) || (rune >= 97 && rune <= 122);
+  final runes = text.runes.toList();
+  for (var i = 0; i < runes.length; i++) {
+    final rune = runes[i];
+    if (isLetter(rune)) {
+      letters++;
+      continue;
+    }
+    endWord();
+    if (rune == 32 || rune == 10 || rune == 13 || rune == 9) {
+      // A space joins the word after it only when that word starts with a
+      // letter; before a digit, symbol or another space it is a token.
+      if (i + 1 >= runes.length || !isLetter(runes[i + 1])) tokens++;
+      continue;
+    }
+    // Digits and punctuation can each be a token; any other character can
+    // fall back to one token per UTF-8 byte.
+    tokens += rune < 128 ? 1 : utf8.encode(String.fromCharCode(rune)).length;
+  }
+  endWord();
+  // The tokenizer also adds a start-of-text token.
+  return tokens + 1;
 }
 
 /// True for the shipped defaults, whose size is known.

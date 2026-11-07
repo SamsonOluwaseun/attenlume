@@ -140,6 +140,8 @@ class _MeasuredEngine implements TextGenerationEngine {
   @override
   int get contextTokens => delegate.contextTokens;
   @override
+  Future<int> countTokens(String text) => delegate.countTokens(text);
+  @override
   Future<String> generate(
     TextGenerationRequest request, {
     void Function(double progress)? onProgress,

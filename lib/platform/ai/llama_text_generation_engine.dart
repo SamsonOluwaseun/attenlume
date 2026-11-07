@@ -74,6 +74,7 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
     LlamaInferenceRunner? inferenceRunner,
     LlamaCancelRunner? cancelRunner,
     LlamaContextLengthResolver? contextLengthResolver,
+    this.tokenCounter,
   }) : _inferenceRunner = inferenceRunner ?? _runNativeChat,
        _cancelRunner = cancelRunner ?? fllamaCancelInference,
        _contextLengthResolver =
@@ -111,6 +112,9 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
   final LlamaCancelRunner _cancelRunner;
   final LlamaContextLengthResolver _contextLengthResolver;
 
+  /// Replaces the model's tokenizer in tests.
+  final Future<int> Function(String text)? tokenCounter;
+
   late final String _modelId;
   late final int _contextTokens;
 
@@ -122,6 +126,11 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
 
   @override
   int get contextTokens => _contextTokens;
+
+  @override
+  Future<int> countTokens(String text) =>
+      tokenCounter?.call(text) ??
+      fllamaTokenize(FllamaTokenizeRequest(input: text, modelPath: modelPath));
 
   bool get isDisposed => _isDisposed;
   bool get isGenerating => _activeGeneration != null;

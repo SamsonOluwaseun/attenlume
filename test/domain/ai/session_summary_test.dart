@@ -350,9 +350,9 @@ Some chatter the model added.
         instructionTokenEstimate(compactSummaryInstructions),
         lessThan(maxSummaryInstructionTokens),
       );
-      // Token-dense text: 400 Chinese characters count as 800 tokens.
+      // Token-dense text: each Chinese character counts as its 3 UTF-8 bytes.
       final dense = '数' * 400;
-      expect(instructionTokenEstimate(dense), 800);
+      expect(instructionTokenEstimate(dense), 1201); // 3 bytes each + start
       for (final build in [
         () => summarySystemPromptFor(dense),
         () => partSystemPromptFor(1, 2, dense),
@@ -366,11 +366,12 @@ Some chatter the model added.
       );
     });
 
-    test('token-dense instructions are counted cautiously when fitting the '
-        'transcript', () async {
-      // 280 Chinese characters pass the editor (560 of 600 tokens) but leave
-      // too little room in a small context, so the user is told why.
-      final dense = '数' * 280;
+    test('token-dense instructions are counted by the model\'s tokenizer when '
+        'fitting the transcript', () async {
+      // 200 Chinese characters pass the editor (600 of 900 tokens); the model
+      // counts them as 400 tokens, too many for a small context, so the
+      // user is told why.
+      final dense = '数' * 200;
       expect(
         instructionTokenEstimate(dense),
         lessThanOrEqualTo(maxSummaryInstructionTokens),
@@ -383,7 +384,7 @@ Some chatter the model added.
             SessionSummariser.answerTokens +
             64 +
             160,
-      );
+      )..tokens = (text) => text.contains('数') ? 400 : (text.length / 4).ceil();
       final material = SessionMaterial.build(
         title: 'Samlytics Conference 2026',
         transcripts: [
@@ -418,19 +419,20 @@ Some chatter the model added.
       expect(engine.requests, hasLength(1));
     });
 
-    test('instructions at the limit still leave every request inside the '
-        'context, even counted cautiously', () async {
-      // Random codes split into many tokens; 1,400 characters is the limit.
-      const chars = 'aZ9xQ7kP3mW2';
-      final own = List.generate(
-        1400,
-        (i) => chars[(i * 7) % chars.length],
-      ).join();
-      expect(instructionTokenEstimate(own), maxSummaryInstructionTokens);
+    test('instructions at the limit leave every request inside the context, '
+        'by the model\'s own count', () async {
+      // Spaced digits are a worst case: every digit is its own token.
+      final own = '7 ' * ((maxSummaryInstructionTokens - 1) ~/ 2);
+      expect(
+        instructionTokenEstimate(own),
+        lessThanOrEqualTo(maxSummaryInstructionTokens),
+      );
+      // A tokenizer that finds them even denser than the estimate.
+      const realOwn = 1100;
       final engine = FakeTextGenerationEngine(
         respond: (_) => 'SUMMARY: x\nPOINT [00:00]: y',
         contextTokens: 2048,
-      );
+      )..tokens = (text) => text == own ? realOwn : (text.length / 4).ceil();
       await SessionSummariser(engine: engine, instructions: own).summarise(
         SessionMaterial.build(
           title: 'Samlytics Conference 2026',
@@ -445,7 +447,7 @@ Some chatter the model added.
                     start: Duration(seconds: i * 10),
                     end: Duration(seconds: i * 10 + 9),
                     text:
-                        'Samlytics Data Services explains sentence  of '
+                        'Samlytics Data Services explains sentence $i of '
                         'a long talk about data quality habits.',
                   ),
               ],
@@ -458,7 +460,7 @@ Some chatter the model added.
         activityId: 'a1',
       );
       expect(engine.requests.length, greaterThan(2)); // split into parts
-      final ownExtra = instructionTokenEstimate(own) - estimateTokens(own);
+      final ownExtra = realOwn - estimateTokens(own);
       for (final r in engine.requests) {
         final used =
             estimateTokens(r.system) +
@@ -467,6 +469,44 @@ Some chatter the model added.
             r.maxOutputTokens;
         expect(used, lessThanOrEqualTo(2048));
       }
+    });
+
+    test('if the tokenizer fails, the cautious estimate is used', () async {
+      final own = '数' * 200; // estimate 600 tokens
+      final engine = FakeTextGenerationEngine(
+        respond: (_) => 'SUMMARY: x',
+        contextTokens:
+            estimateTokens(summarySystemPromptFor(null)) +
+            SessionSummariser.answerTokens +
+            64 +
+            160,
+      )..tokens = (text) => text == own ? throw StateError('no tokenizer') : 1;
+      await expectLater(
+        SessionSummariser(engine: engine, instructions: own).summarise(
+          SessionMaterial.build(
+            title: 'Samlytics Conference 2026',
+            transcripts: [
+              TranscriptDocument(
+                activityId: 'a1',
+                segmentId: 's1',
+                createdAt: DateTime.utc(2026, 11, 7),
+                machineSpans: [
+                  TranscriptSpan(
+                    start: Duration.zero,
+                    end: const Duration(seconds: 5),
+                    text: 'Welcome to Samlytics Conference 2026.',
+                  ),
+                ],
+              ),
+            ],
+            bookmarks: const [],
+            notesMd: null,
+            cuts: const [],
+          ),
+          activityId: 'a1',
+        ),
+        throwsA(isA<SummaryInstructionsTooLongException>()),
+      );
     });
 
     test('the compact default keeps the adviser angle and the dimensions', () {
