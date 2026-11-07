@@ -79,6 +79,21 @@ class _Engine implements TranscriptionEngine {
   }
 }
 
+class _FailingCorrectionsStore extends TranscriptStore {
+  _FailingCorrectionsStore(super.root);
+  int attempts = 0;
+
+  @override
+  Future<TranscriptDocument> saveCorrections({
+    required String activityId,
+    required String segmentId,
+    required Map<int, String> corrections,
+  }) async {
+    attempts++;
+    throw const FileSystemException('disk full');
+  }
+}
+
 class _GatedStore extends TranscriptStore {
   _GatedStore(super.root);
   final entered = Completer<void>();
@@ -206,6 +221,36 @@ void main() {
       expect(plain.corrections, isEmpty);
     },
   );
+
+  test('P2-14 a failed name-fix write still shows the heard text', () async {
+    final failing = _FailingCorrectionsStore(directory);
+    final local = TranscriptionController(
+      models: models,
+      store: failing,
+      createEngine: () => engine,
+      writeEnabled: (_) async {},
+      recordingHeld: () => false,
+    );
+    addTearDown(local.dispose);
+    await local.setEnabled(true);
+    await local.install();
+    engine.text = 'Welcome to SamlyTix';
+    await local.transcribe([
+      const TranscriptionSource(
+        activityId: 'activity',
+        segmentId: 'segment',
+        audioPath: 'original.m4a',
+        hint: 'Samlytics Conference 2026.',
+      ),
+    ]);
+    expect(failing.attempts, 1);
+    expect(
+      local.documents.single.machineSpans.single.text,
+      'Welcome to SamlyTix',
+    );
+    expect(local.documents.single.corrections, isEmpty);
+    expect(local.message, contains('session names could not be corrected'));
+  });
 
   test('FR-TRN-04 active recording blocks after-recording work', () async {
     await controller.setEnabled(true);

@@ -94,14 +94,6 @@ void main() {
         correctNames('Thanks, Francoise.', 'François.'),
         'Thanks, François.',
       );
-      expect(
-        correctNames('at Samlytic today', 'Samlytics.'),
-        'at Samlytics today',
-      );
-      expect(
-        correctNames('at Samlyticss today', 'Samlytics.'),
-        'at Samlytics today',
-      );
       // Odd inner capital at a sentence start is still a mishearing.
       expect(
         correctNames('SamlyTix is here.', 'Samlytics.'),
@@ -109,6 +101,28 @@ void main() {
       );
       // A plural of a name is a real word.
       expect(correctNames('two Conferences', 'Conference.'), 'two Conferences');
+    });
+
+    test('capitalised ordinary words and singulars stay as heard (round 2)', () {
+      expect(
+        correctNames('Open the Service menu.', 'Services.'),
+        'Open the Service menu.',
+      );
+      // Common organisation words are never names, so nothing near them moves.
+      expect(
+        correctNames('the Conferencing Suite', 'Samlytics Conference 2026.'),
+        'the Conferencing Suite',
+      );
+      // A singular of a distinctive name is left too: safe over sorry.
+      expect(
+        correctNames('at Samlytic today', 'Samlytics.'),
+        'at Samlytic today',
+      );
+      expect(
+        correctNames('at Samlyticss today', 'Samlytics.'),
+        'at Samlyticss today',
+      );
+      expect(correctNames('Thanks, Bellos', 'Tunde Bello.'), 'Thanks, Bellos');
     });
 
     test('without a hint the text is unchanged', () {

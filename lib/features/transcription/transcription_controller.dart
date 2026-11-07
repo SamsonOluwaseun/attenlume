@@ -236,6 +236,7 @@ class TranscriptionController extends ChangeNotifier {
     }
     // Caller mutation cannot change an in-flight explicit request.
     final requested = List<TranscriptionSource>.of(sources);
+    var namesFailed = false;
     await _run(() async {
       for (var index = 0; index < requested.length; index++) {
         _checkActive(inference: true);
@@ -284,11 +285,18 @@ class TranscriptionController extends ChangeNotifier {
                 i: fixed,
           };
           if (names.isNotEmpty && persisted.corrections.isEmpty) {
-            persisted = await store.saveCorrections(
-              activityId: source.activityId,
-              segmentId: source.segmentId,
-              corrections: names,
-            );
+            try {
+              persisted = await store.saveCorrections(
+                activityId: source.activityId,
+                segmentId: source.segmentId,
+                corrections: names,
+              );
+            } on Object {
+              // The heard text is saved; show it. Fixes are not retried
+              // later, as that could undo a user's own revert of one.
+              _upsert([persisted]);
+              namesFailed = true;
+            }
           }
           // A completed atomic write remains visible even if Off arrived during it.
           _upsert([persisted]);
@@ -302,7 +310,10 @@ class TranscriptionController extends ChangeNotifier {
         }
       }
       if (!_cancelled && documents.isNotEmpty) {
-        message = 'Transcript saved. Review it for recognition errors.';
+        message = namesFailed
+            ? 'Transcript saved, but session names could not be corrected. '
+                  'Review it for recognition errors.'
+            : 'Transcript saved. Review it for recognition errors.';
       }
     });
   }

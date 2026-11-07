@@ -59,7 +59,10 @@ String correctNames(String text, String? hint) {
   if (hint == null) return text;
   final names = {
     for (final m in _word.allMatches(hint))
-      if (m[0]!.length >= 5 && _isCapital(m[0]!)) m[0]!,
+      if (m[0]!.length >= 5 &&
+          _isCapital(m[0]!) &&
+          !_commonWords.contains(m[0]!.toLowerCase()))
+        m[0]!,
   };
   if (names.isEmpty) return text;
   return text.replaceAllMapped(_word, (m) {
@@ -77,8 +80,9 @@ String correctNames(String text, String? hint) {
       final target = _fold(name);
       if (word.toLowerCase() == name.toLowerCase()) return word;
       if (target == heard) return name;
-      final plural = target.endsWith('s') ? '${target}es' : '${target}s';
-      if (heard == plural) continue;
+      // A singular or plural of a name is a real word ("Service" for
+      // "Services", "Conferences" for "Conference"), never a mishearing.
+      if (_inflects(heard, target) || _inflects(target, heard)) continue;
       if (target[0] != heard[0] || (target.length - heard.length).abs() > 2) {
         continue;
       }
@@ -96,6 +100,64 @@ String correctNames(String text, String? hint) {
 }
 
 bool _isCapital(String word) => word[0] != word[0].toLowerCase();
+
+/// True when [plural] is [word] plus "s" or "es".
+bool _inflects(String plural, String word) =>
+    plural == '${word}s' || plural == '${word}es';
+
+/// Ordinary words common in organisation and event names. They are never
+/// treated as names, so "Service" or "Conferencing" stay as heard.
+const _commonWords = {
+  'academy',
+  'agency',
+  'analytics',
+  'association',
+  'bank',
+  'board',
+  'centre',
+  'center',
+  'college',
+  'company',
+  'conference',
+  'consulting',
+  'council',
+  'data',
+  'department',
+  'digital',
+  'event',
+  'forum',
+  'foundation',
+  'global',
+  'group',
+  'health',
+  'holdings',
+  'industries',
+  'institute',
+  'international',
+  'limited',
+  'meeting',
+  'ministry',
+  'national',
+  'network',
+  'office',
+  'partners',
+  'school',
+  'service',
+  'services',
+  'society',
+  'solutions',
+  'studio',
+  'summit',
+  'systems',
+  'technologies',
+  'technology',
+  'trust',
+  'union',
+  'university',
+  'week',
+  'workshop',
+  'world',
+};
 
 /// Lower case without the accents most names carry.
 String _fold(String word) {
