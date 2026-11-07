@@ -124,6 +124,35 @@ void main() {
   }
 
   group('P3-10 FR-AI-01: Optional AI Settings UI states', () {
+    testWidgets(
+      'iOS explains summaries are unavailable and offers no download',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              languageModelControllerProvider.overrideWith(
+                (ref) => throw StateError('iOS must not open model storage'),
+              ),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: const Scaffold(body: OptionalAiSection(isIos: true)),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(OptionalAiSection.iosUnavailableMessage),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('optional-ai-download-button')),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('pending storage discovery settles without offering Download', (
       tester,
     ) async {

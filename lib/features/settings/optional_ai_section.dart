@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,12 +17,34 @@ import '../ai/language_model_providers.dart';
 /// - Preflight free-space check (model size + 1 GB warning margin).
 /// - In-flight progress with Cancel.
 /// - Verified on-disk confirmation and Delete model action.
+///
+/// Summaries are off on iOS for now, so iOS never offers the download and
+/// never touches model storage.
 class OptionalAiSection extends ConsumerWidget {
-  const OptionalAiSection({super.key});
+  const OptionalAiSection({super.key, this.isIos});
+
+  /// Overrides the platform check in tests.
+  final bool? isIos;
+
+  static const iosUnavailableMessage =
+      'On-device AI summaries are not available on iPhone and iPad yet. '
+      'Recording and transcription still work.';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    if (isIos ?? Platform.isIOS) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: TokenSpace.space4,
+          vertical: TokenSpace.space2,
+        ),
+        child: Text(
+          iosUnavailableMessage,
+          key: Key('optional-ai-ios-unavailable'),
+        ),
+      );
+    }
     final controllerAsync = ref.watch(languageModelControllerProvider);
 
     return controllerAsync.when(
