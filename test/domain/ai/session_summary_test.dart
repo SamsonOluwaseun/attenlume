@@ -340,35 +340,58 @@ Some chatter the model added.
       expect(prompt, contains('guide tone and focus only'));
     });
 
-    test('instructions too long for the model are refused, not cut', () {
-      // The defaults fit with room to spare.
-      expect(
-        instructionTokenEstimate(defaultSummaryInstructions),
-        lessThan(maxSummaryInstructionTokens),
-      );
-      expect(
-        instructionTokenEstimate(compactSummaryInstructions),
-        lessThan(maxSummaryInstructionTokens),
-      );
-      // Token-dense text: each Chinese character counts as its 3 UTF-8 bytes.
-      final dense = '数' * 400;
-      expect(instructionTokenEstimate(dense), 1201); // 3 bytes each + start
-      for (final build in [
-        () => summarySystemPromptFor(dense),
-        () => partSystemPromptFor(1, 2, dense),
-        () => combineSystemPromptFor(dense),
-      ]) {
-        expect(build, throwsA(isA<SummaryInstructionsTooLongException>()));
-      }
-      expect(
-        () => summarySystemPromptFor('word ' * 400),
-        throwsA(isA<SummaryInstructionsTooLongException>()),
-      );
-    });
+    test(
+      'length is judged by the model\'s own count, not the estimate',
+      () async {
+        // The defaults fit with room to spare.
+        expect(
+          instructionTokenEstimate(defaultSummaryInstructions),
+          lessThan(maxSummaryInstructionTokens),
+        );
+        expect(
+          instructionTokenEstimate(compactSummaryInstructions),
+          lessThan(maxSummaryInstructionTokens),
+        );
+        // Token-dense text: each Chinese character counts as its 3 UTF-8 bytes.
+        expect(instructionTokenEstimate('数' * 400), 1201);
+        // Building the prompt never refuses; the summariser decides.
+        expect(summarySystemPromptFor('数' * 400), contains('数'));
 
+        Future<void> run(String own, int real) =>
+            SessionSummariser(
+              engine: FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x')
+                ..tokens = (text) =>
+                    text == own ? real : (text.length / 4).ceil(),
+              instructions: own,
+            ).summarise(
+              SessionMaterial.build(
+                title: 'Samlytics Conference 2026',
+                transcripts: [_one()],
+                bookmarks: const [],
+                notesMd: null,
+                cuts: const [],
+              ),
+              activityId: 'a1',
+            );
+
+        // Over the limit by the model's count: refused with advice.
+        await expectLater(
+          run('数' * 400, 900),
+          throwsA(isA<SummaryInstructionsTooLongException>()),
+        );
+        // Long ordinary English the editor accepted by the model's count (the
+        // estimate alone would refuse it) is summarised.
+        final longEnglish = 'Write clearly for busy executives. ' * 40;
+        expect(
+          instructionTokenEstimate(longEnglish),
+          greaterThan(maxSummaryInstructionTokens),
+        );
+        await run(longEnglish.trim(), 300);
+      },
+    );
     test('token-dense instructions are counted by the model\'s tokenizer when '
         'fitting the transcript', () async {
-      // 200 Chinese characters pass the editor (600 of 900 tokens); the model
+      // 200 Chinese characters pass the editor (600 of 800 tokens); the model
       // counts them as 400 tokens, too many for a small context, so the
       // user is told why.
       final dense = '数' * 200;

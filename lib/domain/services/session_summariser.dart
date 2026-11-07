@@ -65,6 +65,9 @@ class SessionSummariser {
     } on Object {
       real = instructionTokenEstimate(own);
     }
+    if (real > maxSummaryInstructionTokens) {
+      throw const SummaryInstructionsTooLongException();
+    }
     final extra = real - estimateTokens(own);
     _ownExtraTokens = extra > 0 ? extra : 0;
   }

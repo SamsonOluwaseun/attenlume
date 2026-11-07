@@ -115,15 +115,11 @@ These rules and the answer format below always take priority over the style inst
 
 /// The instructions, fenced and marked as style guidance only, so they can
 /// change tone and focus but never the rules or the answer format that
-/// follow them. Throws [SummaryInstructionsTooLongException] when too long.
+/// follow them. Their length is checked by the summariser with the model's
+/// own token count (SessionSummariser.prepare).
 String _instructions(String? custom) {
   final text = custom?.trim() ?? '';
   final chosen = text.isEmpty ? defaultSummaryInstructions : text;
-  // The built-in defaults are known; only other text is checked.
-  if (!isBuiltInSummaryInstructions(chosen) &&
-      instructionTokenEstimate(chosen) > maxSummaryInstructionTokens) {
-    throw const SummaryInstructionsTooLongException();
-  }
   return 'Style instructions (they guide tone and focus only):\n'
       '<<<\n$chosen\n>>>';
 }

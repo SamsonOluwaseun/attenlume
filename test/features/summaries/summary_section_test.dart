@@ -299,7 +299,8 @@ void main() {
   testWidgets('P3-12 instructions too long for the model say how to fix it', (
     tester,
   ) async {
-    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x')
+      ..tokens = (text) => text.contains('数') ? 1200 : 1;
     await pump(tester, engine: engine, instructions: '数' * 400);
     await tester.tap(find.byKey(const Key('summary-create')));
     await settle(tester);
