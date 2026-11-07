@@ -232,6 +232,36 @@ void main() {
     );
   }
 
+  test('P2-13 FR-TRN-03 cancel while waiting for the commit guard leaves no import', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+    final source = File(p.join(sourceDir.path, 'cancel-queued.mp3'))
+      ..writeAsBytesSync(List.filled(128, 7));
+    final queued = Completer<void>();
+    final release = Completer<void>();
+    var cancelled = false;
+    Future<T> guard<T>(Future<T> Function() action) async {
+      queued.complete();
+      await release.future;
+      return action();
+    }
+    final service = makeService(
+      picker: _FakePicker(XFile(source.path)),
+      inspector: _FakeInspector(),
+      withRecordingGuard: guard,
+    );
+    final pending = service.importAudio(
+      conferenceId: conf.id,
+      isCancelled: () => cancelled,
+    );
+    await queued.future;
+    cancelled = true;
+    release.complete();
+    expect(await pending, isA<AudioImportCancelled>());
+    expect(await t.activities.listForConference(conf.id), isEmpty);
+    expect(source.readAsBytesSync(), List.filled(128, 7));
+    expect(mediaRoot.listSync(recursive: true).whereType<File>(), isEmpty);
+  });
+
   test('P2-13 FR-TRN-03 successful import copies bytes exactly and leaves the source untouched', () async {
     final conf = await t.conference(name: 'Samlytics Conference 2026');
 

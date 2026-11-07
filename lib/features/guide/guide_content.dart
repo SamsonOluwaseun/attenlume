@@ -164,7 +164,7 @@ const quickGuide = QuickGuide(
           title: 'Optional transcription pilot',
           images: ['21-transcription'],
           points: [
-            'Open Settings > Optional transcription. It is off by default. Read the conditions before enabling it, then choose Download model (about 31 MB).',
+            'Open Settings > Optional transcription. It is off by default. Read the conditions before enabling it, then choose Download model (about 32 MB including the small speech-detection model).',
             'For English audio up to 10 minutes per clip, choose audio here or open a saved activity and tap Optional transcription. Activities with audio cuts are not supported yet: import their exported trimmed audio instead. Setup alone never starts transcription.',
             'Review the generated text, correct errors, copy it or share transcript.txt for Notepad, or timestamped transcript.md. Private activity text needs a separate opt-in to copy or share.',
             'Exports with notes include the transcript, with times that match the exported audio. Text from parts you cut is left out of trimmed copies.',
@@ -176,9 +176,10 @@ const quickGuide = QuickGuide(
           images: ['18-settings'],
           points: [
             'Open Settings > Optional AI. It is off by default: the core app requires no AI model, API key or account.',
-            'Download Gemma 4 E2B (2.65 GB, Apache 2.0 licence) to run summaries on-device. Nothing you record is sent anywhere.',
+            'On Android and Windows, choose Gemma 4 E2B (2.65 GB, Apache 2.0) or the smaller Gemma 3 1B (769 MB, Gemma Terms of Use). The smaller model gives simpler, less consistent summaries. AI summaries are unavailable in the current iOS source.',
             'Attenlume asks you to confirm with the download size and advises using Wi-Fi. Free storage is checked first (model size plus 1 GB safety margin).',
-            'Progress is shown with a Cancel option. Once installed and verified with its SHA-256 checksum, Delete model removes it at any time.',
+            'Progress is shown with a Cancel option. Once installed and verified with its SHA-256 checksum, Delete model removes the downloaded file. Nothing you record is sent to an online AI service.',
+            'Open Summary instructions to change how future summaries are written. Save uses the model token limit; Reset to default restores the recommended instructions.',
           ],
         ),
         GuideStep(

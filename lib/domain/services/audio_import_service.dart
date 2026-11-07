@@ -493,6 +493,12 @@ class AudioImportService {
 
         // 9. Commit activity and segment to database in one single transaction under recording guard
         Future<AudioImportOutcome> performCommit() async {
+          // Cancel may arrive while this action waits for the recording lock.
+          // Honour it before creating any database rows.
+          if (isCancelled?.call() == true) {
+            _cleanupFiles(stagingFile, targetFile);
+            return const AudioImportCancelled();
+          }
           if (isRecordingActive?.call() == true) {
             _cleanupFiles(stagingFile, targetFile);
             return const AudioImportFailure(

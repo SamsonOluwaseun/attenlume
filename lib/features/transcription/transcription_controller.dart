@@ -35,7 +35,7 @@ class TranscriptionSource {
   final String audioPath;
   final Duration offset;
 
-  /// Session words for Whisper's prompt (see vocabularyHint), or null.
+  /// Session words for post-recognition name corrections, or null.
   final String? hint;
 }
 

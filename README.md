@@ -55,6 +55,26 @@ Open **Settings > Support Attenlume** at any time on eligible direct builds,
 even after dismissing reminders. You can also [support Attenlume on PayPal](https://www.paypal.com/donate/?hosted_button_id=EMQCVQHTPDR2U).
 Choose GBP 5, 10, 20 or a custom amount there; gifts are entirely voluntary.
 
+## Current development source
+
+The following changes are in source after the last published test build; they
+require a new build before download links above can provide them:
+
+- Import external MP3, M4A, WAV and AAC audio into a conference activity, with
+  progress and cancellation. Imported MP3/WAV/AAC files support playback,
+  transcription and original-audio export; cuts and trimming require M4A.
+- Optional speech detection skips long pauses before local transcription.
+  Its small Silero file downloads only when the user requests model installation.
+- Likely session-name fixes are stored as transcript corrections; the original
+  recognised text remains available.
+- Android/Windows summaries offer a larger model and a smaller Gemma 3 1B
+  option, plus editable summary instructions. Smaller-model question quality
+  varies. Device memory recommendations currently work on Windows; Android
+  memory detection is pending. No language model downloads automatically.
+- iOS retains shared recording/transcription/import features, but the current
+  canonical source explicitly disables local AI summaries pending Mac runtime
+  integration. iOS builds and device checks must be performed on the Mac.
+
 ## Develop
 
 Requires Flutter 3.47.8 stable (Dart 3.13.7). Android builds need JDK 17 and the Android SDK. iOS builds need a Mac.
@@ -77,7 +97,7 @@ App data lives in `%LOCALAPPDATA%\Samlytics\Attenlume` on Windows and in the app
 
 ## Export format
 
-A conference, a day or chosen activities export as a folder or ZIP with `conference.json`, one folder per activity (audio, photos, `activity.json`, `notes.md`, `bookmarks.csv`, cut ranges) and `checksums.sha256`. On Android and iOS a ZIP can be shared straight from the app. A summary README, a timeline and a prompt for AI tools are included. Pilot transcript text is shared separately; full conference-export integration is pending.
+A conference, a day or chosen activities export as a folder or ZIP with `conference.json`, one folder per activity (audio, photos, `activity.json`, `notes.md`, `bookmarks.csv`, cut ranges) and `checksums.sha256`. On Android and iOS a ZIP can be shared straight from the app. A summary README, a timeline and a prompt for AI tools are included. Saved transcripts are included in Everything and Notes-and-details exports as text, timestamped Markdown and re-importable JSON. Original machine text is kept alongside corrections; private items follow the export selections.
 
 ## Known limits
 

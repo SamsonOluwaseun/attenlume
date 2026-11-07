@@ -39,12 +39,12 @@ const maxSummaryInstructionsChars = 2000;
 /// cautious [instructionTokenEstimate].
 const maxSummaryInstructionTokens = 800;
 
-/// A cautious token count for text the user wrote, used by the editor's
-/// limit (summaries count with the model's own tokenizer): a run of English
+/// A cautious fallback token count for text the user wrote when the installed
+/// model's tokenizer is unavailable (both the editor and summariser prefer it): a run of English
 /// letters counts one token per one and a half letters (random letters
 /// measured 1.7 a token), every digit and punctuation mark one
 /// token, and any other character one token per UTF-8 byte (the model's
-/// worst case). The real tokenizer is not used: it may load the weights.
+/// worst case). This fallback does not load the model vocabulary.
 int instructionTokenEstimate(String text) {
   var tokens = 0;
   var letters = 0;
