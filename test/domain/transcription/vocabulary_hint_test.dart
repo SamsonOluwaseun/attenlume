@@ -57,7 +57,13 @@ void main() {
         'Welcome to Samlytics Conference 2026. Today Samlytics Data '
         'Services explains it.',
       );
-      expect(correctNames('Thanks, Tundy!', hint), 'Thanks, Tunde!');
+      // A short name is too close to real words to fix from spelling alone.
+      expect(correctNames('Thanks, Tundy!', hint), 'Thanks, Tundy!');
+      expect(correctNames('Thanks, TunDy!', hint), 'Thanks, Tunde!');
+      expect(
+        correctNames('Select the Grade column.', 'Grace.'),
+        'Select the Grade column.',
+      );
     });
 
     test('ordinary words and forms of a name are left as heard', () {

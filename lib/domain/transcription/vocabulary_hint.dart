@@ -53,8 +53,10 @@ final _word = RegExp(
 /// words ("a grade", "serviced") never do; at the start of a sentence it
 /// must also have an odd inner capital ("SamlyTix"). It must start with the
 /// same letter, differ in length by at most 2 and be at least 75% similar,
-/// ignoring accents ("Francois" becomes "François"). Plurals of a name
-/// ("Conferences") are left as heard.
+/// ignoring accents ("Francois" becomes "François"). Names under 7 letters
+/// need an odd inner capital too, since they sit close to real words
+/// ("Grace", "Grade"). Singulars, plurals and common organisation words
+/// ("Service", "Conferences") are left as heard.
 String correctNames(String text, String? hint) {
   if (hint == null) return text;
   final names = {
@@ -83,6 +85,9 @@ String correctNames(String text, String? hint) {
       // A singular or plural of a name is a real word ("Service" for
       // "Services", "Conferences" for "Conference"), never a mishearing.
       if (_inflects(heard, target) || _inflects(target, heard)) continue;
+      // Short names sit close to many real words ("Grace" and "Grade"), so
+      // they are only matched when the heard word looks misheard.
+      if (target.length < 7 && !innerCapital) continue;
       if (target[0] != heard[0] || (target.length - heard.length).abs() > 2) {
         continue;
       }
