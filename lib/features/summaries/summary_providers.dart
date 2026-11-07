@@ -6,6 +6,7 @@ import '../../data/ai/summary_store.dart';
 import '../../data/filesystem/app_data_directory.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/transcription/transcript_store.dart';
+import '../../domain/ai/summary_prompt.dart';
 import '../../domain/ai/text_generation_engine.dart';
 import '../../domain/transcription/transcript.dart';
 import '../../platform/ai/language_model_store.dart';
@@ -113,11 +114,17 @@ final summaryModelAccessProvider = Provider<SummaryModelAccess>(
   ),
 );
 
-/// The user's summary instructions, read when a summary starts (P3-12).
-/// Null uses the default.
+/// The instructions for the next summary (P3-12): the user's own, else the
+/// compact default for a small model, else null for the full default.
 final summaryInstructionsProvider = Provider<Future<String?> Function()>(
-  (ref) =>
-      () => ref.read(settingsRepositoryProvider).summaryInstructions(),
+  (ref) => () async {
+    final saved = await ref
+        .read(settingsRepositoryProvider)
+        .summaryInstructions();
+    if (saved != null) return saved;
+    final model = await ref.read(activeLanguageModelDescriptorProvider.future);
+    return model.compactPrompt ? compactSummaryInstructions : null;
+  },
 );
 
 final summaryStoreProvider = Provider<Future<SummaryStore> Function()>(

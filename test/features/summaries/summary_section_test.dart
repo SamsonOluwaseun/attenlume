@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:attenlume/app/theme/app_theme.dart';
 import 'package:attenlume/data/ai/summary_store.dart';
 import 'package:attenlume/domain/ai/session_summary.dart';
+import 'package:attenlume/domain/ai/summary_prompt.dart';
 import 'package:attenlume/domain/ai/text_generation_engine.dart';
 import 'package:attenlume/domain/transcription/transcript.dart';
 import 'package:attenlume/features/summaries/summary_providers.dart';
@@ -225,6 +226,66 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() => store.delete('a1'));
     }
+  });
+
+  testWidgets('P3-12 a recording started while instructions load stops the '
+      'summary', (tester) async {
+    var recording = false;
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    final read = Completer<String?>();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          summaryTranscriptsProvider.overrideWithValue(
+            (_) async => [_transcript()],
+          ),
+          summaryStoreProvider.overrideWithValue(() async => store),
+          summaryModelAccessProvider.overrideWithValue(_Model(engine)),
+          summaryBlockedByRecordingProvider.overrideWithValue(() => recording),
+          summaryInstructionsProvider.overrideWithValue(() => read.future),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: SummarySection(
+                activityId: 'a1',
+                title: 'Data quality for small teams',
+                notesMd: null,
+                bookmarks: const [],
+                cuts: const [],
+                canPlay: true,
+                onPlayFrom: (_) {},
+                onOpenTranscription: () async {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await tester.pump();
+    recording = true;
+    read.complete(null);
+    await settle(tester);
+    expect(find.textContaining('A recording is running'), findsOneWidget);
+    expect(engine.requests, isEmpty);
+    expect(store.saves, 0);
+  });
+
+  testWidgets('P3-12 instructions too long for the model say how to fix it', (
+    tester,
+  ) async {
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    await pump(tester, engine: engine, instructions: '数' * 400);
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await settle(tester);
+    expect(
+      find.text(SummaryInstructionsTooLongException.message),
+      findsOneWidget,
+    );
+    expect(engine.requests, isEmpty);
   });
 
   testWidgets('P3-02 waits while a recording runs', (tester) async {

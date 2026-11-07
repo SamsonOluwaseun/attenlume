@@ -13,6 +13,7 @@ class LanguageModelDescriptor extends VerifiedModelDescriptor {
     required this.deviceNotice,
     this.suitedTo = '',
     this.termsLinks = const [],
+    this.compactPrompt = false,
     super.maxSizeBytes = 10 * 1024 * 1024 * 1024,
   });
 
@@ -28,6 +29,10 @@ class LanguageModelDescriptor extends VerifiedModelDescriptor {
   /// Terms the user must be shown before downloading, as (label, url).
   /// Empty for plain open licences such as Apache 2.0 [P3-11].
   final List<(String, String)> termsLinks;
+
+  /// True for small models that follow a short default prompt better
+  /// (P3-12). The user's own instructions are always used as written.
+  final bool compactPrompt;
 
   /// Formatted size string for display (e.g. '2.65 GB' or '769 MB').
   String get sizeLabel {
@@ -72,6 +77,7 @@ class LanguageModelDescriptor extends VerifiedModelDescriptor {
     licence: 'Gemma Terms of Use',
     deviceNotice: 'Runs on this device. Nothing you record is sent anywhere.',
     suitedTo: 'Smaller and quicker, simpler summaries. For 4 GB phones.',
+    compactPrompt: true,
     termsLinks: [
       ('Gemma Terms of Use', 'https://ai.google.dev/gemma/terms'),
       (

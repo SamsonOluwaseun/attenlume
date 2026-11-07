@@ -162,6 +162,14 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       }
       final instructions = await ref.read(summaryInstructionsProvider)();
       if (!current()) return;
+      // A recording may have started while the instructions were read.
+      if (ref.read(summaryBlockedByRecordingProvider)()) {
+        _fail(
+          'A recording is running. Summaries wait until it stops, so the '
+          'recording keeps the processor.',
+        );
+        return;
+      }
       final summariser = SessionSummariser(
         engine: engine,
         instructions: instructions,
@@ -182,6 +190,8 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       });
     } on TextGenerationCancelledException {
       // Stopped by the user or by leaving the tab; the old summary stays.
+    } on SummaryInstructionsTooLongException {
+      if (current()) _fail(SummaryInstructionsTooLongException.message);
     } on SummaryFormatException {
       if (current()) {
         _fail('The model gave an answer that could not be read. Try again.');

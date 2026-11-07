@@ -39,6 +39,10 @@ class _SummaryInstructionsScreenState
     });
   }
 
+  /// Over the token limit the model can take (P3-12); Save is disabled.
+  bool get _tooLong =>
+      instructionTokenEstimate(_text.text.trim()) > maxSummaryInstructionTokens;
+
   @override
   void dispose() {
     _text.dispose();
@@ -95,9 +99,13 @@ class _SummaryInstructionsScreenState
                     minLines: 8,
                     maxLines: 20,
                     maxLength: maxSummaryInstructionsChars,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
                       labelText: 'Instructions',
+                      errorText: _tooLong
+                          ? 'Too long for the on-device model. Shorten it.'
+                          : null,
                     ),
                   ),
                   const SizedBox(height: TokenSpace.space2),
@@ -114,7 +122,7 @@ class _SummaryInstructionsScreenState
                     children: [
                       FilledButton(
                         key: const Key('summary-instructions-save'),
-                        onPressed: _save,
+                        onPressed: _tooLong ? null : _save,
                         child: const Text('Save'),
                       ),
                       OutlinedButton(

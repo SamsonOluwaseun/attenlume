@@ -2,7 +2,10 @@ import 'package:attenlume/app/theme/app_theme.dart';
 import 'package:attenlume/data/repositories/repository_providers.dart';
 import 'package:attenlume/data/repositories/settings_repository.dart';
 import 'package:attenlume/domain/ai/summary_prompt.dart';
+import 'package:attenlume/features/ai/language_model_providers.dart';
 import 'package:attenlume/features/settings/summary_instructions_screen.dart';
+import 'package:attenlume/features/summaries/summary_providers.dart';
+import 'package:attenlume/platform/ai/language_model_descriptor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,6 +92,51 @@ void main() {
     await tapKey(tester, 'summary-instructions-save');
     await tester.pumpAndSettle();
     expect(settings.saved, isNull);
+  });
+
+  testWidgets('P3-12 instructions too long for the model cannot be saved', (
+    tester,
+  ) async {
+    final settings = await pump(tester);
+    await tester.enterText(
+      find.byKey(const Key('summary-instructions-field')),
+      'word ' * 400,
+    );
+    await tester.pump();
+    expect(
+      find.text('Too long for the on-device model. Shorten it.'),
+      findsOneWidget,
+    );
+    final save = tester.widget<FilledButton>(
+      find.byKey(const Key('summary-instructions-save')),
+    );
+    expect(save.onPressed, isNull);
+    expect(settings.saved, isNull);
+  });
+
+  test('P3-12 the small model gets the compact default; saved instructions '
+      'always win', () async {
+    Future<String?> read({String? saved, required bool small}) async {
+      final container = ProviderContainer(
+        overrides: [
+          settingsRepositoryProvider.overrideWithValue(
+            _Settings(data.db, saved),
+          ),
+          activeLanguageModelDescriptorProvider.overrideWith(
+            (ref) async => small
+                ? LanguageModelDescriptor.gemma3_1B
+                : LanguageModelDescriptor.gemma4E2B,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container.read(summaryInstructionsProvider)();
+    }
+
+    expect(await read(small: false), isNull);
+    expect(await read(small: true), compactSummaryInstructions);
+    expect(await read(saved: 'Mine.', small: true), 'Mine.');
+    expect(await read(saved: 'Mine.', small: false), 'Mine.');
   });
 
   test('P3-12 settings store instructions and blank means default', () async {

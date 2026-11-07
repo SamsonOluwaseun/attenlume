@@ -42,7 +42,19 @@ void main() {
       );
 
       final measured = _MeasuredEngine(engine);
-      final summariser = SessionSummariser(engine: measured);
+      // As the app does: the user's own instructions, else the compact
+      // default for the small model, else the full default [P3-12].
+      final custom = Platform.environment['ATTENLUME_SUMMARY_INSTRUCTIONS'];
+      final instructions = custom != null && custom.trim().isNotEmpty
+          ? custom
+          : modelPath.contains('gemma-3-1b')
+          ? compactSummaryInstructions
+          : null;
+      debugPrint('Instructions: ${instructions ?? 'full default'}');
+      final summariser = SessionSummariser(
+        engine: measured,
+        instructions: instructions,
+      );
       final qualityFailures = <String>[];
 
       try {
