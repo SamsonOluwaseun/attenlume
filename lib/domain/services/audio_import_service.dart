@@ -169,11 +169,27 @@ class AudioImportService {
   /// Active staging files currently being written by in-progress imports.
   static final Set<String> _activeStagingRelativePaths = <String>{};
 
+  /// Suffix used for temporary files while streaming imported audio into place.
+  static const importStagingSuffix = '.importing';
+
+  /// Whether [relativePath] is positively identified as an import staging file.
+  static bool isImportStagingPath(String relativePath) {
+    final lower = relativePath.toLowerCase();
+    return lower.endsWith(importStagingSuffix) ||
+        lower.contains('/import-staging/') ||
+        lower.contains(r'\import-staging\');
+  }
+
   /// Whether an import is currently in progress across the application.
   static bool _isAnyImportActive = false;
 
-  /// Removes abandoned partial or unlinked import files left behind if the app was killed
+  /// Removes abandoned import staging files left behind if the app was killed
   /// during an import before a database record could be committed.
+  ///
+  /// Cleans ONLY files positively identified as abandoned import staging files
+  /// (e.g. files with [.importing] suffix or within an `import-staging` folder).
+  /// Never deletes recording files, partial recordings, or anything handled
+  /// by [CrashRecoveryService].
   static Future<int> cleanupAbandonedImports({
     required Directory root,
     MediaAssetRepository? media,
@@ -182,9 +198,6 @@ class AudioImportService {
     final conferencesDir = Directory(p.join(root.path, 'conferences'));
     if (!conferencesDir.existsSync()) return 0;
 
-    final knownPaths = media != null
-        ? (await media.segmentPaths()).toSet()
-        : const <String>{};
     final activePaths = activeStagingPaths ?? _activeStagingRelativePaths;
     var cleaned = 0;
 
@@ -196,11 +209,7 @@ class AudioImportService {
       );
       if (activePaths.contains(rel)) continue;
 
-      final ext = p.posix.extension(rel).toLowerCase();
-      final isCandidate =
-          MediaPaths.isPartial(rel) || supportedAudioExtensions.contains(ext);
-
-      if (isCandidate && !knownPaths.contains(rel)) {
+      if (isImportStagingPath(rel)) {
         try {
           entity.deleteSync();
           cleaned++;
@@ -317,7 +326,22 @@ class AudioImportService {
       }
 
       // 6. Check free space with safety margin
-      final fileBytes = await sourceFile.length();
+      final int fileBytes;
+      try {
+        if (!sourceFile.existsSync()) {
+          return const AudioImportFailure(
+            AudioImportFailureReason.unreadableFile,
+            details: 'Source audio file does not exist',
+          );
+        }
+        fileBytes = await sourceFile.length();
+      } catch (e) {
+        return AudioImportFailure(
+          AudioImportFailureReason.unreadableFile,
+          details: 'Could not read source audio file: $e',
+        );
+      }
+
       final space = await freeSpace.query(root.path);
       if (space != null &&
           space.availableBytes - fileBytes < safetyMarginBytes) {
@@ -350,17 +374,17 @@ class AudioImportService {
       );
       final fileName = 'segment-001$ext';
       final relFilePath = p.posix.join(relAudioDir, fileName);
-      final relPartialPath = MediaPaths.partial(relFilePath);
+      final relStagingPath = '$relFilePath$importStagingSuffix';
 
       final targetFile = MediaPaths.resolve(root, relFilePath);
-      final partialFile = MediaPaths.resolve(root, relPartialPath);
+      final stagingFile = MediaPaths.resolve(root, relStagingPath);
 
-      _activeStagingRelativePaths.add(relPartialPath);
+      _activeStagingRelativePaths.add(relStagingPath);
       try {
-        // 8. Streamed copy to temporary name (.partial) with backpressure and concurrent SHA-256 calculation
+        // 8. Streamed copy to temporary staging name (.importing) with backpressure and concurrent SHA-256 calculation
         final String sha256Hex;
         try {
-          partialFile.parent.createSync(recursive: true);
+          stagingFile.parent.createSync(recursive: true);
 
           final digestSink = _DigestSink();
           final hasher = sha256.startChunkedConversion(digestSink);
@@ -369,8 +393,8 @@ class AudioImportService {
               ? openRead!(sourceFile)
               : sourceFile.openRead();
           final sink = openWrite != null
-              ? openWrite!(partialFile)
-              : partialFile.openWrite();
+              ? openWrite!(stagingFile)
+              : stagingFile.openWrite();
 
           var bytesCopied = 0;
           var wasCancelled = false;
@@ -403,12 +427,12 @@ class AudioImportService {
           }
 
           if (wasCancelled) {
-            _cleanupFiles(partialFile, targetFile);
+            _cleanupFiles(stagingFile, targetFile);
             return const AudioImportCancelled();
           }
 
           if (wasInterruptedByRecording) {
-            _cleanupFiles(partialFile, targetFile);
+            _cleanupFiles(stagingFile, targetFile);
             return const AudioImportFailure(
               AudioImportFailureReason.recordingActive,
             );
@@ -419,21 +443,18 @@ class AudioImportService {
 
           // Check recording again immediately before committing the import
           if (isRecordingActive?.call() == true) {
-            _cleanupFiles(partialFile, targetFile);
+            _cleanupFiles(stagingFile, targetFile);
             return const AudioImportFailure(
               AudioImportFailureReason.recordingActive,
             );
           }
 
           if (isCancelled?.call() == true) {
-            _cleanupFiles(partialFile, targetFile);
+            _cleanupFiles(stagingFile, targetFile);
             return const AudioImportCancelled();
           }
-
-          // Atomic rename once copy is complete
-          partialFile.renameSync(targetFile.path);
         } catch (e) {
-          _cleanupFiles(partialFile, targetFile);
+          _cleanupFiles(stagingFile, targetFile);
           return AudioImportFailure(
             AudioImportFailureReason.ioError,
             details: 'Copy failed: $e',
@@ -447,7 +468,7 @@ class AudioImportService {
 
         // Check recording again immediately before database transaction
         if (isRecordingActive?.call() == true) {
-          _cleanupFiles(partialFile, targetFile);
+          _cleanupFiles(stagingFile, targetFile);
           return const AudioImportFailure(
             AudioImportFailureReason.recordingActive,
           );
@@ -456,7 +477,7 @@ class AudioImportService {
         // 9. Commit activity and segment to database in one single transaction under recording guard
         Future<AudioImportOutcome> performCommit() async {
           if (isRecordingActive?.call() == true) {
-            _cleanupFiles(partialFile, targetFile);
+            _cleanupFiles(stagingFile, targetFile);
             return const AudioImportFailure(
               AudioImportFailureReason.recordingActive,
             );
@@ -499,6 +520,9 @@ class AudioImportService {
                 bytes: fileBytes,
                 sha256: sha256Hex,
               );
+
+              // Atomic rename of staging file to target file once inserts succeed
+              stagingFile.renameSync(targetFile.path);
             }
 
             if (db != null) {
@@ -509,8 +533,8 @@ class AudioImportService {
 
             return AudioImportSuccess(activity: activity!, segment: segment!);
           } catch (e) {
-            // If DB fails, clean up target file to leave no orphaned audio
-            _cleanupFiles(partialFile, targetFile);
+            // If DB fails, clean up target and staging files to leave no orphaned audio
+            _cleanupFiles(stagingFile, targetFile);
             return AudioImportFailure(
               AudioImportFailureReason.ioError,
               details: 'Database insert failed: $e',
@@ -524,18 +548,23 @@ class AudioImportService {
           return await performCommit();
         }
       } finally {
-        _activeStagingRelativePaths.remove(relPartialPath);
+        _activeStagingRelativePaths.remove(relStagingPath);
       }
+    } catch (e) {
+      return AudioImportFailure(
+        AudioImportFailureReason.unreadableFile,
+        details: 'The audio file could not be read: $e',
+      );
     } finally {
       _isAnyImportActive = false;
     }
   }
 
-  static void _cleanupFiles(File partialFile, File targetFile) {
+  static void _cleanupFiles(File stagingFile, File targetFile) {
     try {
-      if (partialFile.existsSync()) partialFile.deleteSync();
+      if (stagingFile.existsSync()) stagingFile.deleteSync();
       if (targetFile.existsSync()) targetFile.deleteSync();
-      final parent = partialFile.parent;
+      final parent = stagingFile.parent;
       if (parent.existsSync() && parent.listSync().isEmpty) {
         parent.deleteSync();
         final grandParent = parent.parent;

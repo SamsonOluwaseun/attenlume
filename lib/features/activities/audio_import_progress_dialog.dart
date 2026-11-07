@@ -70,6 +70,7 @@ class AudioImportProgressDialog extends StatefulWidget {
 
 class _AudioImportProgressDialogState extends State<AudioImportProgressDialog> {
   bool _cancelled = false;
+  bool _canPop = false;
   double _fraction = 0.0;
   int _bytesTotal = 0;
 
@@ -80,26 +81,36 @@ class _AudioImportProgressDialogState extends State<AudioImportProgressDialog> {
   }
 
   Future<void> _startImport() async {
-    final outcome = await widget.importService.importAudio(
-      conferenceId: widget.conferenceId,
-      sourceFileOverride: widget.sourceFile,
-      onProgress: (p) {
-        if (mounted) {
-          setState(() {
-            _bytesTotal = p.bytesTotal;
-            _fraction = p.fraction;
-          });
-        }
-      },
-      isCancelled: () => _cancelled,
-    );
+    AudioImportOutcome outcome;
+    try {
+      outcome = await widget.importService.importAudio(
+        conferenceId: widget.conferenceId,
+        sourceFileOverride: widget.sourceFile,
+        onProgress: (p) {
+          if (mounted) {
+            setState(() {
+              _bytesTotal = p.bytesTotal;
+              _fraction = p.fraction;
+            });
+          }
+        },
+        isCancelled: () => _cancelled,
+      );
+    } catch (e) {
+      outcome = AudioImportFailure(
+        AudioImportFailureReason.unreadableFile,
+        details: 'The audio file could not be read: $e',
+      );
+    }
 
+    _canPop = true;
     if (mounted) {
       Navigator.of(context).pop(outcome);
     }
   }
 
   void _onCancel() {
+    if (_cancelled) return;
     setState(() {
       _cancelled = true;
     });
@@ -109,63 +120,70 @@ class _AudioImportProgressDialogState extends State<AudioImportProgressDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return AlertDialog(
-      key: const Key('audio-import-progress-dialog'),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(TokenRadius.radiusLg)),
-      ),
-      icon: Icon(
-        Icons.file_download_outlined,
-        size: 36,
-        color: theme.colorScheme.primary,
-      ),
-      title: const Text(
-        'Importing audio',
-        key: Key('audio-import-dialog-title'),
-        textAlign: TextAlign.center,
-      ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.fileName,
-              key: const Key('audio-import-progress-filename'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+    return PopScope(
+      canPop: _canPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _onCancel();
+      },
+      child: AlertDialog(
+        key: const Key('audio-import-progress-dialog'),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(TokenRadius.radiusLg)),
+        ),
+        icon: Icon(
+          Icons.file_download_outlined,
+          size: 36,
+          color: theme.colorScheme.primary,
+        ),
+        title: const Text(
+          'Importing audio',
+          key: Key('audio-import-dialog-title'),
+          textAlign: TextAlign.center,
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.fileName,
+                key: const Key('audio-import-progress-filename'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(height: TokenSpace.space3),
-            LinearProgressIndicator(
-              key: const Key('audio-import-progress-bar'),
-              value: _bytesTotal > 0 ? _fraction : null,
-            ),
-            const SizedBox(height: TokenSpace.space2),
-            Text(
-              _cancelled
-                  ? 'Cancelling…'
-                  : (_bytesTotal > 0
-                        ? '${(_fraction * 100).toInt()}%'
-                        : 'Preparing…'),
-              key: const Key('audio-import-progress-percent'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(height: TokenSpace.space3),
+              LinearProgressIndicator(
+                key: const Key('audio-import-progress-bar'),
+                value: _bytesTotal > 0 ? _fraction : null,
               ),
-            ),
-            const SizedBox(height: TokenSpace.space4),
-            AttenlumeButton(
-              key: const Key('audio-import-cancel-button'),
-              label: 'Cancel',
-              variant: AttenlumeButtonVariant.secondary,
-              onPressed: _cancelled ? null : _onCancel,
-            ),
-          ],
+              const SizedBox(height: TokenSpace.space2),
+              Text(
+                _cancelled
+                    ? 'Cancelling…'
+                    : (_bytesTotal > 0
+                          ? '${(_fraction * 100).toInt()}%'
+                          : 'Preparing…'),
+                key: const Key('audio-import-progress-percent'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: TokenSpace.space4),
+              AttenlumeButton(
+                key: const Key('audio-import-cancel-button'),
+                label: 'Cancel',
+                variant: AttenlumeButtonVariant.secondary,
+                onPressed: _cancelled ? null : _onCancel,
+              ),
+            ],
+          ),
         ),
       ),
     );

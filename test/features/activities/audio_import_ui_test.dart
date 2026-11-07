@@ -59,6 +59,19 @@ class _FakeInspector implements AudioFileInspector {
   Future<InspectedAudioInfo> inspect(File file) async => info;
 }
 
+class _FakeInspectorHook implements AudioFileInspector {
+  const _FakeInspectorHook({required this.info, required this.onInspect});
+
+  final InspectedAudioInfo info;
+  final void Function() onInspect;
+
+  @override
+  Future<InspectedAudioInfo> inspect(File file) async {
+    onInspect();
+    return info;
+  }
+}
+
 class _MockPilotModelManager implements PilotModelManager {
   @override
   String get name => 'Mock Model';
@@ -506,6 +519,187 @@ void main() {
         // Verify original source file untouched
         expect(sourceFile.existsSync(), isTrue);
         expect(sourceFile.lengthSync(), 4096);
+      },
+    );
+
+    testWidgets(
+      'P2-13 FR-TRN-03 Android Back during copy cancels import and leaves no file, activity or segment',
+      (tester) async {
+        final conf = await t.conference(name: 'Samlytics Conference 2026');
+        final sourceFile = File(p.join(sourceDir.path, 'Lecture_Back.mp3'))
+          ..writeAsBytesSync(List.filled(4096, 0x44));
+
+        Stream<List<int>> slowRead(File f) async* {
+          yield List.filled(1024, 0x44);
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          yield List.filled(1024, 0x44);
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          yield List.filled(1024, 0x44);
+        }
+
+        final fakePicker = _FakePicker(XFile(sourceFile.path));
+        const fakeInspector = _FakeInspector(
+          info: InspectedAudioInfo(
+            duration: Duration(minutes: 5),
+            channelCount: 2,
+            sampleRateHz: 44100,
+            codec: 'mp3',
+            container: 'mp3',
+          ),
+        );
+
+        final customImportService = AudioImportService(
+          db: t.db,
+          activities: t.activities,
+          conferences: t.conferences,
+          media: t.media,
+          mediaRoot: () async => mediaRoot,
+          picker: fakePicker,
+          inspector: fakeInspector,
+          openRead: slowRead,
+        );
+
+        await tester.pumpWidget(
+          wrapWithScope(
+            tester: tester,
+            additionalOverrides: [
+              audioImportServiceProvider.overrideWithValue(customImportService),
+              audioFilePickerProvider.overrideWithValue(fakePicker),
+              audioFileInspectorProvider.overrideWithValue(fakeInspector),
+            ],
+            child: ConferenceHomeScreen(conferenceId: conf.id),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap Import audio button
+        final importButton = find.byKey(const Key('import-audio-button'));
+        expect(importButton, findsOneWidget);
+        await tester.tap(importButton);
+
+        // Advance past picker to show dialog during slow read
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(
+          find.byKey(const Key('audio-import-progress-dialog')),
+          findsOneWidget,
+        );
+
+        // Simulate Android Back navigation during copy
+        await tester.binding.handlePopRoute();
+        await tester.pump();
+
+        // Verify dialog shows Cancelling… and is retained while cleanup runs
+        expect(find.text('Cancelling…'), findsOneWidget);
+
+        await settle(tester);
+        await settle(tester);
+
+        // Verify dialog is dismissed once cancellation and cleanup finish
+        expect(
+          find.byKey(const Key('audio-import-progress-dialog')),
+          findsNothing,
+        );
+
+        // Verify no files on disk
+        final mediaFiles = mediaRoot
+            .listSync(recursive: true)
+            .whereType<File>()
+            .toList();
+        expect(mediaFiles, isEmpty);
+
+        // Verify no activity created in DB
+        final acts = await t.activities.listForConference(conf.id);
+        expect(acts, isEmpty);
+
+        // Verify no segment created in DB
+        final segs = await t.media.segmentPaths();
+        expect(segs, isEmpty);
+
+        // Verify original source file untouched
+        expect(sourceFile.existsSync(), isTrue);
+        expect(sourceFile.lengthSync(), 4096);
+      },
+    );
+
+    testWidgets(
+      'P2-13 FR-TRN-03 source file deleted after inspection gives failure message and dialog closes',
+      (tester) async {
+        final conf = await t.conference(name: 'Samlytics Conference 2026');
+        final sourceFile = File(p.join(sourceDir.path, 'Lecture_Vanishes.mp3'))
+          ..writeAsBytesSync(List.filled(4096, 0x55));
+
+        final fakePicker = _FakePicker(XFile(sourceFile.path));
+
+        // Inspector that deletes the source file right after inspecting
+        final fakeInspector = _FakeInspectorHook(
+          info: const InspectedAudioInfo(
+            duration: Duration(minutes: 5),
+            channelCount: 2,
+            sampleRateHz: 44100,
+            codec: 'mp3',
+            container: 'mp3',
+          ),
+          onInspect: () {
+            if (sourceFile.existsSync()) {
+              sourceFile.deleteSync();
+            }
+          },
+        );
+
+        final customImportService = AudioImportService(
+          db: t.db,
+          activities: t.activities,
+          conferences: t.conferences,
+          media: t.media,
+          mediaRoot: () async => mediaRoot,
+          picker: fakePicker,
+          inspector: fakeInspector,
+        );
+
+        await tester.pumpWidget(
+          wrapWithScope(
+            tester: tester,
+            additionalOverrides: [
+              audioImportServiceProvider.overrideWithValue(customImportService),
+              audioFilePickerProvider.overrideWithValue(fakePicker),
+              audioFileInspectorProvider.overrideWithValue(fakeInspector),
+            ],
+            child: ConferenceHomeScreen(conferenceId: conf.id),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap Import audio button
+        final importButton = find.byKey(const Key('import-audio-button'));
+        expect(importButton, findsOneWidget);
+        await tester.tap(importButton);
+
+        // Pump so the dialog opens and import runs
+        await tester.pump();
+        await settle(tester);
+        await settle(tester);
+
+        // Verify dialog closes (does not stay stuck)
+        expect(
+          find.byKey(const Key('audio-import-progress-dialog')),
+          findsNothing,
+        );
+
+        // Verify UK-English failure SnackBar is shown
+        expect(
+          find.text(
+            'The audio file could not be read. Check the file is not damaged.',
+          ),
+          findsOneWidget,
+        );
+
+        // Verify no activity or segment in DB
+        final acts = await t.activities.listForConference(conf.id);
+        expect(acts, isEmpty);
+        final segs = await t.media.segmentPaths();
+        expect(segs, isEmpty);
       },
     );
   });

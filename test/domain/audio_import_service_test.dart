@@ -11,6 +11,7 @@ import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/media.dart';
 import 'package:attenlume/domain/services/audio_import_service.dart';
 import 'package:attenlume/domain/services/capture_settings.dart';
+import 'package:attenlume/domain/services/crash_recovery_service.dart';
 import 'package:attenlume/domain/services/export_import_service.dart';
 import 'package:attenlume/domain/services/export_service.dart';
 import 'package:attenlume/domain/services/permanent_trim_service.dart';
@@ -21,6 +22,7 @@ import 'package:attenlume/features/transcription/transcription_providers.dart';
 import 'package:attenlume/platform/audio_import/audio_file_inspector.dart';
 import 'package:attenlume/platform/audio_import/audio_file_picker.dart';
 import 'package:attenlume/platform/audio_trimmer/mp4_sample_trimmer.dart';
+import 'package:audio_decoder/audio_decoder.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -63,6 +65,20 @@ class _FakeInspector implements AudioFileInspector {
       throw const AudioInspectionException('Simulated unreadable file');
     }
     return info;
+  }
+}
+
+class _HookInspector implements AudioFileInspector {
+  const _HookInspector({required this.delegate, required this.afterInspect});
+
+  final AudioFileInspector delegate;
+  final void Function() afterInspect;
+
+  @override
+  Future<InspectedAudioInfo> inspect(File file) async {
+    final res = await delegate.inspect(file);
+    afterInspect();
+    return res;
   }
 }
 
@@ -624,14 +640,14 @@ void main() {
     expect(files, isEmpty);
   });
 
-  test('P2-13 FR-TRN-03 temporary copy uses MediaPaths.partial and startup cleanup removes abandoned imports', () async {
-    // 1. MediaPaths.partial convention check
+  test('P2-13 FR-TRN-03 temporary copy uses import staging suffix and startup cleanup removes abandoned imports', () async {
+    // 1. AudioImportService.importStagingSuffix convention check
     const targetRel = 'conferences/c1/activities/a1/audio/segment-001.mp3';
-    final partialRel = MediaPaths.partial(targetRel);
-    expect(MediaPaths.isPartial(partialRel), isTrue);
+    const stagingRel = '$targetRel${AudioImportService.importStagingSuffix}';
+    expect(AudioImportService.isImportStagingPath(stagingRel), isTrue);
     expect(
-      partialRel,
-      'conferences/c1/activities/a1/audio/segment-001.partial.mp3',
+      stagingRel,
+      'conferences/c1/activities/a1/audio/segment-001.mp3.importing',
     );
 
     // 2. Cleanup of abandoned imports left on disk after simulated crash/kill
@@ -643,7 +659,7 @@ void main() {
         'activities',
         'act-abandoned',
         'audio',
-        'segment-001.partial.mp3',
+        'segment-001.mp3.importing',
       ),
     );
     abandonedFile.parent.createSync(recursive: true);
@@ -1131,13 +1147,13 @@ void main() {
     await firstChunkWritten.future;
 
     // Verify first import staging file is present on disk
-    final partialFilesBefore = mediaRoot
+    final stagingFilesBefore = mediaRoot
         .listSync(recursive: true)
         .whereType<File>()
-        .where((f) => MediaPaths.isPartial(f.path))
+        .where((f) => AudioImportService.isImportStagingPath(f.path))
         .toList();
-    expect(partialFilesBefore, hasLength(1));
-    final firstStagingFile = partialFilesBefore.first;
+    expect(stagingFilesBefore, hasLength(1));
+    final firstStagingFile = stagingFilesBefore.first;
     expect(firstStagingFile.existsSync(), isTrue);
 
     // Attempt second import while first is actively copying
@@ -1163,59 +1179,72 @@ void main() {
     expect(import1Outcome, isA<AudioImportSuccess>());
   });
 
-  test('P2-13 FR-TRN-03 kill-like interruption between rename and commit leaves recoverable staging cleaned up on startup', () async {
+  test(
+    'P2-13 FR-TRN-03 abandoned import staging files are cleaned up on startup',
+    () async {
+      final conf = await t.conference(name: 'Samlytics Conference 2026');
+
+      // Simulate orphaned import staging files (.importing) left behind
+      // because an interruption occurred before commit
+      final orphanDir = Directory(
+        p.join(
+          mediaRoot.path,
+          'conferences',
+          conf.id,
+          'activities',
+          'orphaned_act',
+          'audio',
+        ),
+      )..createSync(recursive: true);
+      final orphanMp3 = File(
+        p.join(orphanDir.path, 'segment-001.mp3.importing'),
+      )..writeAsBytesSync(List.filled(4096, 0xAA));
+      final orphanWav = File(
+        p.join(orphanDir.path, 'segment-001.wav.importing'),
+      )..writeAsBytesSync(List.filled(4096, 0xBB));
+
+      expect(orphanMp3.existsSync(), isTrue);
+      expect(orphanWav.existsSync(), isTrue);
+
+      // Verify neither file is linked to any database segment
+      final knownPaths = await t.media.segmentPaths();
+      expect(knownPaths, isEmpty);
+
+      // Run startup / pre-import cleanup
+      final cleaned = await AudioImportService.cleanupAbandonedImports(
+        root: mediaRoot,
+        media: t.media,
+      );
+
+      expect(cleaned, greaterThanOrEqualTo(2));
+      expect(orphanMp3.existsSync(), isFalse);
+      expect(orphanWav.existsSync(), isFalse);
+      expect(orphanDir.existsSync(), isFalse);
+    },
+  );
+
+  test('P2-13 FR-TRN-03 M4A file with positive mdat size and valid metadata but unreadable audio payload is rejected by sample decoder', () async {
     final conf = await t.conference(name: 'Samlytics Conference 2026');
 
-    // Simulate an orphaned final audio file (.mp3, .wav, .aac) left behind
-    // because an interruption occurred after renameSync but before database transaction committed
-    final orphanDir = Directory(
-      p.join(
-        mediaRoot.path,
-        'conferences',
-        conf.id,
-        'activities',
-        'orphaned_act',
-        'audio',
-      ),
-    )..createSync(recursive: true);
-    final orphanMp3 = File(p.join(orphanDir.path, 'segment-001.mp3'))
-      ..writeAsBytesSync(List.filled(4096, 0xAA));
-    final orphanWav = File(p.join(orphanDir.path, 'segment-001.wav'))
-      ..writeAsBytesSync(List.filled(4096, 0xBB));
-
-    expect(orphanMp3.existsSync(), isTrue);
-    expect(orphanWav.existsSync(), isTrue);
-
-    // Verify neither file is linked to any database segment
-    final knownPaths = await t.media.segmentPaths();
-    expect(knownPaths, isEmpty);
-
-    // Run startup / pre-import cleanup
-    final cleaned = await AudioImportService.cleanupAbandonedImports(
-      root: mediaRoot,
-      media: t.media,
-    );
-
-    expect(cleaned, greaterThanOrEqualTo(2));
-    expect(orphanMp3.existsSync(), isFalse);
-    expect(orphanWav.existsSync(), isFalse);
-    expect(orphanDir.existsSync(), isFalse);
-  });
-
-  test('P2-13 FR-TRN-03 M4A file with positive mdat size but unreadable audio payload is rejected by platform decoder', () async {
-    final conf = await t.conference(name: 'Samlytics Conference 2026');
-
-    // Create an M4A file with valid container box headers and non-zero mdat payload (unplayable zero-filled bytes)
+    // Create an M4A file with valid container box headers and non-zero mdat payload
     final m4aBytes = buildM4a(mediaDataBytes: 4096);
     final unreadableM4aFile = File(
       p.join(sourceDir.path, 'unreadable_payload.m4a'),
     )..writeAsBytesSync(m4aBytes);
 
-    // DefaultAudioFileInspector configured with platform decoder that rejects unreadable payload
+    // DefaultAudioFileInspector configured with platform decoder where metadata succeeds,
+    // but sample decoding fails (proving production validation of actual samples)
     final inspector = DefaultAudioFileInspector(
-      audioInfoProvider: (path) async {
-        throw const FormatException(
-          'AAC decoder: bitstream corrupt or unreadable',
+      audioInfoProvider: (path) async => const AudioInfo(
+        duration: Duration(seconds: 10),
+        sampleRate: 44100,
+        channels: 2,
+        bitRate: 128000,
+        format: 'aac',
+      ),
+      sampleDecoder: (inputPath, outputPath, start, end) async {
+        throw AudioConversionException(
+          'AAC decoder: bitstream corrupt or unreadable samples',
         );
       },
     );
@@ -1238,5 +1267,165 @@ void main() {
 
     final acts = await t.activities.listForConference(conf.id);
     expect(acts, isEmpty);
+  });
+
+  test('P2-13 FR-TRN-03 source file deleted after inspection gives a failure message and leaves storage untouched', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+
+    final sourceFile = File(p.join(sourceDir.path, 'vanish_after_inspect.mp3'))
+      ..writeAsBytesSync(List.filled(4096, 0x11));
+
+    final baseInspector = _FakeInspector(
+      info: const InspectedAudioInfo(
+        duration: Duration(minutes: 1),
+        channelCount: 2,
+        sampleRateHz: 44100,
+        codec: 'mp3',
+        container: 'mp3',
+      ),
+    );
+
+    // Hook inspector that deletes the source file immediately after inspection completes
+    final inspector = _HookInspector(
+      delegate: baseInspector,
+      afterInspect: () {
+        if (sourceFile.existsSync()) {
+          sourceFile.deleteSync();
+        }
+      },
+    );
+
+    final picker = _FakePicker(XFile(sourceFile.path));
+    final service = makeService(picker: picker, inspector: inspector);
+    final outcome = await service.importAudio(conferenceId: conf.id);
+
+    expect(outcome, isA<AudioImportFailure>());
+    final failure = outcome as AudioImportFailure;
+    expect(failure.reason, AudioImportFailureReason.unreadableFile);
+    expect(
+      failure.userMessage,
+      'The audio file could not be read. Check the file is not damaged.',
+    );
+
+    final acts = await t.activities.listForConference(conf.id);
+    expect(acts, isEmpty);
+    final files = mediaRoot
+        .listSync(recursive: true)
+        .whereType<File>()
+        .toList();
+    expect(files, isEmpty);
+  });
+
+  test('P2-13 FR-TRN-03 recording-style orphans (partial and renamed final) survive cleanup and are recovered by CrashRecoveryService while abandoned import staging is removed', () async {
+    final conf = await t.conference(name: 'Crash Recovery Test Conf');
+
+    // 1. Setup a recording in progress (partial file and DB row pointing to .partial.m4a)
+    final act1 = await t.activity(conf.id, title: 'Active Recording Session 1');
+    final seg1RelPath = MediaPaths.segment(conf.id, act1.id, 1);
+    final seg1PartialRelPath = MediaPaths.partial(seg1RelPath);
+    await t.media.startSegment(
+      activityId: act1.id,
+      filePath: seg1PartialRelPath,
+      requestedProfile: RecordingProfile.balanced,
+      codec: 'aac_lc',
+      container: 'm4a',
+      channelCount: 1,
+      sampleRateHz: 48000,
+      requestedBitrateBps: 48000,
+      startUtc: t.clock.now,
+    );
+    final seg1File = MediaPaths.resolve(mediaRoot, seg1PartialRelPath)
+      ..parent.createSync(recursive: true)
+      ..writeAsBytesSync(
+        buildM4a(channels: 1, sampleRateHz: 48000, durationUnits: 48000 * 3),
+      );
+
+    // 2. Setup a recording renamed final (DB row points to .partial.m4a, but file on disk was renamed to final .m4a before crash)
+    final act2 = await t.activity(conf.id, title: 'Active Recording Session 2');
+    final seg2RelPath = MediaPaths.segment(conf.id, act2.id, 1);
+    final seg2PartialRelPath = MediaPaths.partial(seg2RelPath);
+    final seg2 = await t.media.startSegment(
+      activityId: act2.id,
+      filePath: seg2PartialRelPath,
+      requestedProfile: RecordingProfile.balanced,
+      codec: 'aac_lc',
+      container: 'm4a',
+      channelCount: 1,
+      sampleRateHz: 48000,
+      requestedBitrateBps: 48000,
+      startUtc: t.clock.now,
+    );
+    final seg2FinalFile = MediaPaths.resolve(mediaRoot, seg2RelPath)
+      ..parent.createSync(recursive: true)
+      ..writeAsBytesSync(
+        buildM4a(channels: 1, sampleRateHz: 48000, durationUnits: 48000 * 4),
+      );
+
+    // 3. Setup an abandoned import staging file (.importing suffix)
+    final importStagingRelPath = p.posix.join(
+      'conferences',
+      conf.id,
+      'activities',
+      'abandoned_import_act',
+      'audio',
+      'segment-001.m4a.importing',
+    );
+    final importStagingFile =
+        MediaPaths.resolve(mediaRoot, importStagingRelPath)
+          ..parent.createSync(recursive: true)
+          ..writeAsBytesSync(List.filled(2048, 0xEE));
+
+    expect(seg1File.existsSync(), isTrue);
+    expect(seg2FinalFile.existsSync(), isTrue);
+    expect(importStagingFile.existsSync(), isTrue);
+
+    // Run cleanupAbandonedImports
+    final cleaned = await AudioImportService.cleanupAbandonedImports(
+      root: mediaRoot,
+      media: t.media,
+    );
+
+    // Staging file should be cleaned up
+    expect(cleaned, greaterThanOrEqualTo(1));
+    expect(importStagingFile.existsSync(), isFalse);
+
+    // Crucial: Recording-style orphans MUST survive cleanup!
+    expect(
+      seg1File.existsSync(),
+      isTrue,
+      reason: 'Partial recording file must survive import cleanup',
+    );
+    expect(
+      seg2FinalFile.existsSync(),
+      isTrue,
+      reason: 'Renamed final recording file must survive import cleanup',
+    );
+
+    // Run CrashRecoveryService reconcile and verify both are found and recovered
+    final crashRecovery = CrashRecoveryService(
+      activities: t.activities,
+      media: t.media,
+      mediaRoot: () async => mediaRoot,
+    );
+    final report = await crashRecovery.reconcile();
+    expect(report.activities, isNotEmpty);
+
+    expect(seg1File.parent.existsSync(), isTrue);
+    final finalSeg1File = MediaPaths.resolve(mediaRoot, seg1RelPath);
+    expect(
+      finalSeg1File.existsSync(),
+      isTrue,
+      reason: 'Crash recovery finalises partial recording',
+    );
+    expect(
+      seg2FinalFile.existsSync(),
+      isTrue,
+      reason: 'Crash recovery reconciles renamed final recording',
+    );
+
+    final updatedSeg2 = (await t.media.segmentsFor(act2.id))
+        .singleWhere((s) => s.id == seg2.id);
+    expect(updatedSeg2.state, SegmentState.recovered);
+    expect(updatedSeg2.filePath, seg2RelPath);
   });
 }

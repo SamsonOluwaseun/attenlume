@@ -38,6 +38,14 @@ class AudioInspectionException implements Exception {
 /// Signature for fetching audio metadata via the platform decoder.
 typedef AudioInfoProvider = Future<AudioInfo> Function(String path);
 
+/// Signature for decoding a slice of an audio file to WAV to verify sample readability.
+typedef AudioSampleDecoder = Future<String> Function(
+  String inputPath,
+  String outputPath,
+  Duration start,
+  Duration end,
+);
+
 /// Platform-neutral inspection of audio files to verify readability and duration.
 abstract interface class AudioFileInspector {
   Future<InspectedAudioInfo> inspect(File file);
@@ -47,11 +55,52 @@ abstract interface class AudioFileInspector {
 class DefaultAudioFileInspector implements AudioFileInspector {
   const DefaultAudioFileInspector({
     this.audioInfoProvider = AudioDecoder.getAudioInfo,
+    this.sampleDecoder = AudioDecoder.trimAudio,
     this.m4aInspector = const M4aInspector(),
   });
 
   final AudioInfoProvider audioInfoProvider;
+  final AudioSampleDecoder sampleDecoder;
   final M4aInspector m4aInspector;
+
+  Future<void> _verifySampleReadability(
+    File file,
+    Duration totalDuration,
+  ) async {
+    final sliceEnd = totalDuration < const Duration(seconds: 3)
+        ? totalDuration
+        : const Duration(seconds: 3);
+
+    final tempDir = Directory.systemTemp;
+    final tempWav = File(
+      p.join(
+        tempDir.path,
+        'attenlume_verify_${DateTime.now().microsecondsSinceEpoch}.wav',
+      ),
+    );
+
+    try {
+      await sampleDecoder(file.path, tempWav.path, Duration.zero, sliceEnd);
+      if (!tempWav.existsSync() || tempWav.lengthSync() <= 44) {
+        throw const AudioInspectionException(
+          'Audio file contains no readable audio samples',
+        );
+      }
+    } on AudioInspectionException {
+      rethrow;
+    } catch (e) {
+      throw AudioInspectionException(
+        'Could not decode audio samples: $e',
+        cause: e,
+      );
+    } finally {
+      try {
+        if (tempWav.existsSync()) {
+          tempWav.deleteSync();
+        }
+      } catch (_) {}
+    }
+  }
 
   @override
   Future<InspectedAudioInfo> inspect(File file) async {
@@ -85,6 +134,9 @@ class DefaultAudioFileInspector implements AudioFileInspector {
         );
       }
 
+      // Prove sample readability before accepting by decoding a short slice (FR-TRN-03) [P2-13].
+      await _verifySampleReadability(file, decoded.duration);
+
       return InspectedAudioInfo(
         duration: Duration(milliseconds: info.durationMs),
         channelCount: decoded.channels > 0
@@ -108,6 +160,10 @@ class DefaultAudioFileInspector implements AudioFileInspector {
           'Audio duration is zero or invalid',
         );
       }
+
+      // Prove sample readability before accepting by decoding a short slice (FR-TRN-03) [P2-13].
+      await _verifySampleReadability(file, info.duration);
+
       final container = ext.startsWith('.') ? ext.substring(1) : ext;
       return InspectedAudioInfo(
         duration: info.duration,
