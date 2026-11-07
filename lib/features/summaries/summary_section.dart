@@ -56,6 +56,14 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
 
   bool _running = false;
 
+  /// Counts runs, so a run stopped while the model is checked can tell it was
+  /// replaced when the check finishes [P3-02d].
+  int _run = 0;
+
+  /// The model check in progress, shared by a run that starts before an
+  /// abandoned check finishes, so the model is not hashed twice.
+  Future<TextGenerationEngine>? _opening;
+
   @override
   void initState() {
     super.initState();
@@ -124,14 +132,26 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       return;
     }
     TextGenerationEngine? engine;
+    final run = ++_run;
+    bool current() => mounted && run == _run;
+    final opening = _opening ??= ref.read(summaryModelAccessProvider).open();
     setState(() {
       _running = true;
       _error = null;
       _progress = null;
     });
     try {
-      engine = await ref.read(summaryModelAccessProvider).open();
-      if (!mounted) return;
+      try {
+        engine = await opening;
+      } finally {
+        if (identical(_opening, opening)) _opening = null;
+      }
+      if (!current()) {
+        // Stopped while the model was checked. A newer run waiting on the
+        // same check owns the engine; otherwise nothing will use it.
+        if (mounted && _running) engine = null;
+        return;
+      }
       // Verification can take long enough for a recording to start.
       if (ref.read(summaryBlockedByRecordingProvider)()) {
         _fail(
@@ -158,21 +178,40 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
     } on TextGenerationCancelledException {
       // Stopped by the user or by leaving the tab; the old summary stays.
     } on SummaryFormatException {
-      _fail('The model gave an answer that could not be read. Try again.');
+      if (current()) {
+        _fail('The model gave an answer that could not be read. Try again.');
+      }
     } on Object {
-      _fail(
-        'The summary could not be made. The recording and transcript are '
-        'unchanged.',
-      );
+      if (current()) {
+        _fail(
+          'The summary could not be made. The recording and transcript are '
+          'unchanged.',
+        );
+      }
     } finally {
       unawaited(engine?.dispose());
-      if (mounted) {
+      if (current()) {
         setState(() {
           _summariser = null;
           _running = false;
         });
       }
     }
+  }
+
+  void _stop() {
+    final summariser = _summariser;
+    if (summariser != null) {
+      unawaited(summariser.cancel());
+      return;
+    }
+    // Still checking the model: the check cannot be interrupted, so the run
+    // is dropped now and its result discarded when the check finishes.
+    setState(() {
+      _run++;
+      _running = false;
+      _progress = null;
+    });
   }
 
   void _fail(String message) {
@@ -245,17 +284,19 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
     ),
     const SizedBox(height: TokenSpace.space2),
     Text(
-      'Summarising on this device. On a phone this can take a few minutes; '
-      'stay on this tab.',
+      _summariser == null
+          ? 'Checking the AI model. The first check after opening the app can '
+                'take a minute.'
+          : 'Summarising on this device. On a phone this can take a few '
+                'minutes; stay on this tab.',
+      key: const Key('summary-progress-text'),
       style: theme.textTheme.bodyMedium,
     ),
     Align(
       alignment: AlignmentDirectional.centerStart,
       child: TextButton(
         key: const Key('summary-cancel'),
-        onPressed: _summariser == null
-            ? null
-            : () => unawaited(_summariser?.cancel()),
+        onPressed: _stop,
         child: const Text('Stop'),
       ),
     ),

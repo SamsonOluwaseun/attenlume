@@ -251,6 +251,55 @@ void main() {
     expect(engine.disposed, isTrue);
   });
 
+  testWidgets('P3-02d Stop works while the model is checked; the check result '
+      'is discarded', (tester) async {
+    final model = _OpeningModel();
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    await pump(tester, model: model);
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await tester.pump();
+    expect(find.textContaining('Checking the AI model'), findsOneWidget);
+    final stop = find.byKey(const Key('summary-cancel'));
+    expect(tester.widget<TextButton>(stop).onPressed, isNotNull);
+
+    await tester.tap(stop);
+    await tester.pump();
+    expect(find.byKey(const Key('summary-progress')), findsNothing);
+    expect(find.byKey(const Key('summary-create')), findsOneWidget);
+
+    model.opening.complete(engine);
+    await settle(tester);
+    expect(engine.requests, isEmpty);
+    expect(engine.disposed, isTrue);
+    expect(store.saves, 0);
+    expect(find.byKey(const Key('summary-error')), findsNothing);
+    expect(find.byKey(const Key('summary-create')), findsOneWidget);
+  });
+
+  testWidgets('P3-02d Create again after Stop reuses the unfinished check', (
+    tester,
+  ) async {
+    final model = _OpeningModel();
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x');
+    await pump(tester, model: model);
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('summary-cancel')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await tester.pump();
+    expect(model.opens, 1);
+    expect(find.byKey(const Key('summary-progress')), findsOneWidget);
+
+    model.opening.complete(engine);
+    await settle(tester);
+    expect(model.opens, 1);
+    expect(engine.requests, hasLength(1));
+    expect(store.saves, 1);
+    expect(engine.disposed, isTrue);
+    expect(find.text('x'), findsOneWidget);
+  });
+
   testWidgets('P3-02 an unreadable answer keeps nothing and says so', (
     tester,
   ) async {
