@@ -280,6 +280,13 @@ class RecordingService {
   Future<StartOutcome> start(String activityId) =>
       _lock.run(() => _startLocked(activityId));
 
+  /// Runs a brief critical commit (such as audio import database commit)
+  /// under the recording lock so recording startup cannot interleave.
+  ///
+  /// Recording startup will wait for [action] to finish if called during the commit.
+  Future<T> runWithCommitLock<T>(Future<T> Function() action) =>
+      _lock.run(action);
+
   /// Stops whatever is held and starts [activityId], under one lock hold so
   /// no other command can run in between (FR-REC-04) [P1-06].
   ///

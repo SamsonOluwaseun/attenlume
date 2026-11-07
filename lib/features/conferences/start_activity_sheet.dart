@@ -209,9 +209,11 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
   }
 
   Future<void> _handleImportAudio() async {
-    final outcome = await ref
-        .read(audioImportServiceProvider)
-        .importAudio(conferenceId: widget.conferenceId);
+    final outcome = await showAudioImportDialog(
+      context: context,
+      importService: ref.read(audioImportServiceProvider),
+      conferenceId: widget.conferenceId,
+    );
     if (!mounted) return;
     switch (outcome) {
       case AudioImportSuccess(:final activity):

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:attenlume/app/theme/app_theme.dart';
@@ -393,6 +394,118 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(fakePicker.pickAudioCalls, 1);
+      },
+    );
+
+    testWidgets(
+      'P2-13 FR-TRN-03 import audio displays progress dialog and Cancel leaves no file, activity or segment',
+      (tester) async {
+        final conf = await t.conference(name: 'Samlytics Conference 2026');
+        final sourceFile = File(p.join(sourceDir.path, 'Lecture_Progress.mp3'))
+          ..writeAsBytesSync(List.filled(4096, 0x33));
+
+        Stream<List<int>> slowRead(File f) async* {
+          yield List.filled(1024, 0x33);
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          yield List.filled(1024, 0x33);
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          yield List.filled(1024, 0x33);
+        }
+
+        final fakePicker = _FakePicker(XFile(sourceFile.path));
+        const fakeInspector = _FakeInspector(
+          info: InspectedAudioInfo(
+            duration: Duration(minutes: 5),
+            channelCount: 2,
+            sampleRateHz: 44100,
+            codec: 'mp3',
+            container: 'mp3',
+          ),
+        );
+
+        final customImportService = AudioImportService(
+          db: t.db,
+          activities: t.activities,
+          conferences: t.conferences,
+          media: t.media,
+          mediaRoot: () async => mediaRoot,
+          picker: fakePicker,
+          inspector: fakeInspector,
+          openRead: slowRead,
+        );
+
+        await tester.pumpWidget(
+          wrapWithScope(
+            tester: tester,
+            additionalOverrides: [
+              audioImportServiceProvider.overrideWithValue(customImportService),
+              audioFilePickerProvider.overrideWithValue(fakePicker),
+              audioFileInspectorProvider.overrideWithValue(fakeInspector),
+            ],
+            child: ConferenceHomeScreen(conferenceId: conf.id),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap Import audio button
+        final importButton = find.byKey(const Key('import-audio-button'));
+        expect(importButton, findsOneWidget);
+        await tester.tap(importButton);
+
+        // Advance past picker to show dialog during slow read
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Verify progress dialog appears with file name, progress bar, and Cancel button
+        expect(
+          find.byKey(const Key('audio-import-progress-dialog')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('audio-import-progress-filename')),
+          findsOneWidget,
+        );
+        expect(find.text('Lecture_Progress.mp3'), findsOneWidget);
+        expect(
+          find.byKey(const Key('audio-import-progress-bar')),
+          findsOneWidget,
+        );
+
+        final cancelButton = find.byKey(
+          const Key('audio-import-cancel-button'),
+        );
+        expect(cancelButton, findsOneWidget);
+
+        // Tap Cancel while copying is in progress
+        await tester.tap(cancelButton);
+        await tester.pump();
+        await settle(tester);
+        await settle(tester);
+
+        // Verify dialog is dismissed
+        expect(
+          find.byKey(const Key('audio-import-progress-dialog')),
+          findsNothing,
+        );
+
+        // Verify no files on disk
+        final mediaFiles = mediaRoot
+            .listSync(recursive: true)
+            .whereType<File>()
+            .toList();
+        expect(mediaFiles, isEmpty);
+
+        // Verify no activity created in DB
+        final acts = await t.activities.listForConference(conf.id);
+        expect(acts, isEmpty);
+
+        // Verify no segment created in DB
+        final segs = await t.media.segmentPaths();
+        expect(segs, isEmpty);
+
+        // Verify original source file untouched
+        expect(sourceFile.existsSync(), isTrue);
+        expect(sourceFile.lengthSync(), 4096);
       },
     );
   });

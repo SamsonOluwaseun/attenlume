@@ -299,9 +299,11 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen>
 
   /// Imports an audio file recorded elsewhere into an activity (FR-TRN-03) [P2-13].
   Future<void> _handleImportAudio() async {
-    final outcome = await ref
-        .read(audioImportServiceProvider)
-        .importAudio(conferenceId: widget.conferenceId);
+    final outcome = await showAudioImportDialog(
+      context: context,
+      importService: ref.read(audioImportServiceProvider),
+      conferenceId: widget.conferenceId,
+    );
     if (!mounted) return;
     switch (outcome) {
       case AudioImportSuccess(:final activity):

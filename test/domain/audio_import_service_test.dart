@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:attenlume/data/filesystem/export_writer.dart';
@@ -8,9 +10,12 @@ import 'package:attenlume/data/repositories/repository_providers.dart';
 import 'package:attenlume/domain/models/enums.dart';
 import 'package:attenlume/domain/models/media.dart';
 import 'package:attenlume/domain/services/audio_import_service.dart';
+import 'package:attenlume/domain/services/capture_settings.dart';
 import 'package:attenlume/domain/services/export_import_service.dart';
 import 'package:attenlume/domain/services/export_service.dart';
 import 'package:attenlume/domain/services/permanent_trim_service.dart';
+import 'package:attenlume/domain/services/recording_service.dart';
+import 'package:attenlume/domain/services/recording_state.dart';
 import 'package:attenlume/features/capture/recording_providers.dart';
 import 'package:attenlume/features/transcription/transcription_providers.dart';
 import 'package:attenlume/platform/audio_import/audio_file_inspector.dart';
@@ -22,6 +27,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import '../fixtures/fake_capture_engine.dart';
 import '../fixtures/fake_free_space_probe.dart';
 import '../fixtures/fixtures.dart';
 import '../fixtures/m4a_builder.dart';
@@ -86,6 +92,70 @@ class _FailingSegmentMediaRepository extends MediaAssetRepository {
   }
 }
 
+class _SlowSink implements IOSink {
+  _SlowSink(
+    this.realSink, {
+    this.flushDelay = const Duration(milliseconds: 10),
+  });
+
+  final IOSink realSink;
+  final Duration flushDelay;
+
+  int bufferedChunks = 0;
+  int maxBufferedChunks = 0;
+
+  @override
+  void add(List<int> data) {
+    bufferedChunks++;
+    if (bufferedChunks > maxBufferedChunks) {
+      maxBufferedChunks = bufferedChunks;
+    }
+    realSink.add(data);
+  }
+
+  @override
+  Future<void> flush() async {
+    if (flushDelay > Duration.zero) {
+      await Future<void>.delayed(flushDelay);
+    }
+    await realSink.flush();
+    bufferedChunks = 0;
+  }
+
+  @override
+  Future<void> close() => realSink.close();
+
+  @override
+  Future<void> get done => realSink.done;
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) =>
+      realSink.addError(error, stackTrace);
+
+  @override
+  Future<dynamic> addStream(Stream<List<int>> stream) =>
+      realSink.addStream(stream);
+
+  @override
+  Encoding get encoding => realSink.encoding;
+
+  @override
+  set encoding(Encoding encoding) => realSink.encoding = encoding;
+
+  @override
+  void write(Object? object) => realSink.write(object);
+
+  @override
+  void writeAll(Iterable<dynamic> objects, [String separator = '']) =>
+      realSink.writeAll(objects, separator);
+
+  @override
+  void writeCharCode(int charCode) => realSink.writeCharCode(charCode);
+
+  @override
+  void writeln([Object? object = '']) => realSink.writeln(object);
+}
+
 Future<ExportWriteResult> _inlineWriter(
   ExportWritePlan plan, {
   void Function(ExportWriteProgress progress)? onProgress,
@@ -119,8 +189,10 @@ void main() {
     AudioFileInspector? inspector,
     FakeFreeSpaceProbe? freeSpace,
     bool Function()? isRecordingActive,
+    Future<T> Function<T>(Future<T> Function() action)? withRecordingGuard,
     int? safetyMarginBytes,
     Stream<List<int>> Function(File file)? openRead,
+    IOSink Function(File file)? openWrite,
   }) {
     return AudioImportService(
       db: t.db,
@@ -134,11 +206,13 @@ void main() {
           freeSpace ??
           FakeFreeSpaceProbe(10 * 1024 * 1024 * 1024), // 10 GB free
       isRecordingActive: isRecordingActive ?? () => false,
+      withRecordingGuard: withRecordingGuard,
       safetyMarginBytes:
           safetyMarginBytes ?? defaultAudioImportSafetyMarginBytes,
       clock: t.clock.call,
       newId: t.ids.call,
       openRead: openRead,
+      openWrite: openWrite,
     );
   }
 
@@ -919,5 +993,250 @@ void main() {
     );
     expect(reimportedFile.existsSync(), isTrue);
     expect(reimportedFile.lengthSync(), 2048);
+  });
+
+  test('P2-13 FR-TRN-03 stream copy provides write backpressure with bounded chunk buffer on slow sink', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+    final sourceFile = File(p.join(sourceDir.path, 'large_file.mp3'))
+      ..writeAsBytesSync(List.filled(2048, 0x55));
+
+    final picker = _FakePicker(XFile(sourceFile.path));
+    final inspector = _FakeInspector(
+      info: const InspectedAudioInfo(
+        duration: Duration(minutes: 5),
+        channelCount: 2,
+        sampleRateHz: 44100,
+        codec: 'mp3',
+        container: 'mp3',
+      ),
+    );
+
+    // Rapidly emit 20 chunks from the read stream
+    final chunks = List.generate(20, (i) => List.filled(100, i));
+    Stream<List<int>> fastRead(File f) => Stream.fromIterable(chunks);
+
+    _SlowSink? slowSink;
+    final service = makeService(
+      picker: picker,
+      inspector: inspector,
+      openRead: fastRead,
+      openWrite: (file) {
+        slowSink = _SlowSink(
+          file.openWrite(),
+          flushDelay: const Duration(milliseconds: 5),
+        );
+        return slowSink!;
+      },
+    );
+
+    final outcome = await service.importAudio(conferenceId: conf.id);
+    expect(outcome, isA<AudioImportSuccess>());
+
+    // Backpressure ensures that each chunk write/flush is awaited so at most a few chunks
+    // can ever be buffered simultaneously in memory
+    expect(slowSink, isNotNull);
+    expect(slowSink!.maxBufferedChunks, lessThanOrEqualTo(2));
+  });
+
+  test('P2-13 FR-TRN-03 recording startup during import commit waits for commit and succeeds', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+    final liveActivity = await t.activity(conf.id, title: 'Live Meeting');
+
+    final sourceFile = File(p.join(sourceDir.path, 'commit_race.mp3'))
+      ..writeAsBytesSync(List.filled(1024, 0x11));
+    final picker = _FakePicker(XFile(sourceFile.path));
+    final inspector = _FakeInspector();
+
+    final engine = FakeCaptureEngine();
+    final recorder = RecordingService(
+      engine: engine,
+      activities: t.activities,
+      media: t.media,
+      mediaRoot: () async => mediaRoot,
+      platform: CapturePlatform.android,
+      clock: t.clock.call,
+    );
+    addTearDown(recorder.dispose);
+
+    final commitStarted = Completer<void>();
+    final allowCommitFinish = Completer<void>();
+    Future<StartOutcome>? recordingStartFuture;
+
+    Future<T> commitGuardHook<T>(Future<T> Function() action) {
+      return recorder.runWithCommitLock(() async {
+        commitStarted.complete();
+        // Wait until recording start has been invoked
+        await allowCommitFinish.future;
+        return await action();
+      });
+    }
+
+    final service = makeService(
+      picker: picker,
+      inspector: inspector,
+      isRecordingActive: () => recorder.status.state.holdsActivity,
+      withRecordingGuard: commitGuardHook,
+    );
+
+    // 1. Start import
+    final importFuture = service.importAudio(conferenceId: conf.id);
+
+    // 2. Wait until commit is executing under the lock
+    await commitStarted.future;
+
+    // 3. Request recording start while import is committing
+    recordingStartFuture = recorder.start(liveActivity.id);
+
+    // 4. Release commit so import completes
+    allowCommitFinish.complete();
+
+    final importOutcome = await importFuture;
+    expect(importOutcome, isA<AudioImportSuccess>());
+
+    // 5. Recording start was queued on the lock, awaited commit completion and started cleanly
+    final recOutcome = await recordingStartFuture;
+    expect(recOutcome, StartOutcome.started);
+    expect(recorder.status.state, RecordingState.recording);
+    expect(recorder.status.activityId, liveActivity.id);
+  });
+
+  test('P2-13 FR-TRN-03 second import during first copy is rejected and does not delete active staging file', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+    final source1 = File(p.join(sourceDir.path, 'first.mp3'))
+      ..writeAsBytesSync(List.filled(2048, 0x01));
+    final source2 = File(p.join(sourceDir.path, 'second.mp3'))
+      ..writeAsBytesSync(List.filled(2048, 0x02));
+
+    final pauseCopy = Completer<void>();
+    final firstChunkWritten = Completer<void>();
+
+    Stream<List<int>> controllableRead(File f) async* {
+      yield List.filled(1024, 0x01);
+      firstChunkWritten.complete();
+      await pauseCopy.future;
+      yield List.filled(1024, 0x01);
+    }
+
+    final service = makeService(
+      inspector: _FakeInspector(),
+      openRead: controllableRead,
+    );
+
+    // Start first import
+    final import1Future = service.importAudio(
+      conferenceId: conf.id,
+      sourceFileOverride: XFile(source1.path),
+    );
+
+    await firstChunkWritten.future;
+
+    // Verify first import staging file is present on disk
+    final partialFilesBefore = mediaRoot
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => MediaPaths.isPartial(f.path))
+        .toList();
+    expect(partialFilesBefore, hasLength(1));
+    final firstStagingFile = partialFilesBefore.first;
+    expect(firstStagingFile.existsSync(), isTrue);
+
+    // Attempt second import while first is actively copying
+    final import2Outcome = await service.importAudio(
+      conferenceId: conf.id,
+      sourceFileOverride: XFile(source2.path),
+    );
+
+    expect(import2Outcome, isA<AudioImportFailure>());
+    final failure = import2Outcome as AudioImportFailure;
+    expect(failure.reason, AudioImportFailureReason.importAlreadyRunning);
+    expect(
+      failure.userMessage,
+      'An audio import is already in progress. Please wait for it to finish.',
+    );
+
+    // Verify first import staging file was NOT deleted by second import
+    expect(firstStagingFile.existsSync(), isTrue);
+
+    // Let first import finish
+    pauseCopy.complete();
+    final import1Outcome = await import1Future;
+    expect(import1Outcome, isA<AudioImportSuccess>());
+  });
+
+  test('P2-13 FR-TRN-03 kill-like interruption between rename and commit leaves recoverable staging cleaned up on startup', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+
+    // Simulate an orphaned final audio file (.mp3, .wav, .aac) left behind
+    // because an interruption occurred after renameSync but before database transaction committed
+    final orphanDir = Directory(
+      p.join(
+        mediaRoot.path,
+        'conferences',
+        conf.id,
+        'activities',
+        'orphaned_act',
+        'audio',
+      ),
+    )..createSync(recursive: true);
+    final orphanMp3 = File(p.join(orphanDir.path, 'segment-001.mp3'))
+      ..writeAsBytesSync(List.filled(4096, 0xAA));
+    final orphanWav = File(p.join(orphanDir.path, 'segment-001.wav'))
+      ..writeAsBytesSync(List.filled(4096, 0xBB));
+
+    expect(orphanMp3.existsSync(), isTrue);
+    expect(orphanWav.existsSync(), isTrue);
+
+    // Verify neither file is linked to any database segment
+    final knownPaths = await t.media.segmentPaths();
+    expect(knownPaths, isEmpty);
+
+    // Run startup / pre-import cleanup
+    final cleaned = await AudioImportService.cleanupAbandonedImports(
+      root: mediaRoot,
+      media: t.media,
+    );
+
+    expect(cleaned, greaterThanOrEqualTo(2));
+    expect(orphanMp3.existsSync(), isFalse);
+    expect(orphanWav.existsSync(), isFalse);
+    expect(orphanDir.existsSync(), isFalse);
+  });
+
+  test('P2-13 FR-TRN-03 M4A file with positive mdat size but unreadable audio payload is rejected by platform decoder', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+
+    // Create an M4A file with valid container box headers and non-zero mdat payload (unplayable zero-filled bytes)
+    final m4aBytes = buildM4a(mediaDataBytes: 4096);
+    final unreadableM4aFile = File(
+      p.join(sourceDir.path, 'unreadable_payload.m4a'),
+    )..writeAsBytesSync(m4aBytes);
+
+    // DefaultAudioFileInspector configured with platform decoder that rejects unreadable payload
+    final inspector = DefaultAudioFileInspector(
+      audioInfoProvider: (path) async {
+        throw const FormatException(
+          'AAC decoder: bitstream corrupt or unreadable',
+        );
+      },
+    );
+
+    // Verify inspector throws AudioInspectionException
+    expect(
+      () => inspector.inspect(unreadableM4aFile),
+      throwsA(isA<AudioInspectionException>()),
+    );
+
+    final picker = _FakePicker(XFile(unreadableM4aFile.path));
+    final service = makeService(picker: picker, inspector: inspector);
+    final outcome = await service.importAudio(conferenceId: conf.id);
+
+    expect(outcome, isA<AudioImportFailure>());
+    expect(
+      (outcome as AudioImportFailure).reason,
+      AudioImportFailureReason.unreadableFile,
+    );
+
+    final acts = await t.activities.listForConference(conf.id);
+    expect(acts, isEmpty);
   });
 }

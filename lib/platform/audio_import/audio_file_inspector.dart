@@ -35,6 +35,9 @@ class AudioInspectionException implements Exception {
   String toString() => 'AudioInspectionException: $message';
 }
 
+/// Signature for fetching audio metadata via the platform decoder.
+typedef AudioInfoProvider = Future<AudioInfo> Function(String path);
+
 /// Platform-neutral inspection of audio files to verify readability and duration.
 abstract interface class AudioFileInspector {
   Future<InspectedAudioInfo> inspect(File file);
@@ -42,43 +45,64 @@ abstract interface class AudioFileInspector {
 
 /// Default inspector implementation reusing M4aInspector and AudioDecoder.
 class DefaultAudioFileInspector implements AudioFileInspector {
-  const DefaultAudioFileInspector();
+  const DefaultAudioFileInspector({
+    this.audioInfoProvider = AudioDecoder.getAudioInfo,
+    this.m4aInspector = const M4aInspector(),
+  });
+
+  final AudioInfoProvider audioInfoProvider;
+  final M4aInspector m4aInspector;
 
   @override
   Future<InspectedAudioInfo> inspect(File file) async {
     final ext = p.extension(file.path).toLowerCase();
     if (ext == '.m4a') {
-      try {
-        const m4aInspector = M4aInspector();
-        final info = await m4aInspector.inspect(file);
-        if (info.durationMs <= 0) {
-          throw const AudioInspectionException(
-            'Audio duration is zero or invalid',
-          );
-        }
-        if (info.mediaDataBytes <= 0) {
-          throw const AudioInspectionException(
-            'Audio file contains no audio data (mdat box is missing or empty)',
-          );
-        }
-        return InspectedAudioInfo(
-          duration: Duration(milliseconds: info.durationMs),
-          channelCount: info.channelCount,
-          sampleRateHz: info.sampleRateHz,
-          codec: info.codec,
-          container: 'm4a',
-          bitrateBps: info.observedBitrateBps > 0
-              ? info.observedBitrateBps
-              : null,
+      final info = await m4aInspector.inspect(file);
+      if (info.durationMs <= 0) {
+        throw const AudioInspectionException(
+          'Audio duration is zero or invalid',
         );
-      } catch (e) {
-        if (e is AudioInspectionException) rethrow;
-        // If M4aInspector fails, try AudioDecoder fallback below
       }
+      if (info.mediaDataBytes <= 0) {
+        throw const AudioInspectionException(
+          'Audio file contains no audio data (mdat box is missing or empty)',
+        );
+      }
+
+      // Require the platform decoder to read the file with a positive duration (FR-TRN-03) [P2-13].
+      final AudioInfo decoded;
+      try {
+        decoded = await audioInfoProvider(file.path);
+      } catch (e) {
+        throw AudioInspectionException(
+          'Could not decode audio file: $e',
+          cause: e,
+        );
+      }
+      if (decoded.duration <= Duration.zero) {
+        throw const AudioInspectionException(
+          'Audio duration is zero or invalid',
+        );
+      }
+
+      return InspectedAudioInfo(
+        duration: Duration(milliseconds: info.durationMs),
+        channelCount: decoded.channels > 0
+            ? decoded.channels
+            : info.channelCount,
+        sampleRateHz: decoded.sampleRate > 0
+            ? decoded.sampleRate
+            : info.sampleRateHz,
+        codec: info.codec,
+        container: 'm4a',
+        bitrateBps: info.observedBitrateBps > 0
+            ? info.observedBitrateBps
+            : (decoded.bitRate > 0 ? decoded.bitRate : null),
+      );
     }
 
     try {
-      final info = await AudioDecoder.getAudioInfo(file.path);
+      final info = await audioInfoProvider(file.path);
       if (info.duration <= Duration.zero) {
         throw const AudioInspectionException(
           'Audio duration is zero or invalid',

@@ -10,6 +10,7 @@ import '../capture/recording_providers.dart';
 export '../../domain/services/audio_import_service.dart';
 export '../../platform/audio_import/audio_file_inspector.dart';
 export '../../platform/audio_import/audio_file_picker.dart';
+export 'audio_import_progress_dialog.dart';
 
 /// Injectable audio file picker for audio import and transcription (FR-TRN-03) [P2-13].
 final audioFilePickerProvider = Provider<AudioFilePicker>(
@@ -23,6 +24,7 @@ final audioFileInspectorProvider = Provider<AudioFileInspector>(
 
 /// Audio import service provider (FR-TRN-03) [P2-13].
 final audioImportServiceProvider = Provider<AudioImportService>((ref) {
+  final recordingService = ref.watch(recordingServiceProvider);
   return AudioImportService(
     db: ref.watch(appDatabaseProvider),
     activities: ref.watch(activityRepositoryProvider),
@@ -32,16 +34,13 @@ final audioImportServiceProvider = Provider<AudioImportService>((ref) {
     picker: ref.watch(audioFilePickerProvider),
     inspector: ref.watch(audioFileInspectorProvider),
     freeSpace: ref.watch(freeSpaceProbeProvider),
+    withRecordingGuard: recordingService.runWithCommitLock,
     isRecordingActive: () {
       final status = ref.read(recordingStatusProvider).asData?.value;
       if (status != null) {
         return status.state.holdsActivity;
       }
-      try {
-        return ref.read(recordingServiceProvider).status.state.holdsActivity;
-      } catch (_) {
-        return false;
-      }
+      return recordingService.status.state.holdsActivity;
     },
   );
 });

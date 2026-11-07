@@ -89,6 +89,7 @@ enum AudioImportFailureReason {
   unreadableFile,
   lowStorage,
   ioError,
+  importAlreadyRunning,
 }
 
 /// Import failed with an explained reason.
@@ -112,6 +113,8 @@ class AudioImportFailure extends AudioImportOutcome {
         return 'Storage space is low. Free some space before importing.';
       case AudioImportFailureReason.ioError:
         return 'Could not import the audio file. Your device storage was unchanged.';
+      case AudioImportFailureReason.importAlreadyRunning:
+        return 'An audio import is already in progress. Please wait for it to finish.';
     }
   }
 }
@@ -122,11 +125,12 @@ class AudioImportFailure extends AudioImportOutcome {
 /// - Reuses injectable [AudioFilePicker] and [AudioFileInspector].
 /// - Validates extensions (.m4a, .mp3, .wav, .aac) and reads duration before copying.
 /// - Checks free space via [FreeSpaceProbe] with safety margin.
-/// - Performs atomic stream copy to `.partial` and renames only on complete copy.
+/// - Performs atomic stream copy to `.partial` with backpressure and renames only on complete copy.
 /// - If copy fails or cancels mid-way, leaves no file and no database activity.
 /// - Leaves the original source file completely untouched (never moved, modified or deleted).
 /// - Marks activity and segment as imported (`imported` tag and `imported` inputRoute).
 /// - Refuses import while recording is active to avoid microphone/resource conflicts.
+/// - Allows only one import at a time and protects active staging files from cleanup.
 class AudioImportService {
   AudioImportService({
     this.db,
@@ -139,9 +143,11 @@ class AudioImportService {
     this.freeSpace = const UnknownFreeSpaceProbe(),
     this.safetyMarginBytes = defaultAudioImportSafetyMarginBytes,
     this.isRecordingActive,
+    this.withRecordingGuard,
     this.clock = systemUtcClock,
     this.newId = uuidV4,
     this.openRead,
+    this.openWrite,
   });
 
   final AppDatabase? db;
@@ -154,15 +160,24 @@ class AudioImportService {
   final FreeSpaceProbe freeSpace;
   final int safetyMarginBytes;
   final bool Function()? isRecordingActive;
+  final Future<T> Function<T>(Future<T> Function() action)? withRecordingGuard;
   final UtcClock clock;
   final IdGenerator newId;
   final Stream<List<int>> Function(File file)? openRead;
+  final IOSink Function(File file)? openWrite;
 
-  /// Removes abandoned partial import files left behind if the app was killed
+  /// Active staging files currently being written by in-progress imports.
+  static final Set<String> _activeStagingRelativePaths = <String>{};
+
+  /// Whether an import is currently in progress across the application.
+  static bool _isAnyImportActive = false;
+
+  /// Removes abandoned partial or unlinked import files left behind if the app was killed
   /// during an import before a database record could be committed.
   static Future<int> cleanupAbandonedImports({
     required Directory root,
     MediaAssetRepository? media,
+    Set<String>? activeStagingPaths,
   }) async {
     final conferencesDir = Directory(p.join(root.path, 'conferences'));
     if (!conferencesDir.existsSync()) return 0;
@@ -170,6 +185,7 @@ class AudioImportService {
     final knownPaths = media != null
         ? (await media.segmentPaths()).toSet()
         : const <String>{};
+    final activePaths = activeStagingPaths ?? _activeStagingRelativePaths;
     var cleaned = 0;
 
     final entities = conferencesDir.listSync(recursive: true);
@@ -178,7 +194,13 @@ class AudioImportService {
       final rel = p.posix.joinAll(
         p.split(p.relative(entity.path, from: root.path)),
       );
-      if (MediaPaths.isPartial(rel) && !knownPaths.contains(rel)) {
+      if (activePaths.contains(rel)) continue;
+
+      final ext = p.posix.extension(rel).toLowerCase();
+      final isCandidate =
+          MediaPaths.isPartial(rel) || supportedAudioExtensions.contains(ext);
+
+      if (isCandidate && !knownPaths.contains(rel)) {
         try {
           entity.deleteSync();
           cleaned++;
@@ -206,6 +228,14 @@ class AudioImportService {
     void Function(AudioImportProgress progress)? onProgress,
     bool Function()? isCancelled,
   }) async {
+    // 0. Only allow one import at a time (FR-TRN-03) [P2-13].
+    if (_isAnyImportActive) {
+      return const AudioImportFailure(
+        AudioImportFailureReason.importAlreadyRunning,
+        details: 'Another audio import is currently in progress',
+      );
+    }
+
     // 1. Refuse import while recording is active (FR-TRN-03 item 6)
     if (isRecordingActive?.call() == true) {
       return const AudioImportFailure(AudioImportFailureReason.recordingActive);
@@ -215,252 +245,289 @@ class AudioImportService {
       return const AudioImportCancelled();
     }
 
-    final root = await mediaRoot();
-
-    // Clean up any abandoned partial files from previous interrupted imports
-    await cleanupAbandonedImports(root: root, media: media);
-
-    // 2. Pick audio file
-    final picked = sourceFileOverride ?? await picker.pickAudio();
-    if (picked == null) {
-      return const AudioImportCancelled();
-    }
-
-    if (isCancelled?.call() == true) {
-      return const AudioImportCancelled();
-    }
-
-    // 3. Check recording active again after picker await
-    if (isRecordingActive?.call() == true) {
-      return const AudioImportFailure(AudioImportFailureReason.recordingActive);
-    }
-
-    // 4. Check format / extension
-    final ext = p
-        .extension(picked.name.isNotEmpty ? picked.name : picked.path)
-        .toLowerCase();
-    if (!supportedAudioExtensions.contains(ext)) {
-      return AudioImportFailure(
-        AudioImportFailureReason.unsupportedFormat,
-        details: 'Extension "$ext" is not supported',
-      );
-    }
-
-    final sourceFile = File(picked.path);
-    if (!sourceFile.existsSync()) {
-      return const AudioImportFailure(
-        AudioImportFailureReason.unreadableFile,
-        details: 'Source file does not exist',
-      );
-    }
-
-    // 5. Inspect audio duration and format before copying
-    final InspectedAudioInfo inspected;
+    _isAnyImportActive = true;
     try {
-      inspected = await inspector.inspect(sourceFile);
-      if (inspected.duration <= Duration.zero) {
-        return const AudioImportFailure(
-          AudioImportFailureReason.unreadableFile,
-          details: 'Audio duration is zero',
-        );
-      }
-    } catch (e) {
-      return AudioImportFailure(
-        AudioImportFailureReason.unreadableFile,
-        details: e.toString(),
-      );
-    }
+      final root = await mediaRoot();
 
-    if (isCancelled?.call() == true) {
-      return const AudioImportCancelled();
-    }
+      // Clean up any abandoned partial files from previous interrupted imports
+      await cleanupAbandonedImports(root: root, media: media);
 
-    // Check recording again after inspection await
-    if (isRecordingActive?.call() == true) {
-      return const AudioImportFailure(AudioImportFailureReason.recordingActive);
-    }
-
-    // 6. Check free space with safety margin
-    final fileBytes = await sourceFile.length();
-    final space = await freeSpace.query(root.path);
-    if (space != null && space.availableBytes - fileBytes < safetyMarginBytes) {
-      return AudioImportFailure(
-        AudioImportFailureReason.lowStorage,
-        details:
-            'Available: ${space.availableBytes}, needed: ${fileBytes + safetyMarginBytes}',
-      );
-    }
-
-    // 7. Resolve activity and segment targets
-    final conf = await conferences.get(conferenceId);
-    if (conf == null) {
-      return const AudioImportFailure(
-        AudioImportFailureReason.ioError,
-        details: 'Conference not found',
-      );
-    }
-
-    final effectiveTypeId = typeId ?? await _defaultTypeId();
-    final activityId = newId();
-    final segmentId = newId();
-
-    final relAudioDir = p.posix.join(
-      'conferences',
-      conferenceId,
-      'activities',
-      activityId,
-      'audio',
-    );
-    final fileName = 'segment-001$ext';
-    final relFilePath = p.posix.join(relAudioDir, fileName);
-    final relPartialPath = MediaPaths.partial(relFilePath);
-
-    final targetFile = MediaPaths.resolve(root, relFilePath);
-    final partialFile = MediaPaths.resolve(root, relPartialPath);
-
-    // 8. Streamed copy to temporary name (.partial) and concurrent SHA-256 calculation
-    final String sha256Hex;
-    try {
-      partialFile.parent.createSync(recursive: true);
-
-      final digestSink = _DigestSink();
-      final hasher = sha256.startChunkedConversion(digestSink);
-
-      final stream = openRead != null
-          ? openRead!(sourceFile)
-          : sourceFile.openRead();
-      final sink = partialFile.openWrite();
-
-      var bytesCopied = 0;
-      var wasCancelled = false;
-      var wasInterruptedByRecording = false;
-
-      try {
-        await for (final chunk in stream) {
-          if (isCancelled?.call() == true) {
-            wasCancelled = true;
-            break;
-          }
-          if (isRecordingActive?.call() == true) {
-            wasInterruptedByRecording = true;
-            break;
-          }
-
-          hasher.add(chunk);
-          sink.add(chunk);
-          bytesCopied += chunk.length;
-          onProgress?.call(
-            AudioImportProgress(bytesDone: bytesCopied, bytesTotal: fileBytes),
-          );
-        }
-        await sink.flush();
-      } finally {
-        await sink.close();
-      }
-
-      if (wasCancelled) {
-        _cleanupFiles(partialFile, targetFile);
+      // 2. Pick audio file
+      final picked = sourceFileOverride ?? await picker.pickAudio();
+      if (picked == null) {
         return const AudioImportCancelled();
       }
 
-      if (wasInterruptedByRecording) {
-        _cleanupFiles(partialFile, targetFile);
+      if (isCancelled?.call() == true) {
+        return const AudioImportCancelled();
+      }
+
+      // 3. Check recording active again after picker await
+      if (isRecordingActive?.call() == true) {
         return const AudioImportFailure(
           AudioImportFailureReason.recordingActive,
         );
       }
 
-      hasher.close();
-      sha256Hex = digestSink.value.toString();
+      // 4. Check format / extension
+      final ext = p
+          .extension(picked.name.isNotEmpty ? picked.name : picked.path)
+          .toLowerCase();
+      if (!supportedAudioExtensions.contains(ext)) {
+        return AudioImportFailure(
+          AudioImportFailureReason.unsupportedFormat,
+          details: 'Extension "$ext" is not supported',
+        );
+      }
 
-      // Check recording again immediately before committing the import
-      if (isRecordingActive?.call() == true) {
-        _cleanupFiles(partialFile, targetFile);
+      final sourceFile = File(picked.path);
+      if (!sourceFile.existsSync()) {
         return const AudioImportFailure(
-          AudioImportFailureReason.recordingActive,
+          AudioImportFailureReason.unreadableFile,
+          details: 'Source file does not exist',
+        );
+      }
+
+      // 5. Inspect audio duration and format before copying
+      final InspectedAudioInfo inspected;
+      try {
+        inspected = await inspector.inspect(sourceFile);
+        if (inspected.duration <= Duration.zero) {
+          return const AudioImportFailure(
+            AudioImportFailureReason.unreadableFile,
+            details: 'Audio duration is zero',
+          );
+        }
+      } catch (e) {
+        return AudioImportFailure(
+          AudioImportFailureReason.unreadableFile,
+          details: e.toString(),
         );
       }
 
       if (isCancelled?.call() == true) {
-        _cleanupFiles(partialFile, targetFile);
         return const AudioImportCancelled();
       }
 
-      // Atomic rename once copy is complete
-      partialFile.renameSync(targetFile.path);
-    } catch (e) {
-      _cleanupFiles(partialFile, targetFile);
-      return AudioImportFailure(
-        AudioImportFailureReason.ioError,
-        details: 'Copy failed: $e',
-      );
-    }
-
-    final now = clock().toUtc();
-    final title = activityTitleFromFileName(
-      picked.name.isNotEmpty ? picked.name : p.basename(picked.path),
-    );
-
-    // Check recording again immediately before database transaction
-    if (isRecordingActive?.call() == true) {
-      _cleanupFiles(partialFile, targetFile);
-      return const AudioImportFailure(AudioImportFailureReason.recordingActive);
-    }
-
-    // 9. Commit activity and segment to database in one single transaction
-    try {
-      Activity? activity;
-      RecordingSegment? segment;
-
-      Future<void> performInserts() async {
-        activity = await activities.create(
-          id: activityId,
-          conferenceId: conferenceId,
-          typeId: effectiveTypeId,
-          title: title,
-          actualStart: now,
-          actualEnd: now.add(inspected.duration),
-          status: ActivityStatus.completed,
-          recordingPermissionStatus: RecordingPermissionStatus.permitted,
-          tags: const [importedAudioTag],
-        );
-
-        segment = await media.addImportedSegment(
-          id: segmentId,
-          activityId: activityId,
-          filePath: relFilePath,
-          requestedProfile: conf.defaultRecordingProfile,
-          codec: inspected.codec,
-          container: inspected.container,
-          channelCount: inspected.channelCount,
-          sampleRateHz: inspected.sampleRateHz,
-          requestedBitrateBps:
-              inspected.bitrateBps ??
-              conf.defaultRecordingProfile.targetBitrateBps,
-          observedBitrateBps: inspected.bitrateBps,
-          inputRoute: importedInputRoute,
-          startUtc: now,
-          endUtc: now.add(inspected.duration),
-          durationMs: inspected.duration.inMilliseconds,
-          bytes: fileBytes,
-          sha256: sha256Hex,
+      // Check recording again after inspection await
+      if (isRecordingActive?.call() == true) {
+        return const AudioImportFailure(
+          AudioImportFailureReason.recordingActive,
         );
       }
 
-      if (db != null) {
-        await db!.transaction(performInserts);
-      } else {
-        await performInserts();
+      // 6. Check free space with safety margin
+      final fileBytes = await sourceFile.length();
+      final space = await freeSpace.query(root.path);
+      if (space != null &&
+          space.availableBytes - fileBytes < safetyMarginBytes) {
+        return AudioImportFailure(
+          AudioImportFailureReason.lowStorage,
+          details:
+              'Available: ${space.availableBytes}, needed: ${fileBytes + safetyMarginBytes}',
+        );
       }
 
-      return AudioImportSuccess(activity: activity!, segment: segment!);
-    } catch (e) {
-      // If DB fails, clean up target file to leave no orphaned audio
-      _cleanupFiles(partialFile, targetFile);
-      return AudioImportFailure(
-        AudioImportFailureReason.ioError,
-        details: 'Database insert failed: $e',
+      // 7. Resolve activity and segment targets
+      final conf = await conferences.get(conferenceId);
+      if (conf == null) {
+        return const AudioImportFailure(
+          AudioImportFailureReason.ioError,
+          details: 'Conference not found',
+        );
+      }
+
+      final effectiveTypeId = typeId ?? await _defaultTypeId();
+      final activityId = newId();
+      final segmentId = newId();
+
+      final relAudioDir = p.posix.join(
+        'conferences',
+        conferenceId,
+        'activities',
+        activityId,
+        'audio',
       );
+      final fileName = 'segment-001$ext';
+      final relFilePath = p.posix.join(relAudioDir, fileName);
+      final relPartialPath = MediaPaths.partial(relFilePath);
+
+      final targetFile = MediaPaths.resolve(root, relFilePath);
+      final partialFile = MediaPaths.resolve(root, relPartialPath);
+
+      _activeStagingRelativePaths.add(relPartialPath);
+      try {
+        // 8. Streamed copy to temporary name (.partial) with backpressure and concurrent SHA-256 calculation
+        final String sha256Hex;
+        try {
+          partialFile.parent.createSync(recursive: true);
+
+          final digestSink = _DigestSink();
+          final hasher = sha256.startChunkedConversion(digestSink);
+
+          final stream = openRead != null
+              ? openRead!(sourceFile)
+              : sourceFile.openRead();
+          final sink = openWrite != null
+              ? openWrite!(partialFile)
+              : partialFile.openWrite();
+
+          var bytesCopied = 0;
+          var wasCancelled = false;
+          var wasInterruptedByRecording = false;
+
+          try {
+            await for (final chunk in stream) {
+              if (isCancelled?.call() == true) {
+                wasCancelled = true;
+                break;
+              }
+              if (isRecordingActive?.call() == true) {
+                wasInterruptedByRecording = true;
+                break;
+              }
+
+              hasher.add(chunk);
+              sink.add(chunk);
+              await sink.flush();
+              bytesCopied += chunk.length;
+              onProgress?.call(
+                AudioImportProgress(
+                  bytesDone: bytesCopied,
+                  bytesTotal: fileBytes,
+                ),
+              );
+            }
+          } finally {
+            await sink.close();
+          }
+
+          if (wasCancelled) {
+            _cleanupFiles(partialFile, targetFile);
+            return const AudioImportCancelled();
+          }
+
+          if (wasInterruptedByRecording) {
+            _cleanupFiles(partialFile, targetFile);
+            return const AudioImportFailure(
+              AudioImportFailureReason.recordingActive,
+            );
+          }
+
+          hasher.close();
+          sha256Hex = digestSink.value.toString();
+
+          // Check recording again immediately before committing the import
+          if (isRecordingActive?.call() == true) {
+            _cleanupFiles(partialFile, targetFile);
+            return const AudioImportFailure(
+              AudioImportFailureReason.recordingActive,
+            );
+          }
+
+          if (isCancelled?.call() == true) {
+            _cleanupFiles(partialFile, targetFile);
+            return const AudioImportCancelled();
+          }
+
+          // Atomic rename once copy is complete
+          partialFile.renameSync(targetFile.path);
+        } catch (e) {
+          _cleanupFiles(partialFile, targetFile);
+          return AudioImportFailure(
+            AudioImportFailureReason.ioError,
+            details: 'Copy failed: $e',
+          );
+        }
+
+        final now = clock().toUtc();
+        final title = activityTitleFromFileName(
+          picked.name.isNotEmpty ? picked.name : p.basename(picked.path),
+        );
+
+        // Check recording again immediately before database transaction
+        if (isRecordingActive?.call() == true) {
+          _cleanupFiles(partialFile, targetFile);
+          return const AudioImportFailure(
+            AudioImportFailureReason.recordingActive,
+          );
+        }
+
+        // 9. Commit activity and segment to database in one single transaction under recording guard
+        Future<AudioImportOutcome> performCommit() async {
+          if (isRecordingActive?.call() == true) {
+            _cleanupFiles(partialFile, targetFile);
+            return const AudioImportFailure(
+              AudioImportFailureReason.recordingActive,
+            );
+          }
+
+          try {
+            Activity? activity;
+            RecordingSegment? segment;
+
+            Future<void> performInserts() async {
+              activity = await activities.create(
+                id: activityId,
+                conferenceId: conferenceId,
+                typeId: effectiveTypeId,
+                title: title,
+                actualStart: now,
+                actualEnd: now.add(inspected.duration),
+                status: ActivityStatus.completed,
+                recordingPermissionStatus: RecordingPermissionStatus.permitted,
+                tags: const [importedAudioTag],
+              );
+
+              segment = await media.addImportedSegment(
+                id: segmentId,
+                activityId: activityId,
+                filePath: relFilePath,
+                requestedProfile: conf.defaultRecordingProfile,
+                codec: inspected.codec,
+                container: inspected.container,
+                channelCount: inspected.channelCount,
+                sampleRateHz: inspected.sampleRateHz,
+                requestedBitrateBps:
+                    inspected.bitrateBps ??
+                    conf.defaultRecordingProfile.targetBitrateBps,
+                observedBitrateBps: inspected.bitrateBps,
+                inputRoute: importedInputRoute,
+                startUtc: now,
+                endUtc: now.add(inspected.duration),
+                durationMs: inspected.duration.inMilliseconds,
+                bytes: fileBytes,
+                sha256: sha256Hex,
+              );
+            }
+
+            if (db != null) {
+              await db!.transaction(performInserts);
+            } else {
+              await performInserts();
+            }
+
+            return AudioImportSuccess(activity: activity!, segment: segment!);
+          } catch (e) {
+            // If DB fails, clean up target file to leave no orphaned audio
+            _cleanupFiles(partialFile, targetFile);
+            return AudioImportFailure(
+              AudioImportFailureReason.ioError,
+              details: 'Database insert failed: $e',
+            );
+          }
+        }
+
+        if (withRecordingGuard != null) {
+          return await withRecordingGuard!(performCommit);
+        } else {
+          return await performCommit();
+        }
+      } finally {
+        _activeStagingRelativePaths.remove(relPartialPath);
+      }
+    } finally {
+      _isAnyImportActive = false;
     }
   }
 
