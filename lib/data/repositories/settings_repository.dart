@@ -147,4 +147,12 @@ class SettingsRepository {
 
   Future<void> setThemeMode(ThemeMode mode) =>
       _db.writeSetting(themeModeKey, mode.name);
+
+  static const languageModelKey = 'language_model';
+
+  /// The on-device AI model the user chose (P3-11), or null if never chosen.
+  Future<String?> languageModelId() => _db.readSetting(languageModelKey);
+
+  Future<void> setLanguageModelId(String id) =>
+      _db.writeSetting(languageModelKey, id);
 }

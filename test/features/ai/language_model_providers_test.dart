@@ -253,6 +253,9 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           languageModelStoreProvider.overrideWith((ref) async => store),
+          activeLanguageModelDescriptorProvider.overrideWith(
+            (ref) async => testDescriptor,
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -274,8 +277,8 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           languageModelStoreProvider.overrideWith((ref) async => store),
-          activeLanguageModelDescriptorProvider.overrideWithValue(
-            testDescriptor,
+          activeLanguageModelDescriptorProvider.overrideWith(
+            (ref) async => testDescriptor,
           ),
         ],
       );

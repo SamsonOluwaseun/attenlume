@@ -15,7 +15,8 @@ POINT [mm:ss]: <a key point>
 FOLLOWUP [mm:ss]: <an action someone said they would take, or that the listener should take>
 QUESTION: <a question worth asking the speaker, based on the material>
 Write 3 to 7 POINT lines, 0 to 5 FOLLOWUP lines and 0 to 3 QUESTION lines.
-Copy each timestamp from the material line that supports the item.
+Every POINT and FOLLOWUP line starts with a timestamp in square brackets, copied from the material line that supports it, for example: POINT [04:12]: <the point made at 04:12>
+Write the answer once.
 If the material is too short to summarise, write only: SUMMARY: Not enough material to summarise.''';
 
 const _rules = '''

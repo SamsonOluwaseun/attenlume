@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/tokens.dart';
+import '../../platform/ai/language_model_descriptor.dart';
 import '../ai/language_model_providers.dart';
 
 /// Optional AI section in Settings (P3-10, FR-AI-01).
@@ -72,7 +74,58 @@ class OptionalAiSection extends ConsumerWidget {
       ),
       data: (controller) => ListenableBuilder(
         listenable: controller,
-        builder: (context, _) => _OptionalAiCard(controller: controller),
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ModelChoice(
+              active: controller.descriptor,
+              locked: controller.state.isDownloading,
+            ),
+            _OptionalAiCard(controller: controller),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Choose between the models in the catalogue (P3-11). The recommendation
+/// comes from the device's memory where known; nothing is downloaded here.
+class _ModelChoice extends ConsumerWidget {
+  const _ModelChoice({required this.active, required this.locked});
+
+  final LanguageModelDescriptor active;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final recommended = ref.watch(recommendedLanguageModelProvider).value;
+    return RadioGroup<String>(
+      groupValue: active.id,
+      onChanged: (id) {
+        final model = LanguageModelDescriptor.byId(id);
+        if (locked || model == null || model.id == active.id) return;
+        unawaited(chooseLanguageModel(ref, model));
+      },
+      child: Column(
+        children: [
+          for (final model in LanguageModelDescriptor.catalogue)
+            RadioListTile<String>(
+              key: Key('optional-ai-choice-${model.id}'),
+              value: model.id,
+              enabled: !locked,
+              title: Text('${model.name} · ${model.sizeLabel}'),
+              subtitle: Text(
+                [
+                  model.suitedTo,
+                  if (recommended?.id == model.id)
+                    'Recommended for this device.',
+                ].join(' '),
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -84,13 +137,17 @@ class _OptionalAiCard extends StatelessWidget {
   final LanguageModelController controller;
 
   Future<void> _confirmDownload(BuildContext context) async {
+    final desc = controller.descriptor;
+    final terms = desc.termsLinks.map((link) => link.$1).join(' and the ');
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Download Gemma 4 E2B?'),
-        content: const Text(
-          'The model download is 2.65 GB. We recommend using Wi-Fi for this download.\n\n'
-          'Runs on this device. Nothing you record is sent anywhere.',
+        title: Text('Download ${desc.name}?'),
+        content: Text(
+          'The model download is ${desc.sizeLabel}. We recommend using Wi-Fi '
+          'for this download.\n\n'
+          'Runs on this device. Nothing you record is sent anywhere.'
+          '${terms.isEmpty ? '' : '\n\nBy downloading you agree to the $terms.'}',
         ),
         actions: [
           TextButton(
@@ -117,8 +174,9 @@ class _OptionalAiCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete model?'),
-        content: const Text(
-          'This will remove the 2.65 GB Gemma 4 E2B model from this device. '
+        content: Text(
+          'This will remove the ${controller.descriptor.sizeLabel} '
+          '${controller.descriptor.name} model from this device. '
           'You can download it again at any time.',
         ),
         actions: [
@@ -219,6 +277,29 @@ class _OptionalAiCard extends StatelessWidget {
                   color: theme.colorScheme.onSurface,
                 ),
               ),
+              // Gemma Terms models: the user sees the terms before download.
+              for (final (label, url) in desc.termsLinks)
+                Padding(
+                  padding: const EdgeInsets.only(top: TokenSpace.space2),
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: TokenSpace.space2,
+                    children: [
+                      SelectableText('$label: $url'),
+                      TextButton(
+                        key: Key('optional-ai-copy-$url'),
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: url));
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                            SnackBar(content: Text('$label link copied.')),
+                          );
+                        },
+                        child: const Text('Copy link'),
+                      ),
+                    ],
+                  ),
+                ),
               if (state.isError && state.errorMessage != null) ...[
                 const SizedBox(height: TokenSpace.space3),
                 Container(

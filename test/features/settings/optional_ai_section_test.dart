@@ -9,11 +9,19 @@ import 'package:attenlume/features/capture/recording_providers.dart'
     show freeSpaceProbeProvider;
 import 'package:attenlume/features/settings/optional_ai_section.dart';
 import 'package:attenlume/platform/ai/language_model_store.dart';
+import 'package:attenlume/platform/device/device_memory_probe.dart';
 import 'package:attenlume/platform/storage/free_space_probe.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _Memory implements DeviceMemoryProbe {
+  const _Memory(this.bytes);
+  final int? bytes;
+  @override
+  Future<int?> totalBytes() async => bytes;
+}
 
 class _FakeFreeSpaceProbe implements FreeSpaceProbe {
   _FakeFreeSpaceProbe(this.freeBytes);
@@ -94,6 +102,7 @@ void main() {
     LanguageModelController? controller,
     double textScale = 1.0,
     bool dark = false,
+    int? memoryBytes,
   }) {
     final ctrl =
         controller ??
@@ -106,8 +115,11 @@ void main() {
       overrides: [
         languageModelStoreProvider.overrideWith((ref) async => store),
         freeSpaceProbeProvider.overrideWithValue(probe),
-        activeLanguageModelDescriptorProvider.overrideWithValue(testDescriptor),
+        activeLanguageModelDescriptorProvider.overrideWith(
+          (ref) async => testDescriptor,
+        ),
         languageModelControllerProvider.overrideWith((ref) async => ctrl),
+        deviceMemoryProbeProvider.overrideWithValue(_Memory(memoryBytes)),
       ],
       child: MaterialApp(
         theme: dark ? AppTheme.dark() : AppTheme.light(),
@@ -122,6 +134,80 @@ void main() {
       ),
     );
   }
+
+  group('P3-11 FR-AI-01: model choice', () {
+    testWidgets('both models are offered; a 4 GB device is pointed to the '
+        'small one, whose terms show before download', (tester) async {
+      final store = LanguageModelStore(baseDirectory: tempDir);
+      final probe = _FakeFreeSpaceProbe(10 * 1024 * 1024 * 1024);
+      final controller = LanguageModelController(
+        store: store,
+        freeSpaceProbe: probe,
+        descriptor: LanguageModelDescriptor.gemma3_1B,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        pumpSection(
+          store: store,
+          probe: probe,
+          controller: controller,
+          memoryBytes: 3865470566, // a 4 GB phone reports about 3.6 GiB
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      const small = LanguageModelDescriptor.gemma3_1B;
+      const big = LanguageModelDescriptor.gemma4E2B;
+      expect(find.text('${big.name} · 2.65 GB'), findsOneWidget);
+      expect(find.text('${small.name} · 769 MB'), findsOneWidget);
+      final smallTile = find.byKey(Key('optional-ai-choice-${small.id}'));
+      expect(
+        find.descendant(
+          of: smallTile,
+          matching: find.textContaining('Recommended for this device.'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Recommended for this device.'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('https://ai.google.dev/gemma/terms'),
+        findsOneWidget,
+      );
+      expect(find.text('Copy link'), findsNWidgets(2));
+
+      await tester.tap(find.byKey(const Key('optional-ai-download-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Download ${small.name}?'), findsOneWidget);
+      expect(find.textContaining('769 MB'), findsWidgets);
+      expect(
+        find.textContaining(
+          'By downloading you agree to the Gemma Terms of Use and the '
+          'Gemma Prohibited Use Policy.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('optional-ai-confirm-cancel')));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'unknown memory recommends nothing; Gemma 4 has no terms step',
+      (tester) async {
+        final store = LanguageModelStore(baseDirectory: tempDir);
+        final probe = _FakeFreeSpaceProbe(10 * 1024 * 1024 * 1024);
+        await tester.pumpWidget(pumpSection(store: store, probe: probe));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Recommended for this device.'),
+          findsNothing,
+        );
+        expect(find.text('Copy link'), findsNothing);
+      },
+    );
+  });
 
   group('P3-10 FR-AI-01: Optional AI Settings UI states', () {
     testWidgets(
@@ -269,7 +355,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Confirmation dialog appears
-        expect(find.text('Download Gemma 4 E2B?'), findsOneWidget);
+        expect(find.text('Download Gemma 4 E2B, Fast?'), findsOneWidget);
         expect(find.textContaining('2.65 GB'), findsWidgets);
         expect(find.textContaining('Wi-Fi'), findsOneWidget);
 

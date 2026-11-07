@@ -49,7 +49,7 @@ class OnDeviceSummaryModelAccess implements SummaryModelAccess {
   }) : isIos = isIos ?? Platform.isIOS;
 
   final Future<LanguageModelStore> Function() getStore;
-  final LanguageModelDescriptor Function() getDescriptor;
+  final Future<LanguageModelDescriptor> Function() getDescriptor;
   final bool isIos;
   final LlamaInferenceRunner? inferenceRunner;
   final LlamaCancelRunner? cancelRunner;
@@ -63,7 +63,7 @@ class OnDeviceSummaryModelAccess implements SummaryModelAccess {
       return 'On-device AI is not supported on iOS for now.';
     }
     final store = await getStore();
-    final descriptor = getDescriptor();
+    final descriptor = await getDescriptor();
     final path = await store.installedPath(descriptor);
     if (path == null) {
       return 'Download the AI model in Settings > Optional AI';
@@ -77,7 +77,7 @@ class OnDeviceSummaryModelAccess implements SummaryModelAccess {
       throw UnsupportedError('On-device AI is not supported on iOS for now.');
     }
     final store = await getStore();
-    final descriptor = getDescriptor();
+    final descriptor = await getDescriptor();
 
     String? path;
     if (!_verifiedFirstLoad) {
@@ -106,7 +106,7 @@ class OnDeviceSummaryModelAccess implements SummaryModelAccess {
 final summaryModelAccessProvider = Provider<SummaryModelAccess>(
   (ref) => OnDeviceSummaryModelAccess(
     getStore: () => ref.read(languageModelStoreProvider.future),
-    getDescriptor: () => ref.read(activeLanguageModelDescriptorProvider),
+    getDescriptor: () => ref.read(activeLanguageModelDescriptorProvider.future),
   ),
 );
 

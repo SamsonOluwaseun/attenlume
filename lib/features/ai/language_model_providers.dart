@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../data/filesystem/app_data_directory.dart';
+import '../../data/repositories/repository_providers.dart';
 import '../../platform/ai/language_model_store.dart';
+import '../../platform/device/device_memory_probe.dart';
 import '../../platform/storage/free_space_probe.dart';
 import '../capture/recording_providers.dart' show freeSpaceProbeProvider;
 
@@ -30,13 +32,46 @@ final languageModelStoreProvider = FutureProvider<LanguageModelStore>((
   return LanguageModelStore(baseDirectory: dir, freeSpaceProbe: freeSpace);
 });
 
-/// The active language model descriptor (Phase 3, FR-AI-01).
-/// Defaults to pinned [LanguageModelDescriptor.defaultModel] (Gemma 4 E2B).
-final activeLanguageModelDescriptorProvider = Provider<LanguageModelDescriptor>(
-  (ref) {
-    return LanguageModelDescriptor.defaultModel;
-  },
+/// The device's total memory, for the model recommendation only (P3-11).
+final deviceMemoryProbeProvider = Provider<DeviceMemoryProbe>(
+  (ref) => DeviceMemoryProbe.platform(),
 );
+
+/// The model to recommend on this device, or null when memory is unknown.
+final recommendedLanguageModelProvider =
+    FutureProvider<LanguageModelDescriptor?>(
+      (ref) async => LanguageModelDescriptor.recommendedFor(
+        await ref.watch(deviceMemoryProbeProvider).totalBytes(),
+      ),
+    );
+
+/// The active language model (FR-AI-01, P3-11): the user's choice; without
+/// one, a model already downloaded (so earlier installs keep working), then
+/// the recommendation for this device, then Gemma 4 E2B.
+final activeLanguageModelDescriptorProvider =
+    FutureProvider<LanguageModelDescriptor>((ref) async {
+      final chosen = LanguageModelDescriptor.byId(
+        await ref.watch(settingsRepositoryProvider).languageModelId(),
+      );
+      if (chosen != null) return chosen;
+      final store = await ref.watch(languageModelStoreProvider.future);
+      for (final model in LanguageModelDescriptor.catalogue) {
+        if (await store.installedPath(model) != null) return model;
+      }
+      final recommended = await ref.watch(
+        recommendedLanguageModelProvider.future,
+      );
+      return recommended ?? LanguageModelDescriptor.defaultModel;
+    });
+
+/// Saves the user's model choice and switches Settings and summaries to it.
+Future<void> chooseLanguageModel(
+  WidgetRef ref,
+  LanguageModelDescriptor model,
+) async {
+  await ref.read(settingsRepositoryProvider).setLanguageModelId(model.id);
+  ref.invalidate(activeLanguageModelDescriptorProvider);
+}
 
 /// Answers the installed, verified on-device language model path, or null if
 /// not downloaded or verification failed (P3-10, FR-AI-01).
@@ -45,7 +80,9 @@ final activeLanguageModelDescriptorProvider = Provider<LanguageModelDescriptor>(
 final installedLanguageModelPathProvider = FutureProvider<String?>((ref) async {
   try {
     final store = await ref.watch(languageModelStoreProvider.future);
-    final descriptor = ref.watch(activeLanguageModelDescriptorProvider);
+    final descriptor = await ref.watch(
+      activeLanguageModelDescriptorProvider.future,
+    );
     return await store.installedPath(descriptor);
   } catch (_) {
     return null;
@@ -242,9 +279,13 @@ final languageModelControllerProvider = FutureProvider<LanguageModelController>(
   (ref) async {
     final store = await ref.watch(languageModelStoreProvider.future);
     final freeSpace = ref.watch(freeSpaceProbeProvider);
+    final descriptor = await ref.watch(
+      activeLanguageModelDescriptorProvider.future,
+    );
     final controller = LanguageModelController(
       store: store,
       freeSpaceProbe: freeSpace,
+      descriptor: descriptor,
       onStateChanged: () {
         ref.invalidate(installedLanguageModelPathProvider);
       },

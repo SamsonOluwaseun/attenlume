@@ -99,6 +99,10 @@ void main() {
           debugPrint('Points count: ${summary.points.length}');
           if (!score.passes) {
             qualityFailures.add('${testCase.id}: $score');
+            // Shows why points were dropped (for example invented times).
+            for (final answer in measured.answers) {
+              debugPrint('Raw model answer: $answer');
+            }
           }
         }
       } finally {

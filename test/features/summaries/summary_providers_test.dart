@@ -77,7 +77,7 @@ void main() {
     test('P3-02b [FR-AI-02] unavailableReason returns download guidance when no model installed', () async {
       final access = OnDeviceSummaryModelAccess(
         getStore: () async => modelStore,
-        getDescriptor: () => testDescriptor,
+        getDescriptor: () async => testDescriptor,
         isIos: false,
       );
 
@@ -89,7 +89,7 @@ void main() {
       installFakeModel();
       final access = OnDeviceSummaryModelAccess(
         getStore: () async => modelStore,
-        getDescriptor: () => testDescriptor,
+        getDescriptor: () async => testDescriptor,
         isIos: true,
       );
 
@@ -101,7 +101,7 @@ void main() {
       installFakeModel();
       final access = OnDeviceSummaryModelAccess(
         getStore: () async => modelStore,
-        getDescriptor: () => testDescriptor,
+        getDescriptor: () async => testDescriptor,
         isIos: false,
       );
 
@@ -113,7 +113,7 @@ void main() {
       installFakeModel();
       final access = OnDeviceSummaryModelAccess(
         getStore: () async => modelStore,
-        getDescriptor: () => testDescriptor,
+        getDescriptor: () async => testDescriptor,
         isIos: false,
         inferenceRunner: (req, cb) async => 1,
         contextLengthResolver: (p) => 2048,
@@ -144,7 +144,7 @@ void main() {
 
         final access = OnDeviceSummaryModelAccess(
           getStore: () async => modelStore,
-          getDescriptor: () => testDescriptor,
+          getDescriptor: () async => testDescriptor,
           isIos: false,
           inferenceRunner: (req, cb) async => 1,
         );
@@ -170,7 +170,7 @@ void main() {
       installFakeModel();
       final access = OnDeviceSummaryModelAccess(
         getStore: () async => modelStore,
-        getDescriptor: () => testDescriptor,
+        getDescriptor: () async => testDescriptor,
         isIos: true,
         inferenceRunner: (req, cb) async => 1,
       );
@@ -233,7 +233,7 @@ void main() {
       (tester) async {
         final access = OnDeviceSummaryModelAccess(
           getStore: () async => modelStore,
-          getDescriptor: () => testDescriptor,
+          getDescriptor: () async => testDescriptor,
           isIos: false,
         );
 
@@ -253,7 +253,7 @@ void main() {
       installFakeModel();
       final access = OnDeviceSummaryModelAccess(
         getStore: () async => modelStore,
-        getDescriptor: () => testDescriptor,
+        getDescriptor: () async => testDescriptor,
         isIos: true,
       );
 
@@ -272,7 +272,7 @@ void main() {
         installFakeModel();
         final access = OnDeviceSummaryModelAccess(
           getStore: () async => modelStore,
-          getDescriptor: () => testDescriptor,
+          getDescriptor: () async => testDescriptor,
           isIos: false,
           inferenceRunner: (req, cb) async {
             scheduleMicrotask(() {
@@ -313,7 +313,7 @@ void main() {
         installFakeModel();
         final access = OnDeviceSummaryModelAccess(
           getStore: () async => modelStore,
-          getDescriptor: () => testDescriptor,
+          getDescriptor: () async => testDescriptor,
           isIos: false,
           inferenceRunner: (req, cb) async => 1,
           contextLengthResolver: (p) => 2048,
