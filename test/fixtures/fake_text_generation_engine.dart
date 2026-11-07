@@ -22,8 +22,18 @@ class FakeTextGenerationEngine implements TextGenerationEngine {
   /// Tokens per text for [countTokens]; four characters a token by default.
   int Function(String text) tokens = (text) => (text.length / 4).ceil();
 
+  /// Texts given to [countTokens], in order.
+  final counted = <String>[];
+
+  /// When set, [countTokens] waits for it before answering.
+  Completer<void>? tokenGate;
+
   @override
-  Future<int> countTokens(String text) async => tokens(text);
+  Future<int> countTokens(String text) async {
+    counted.add(text);
+    await tokenGate?.future;
+    return tokens(text);
+  }
 
   final requests = <TextGenerationRequest>[];
   bool cancelled = false;

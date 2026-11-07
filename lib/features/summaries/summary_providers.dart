@@ -114,6 +114,22 @@ final summaryModelAccessProvider = Provider<SummaryModelAccess>(
   ),
 );
 
+/// Counts instruction tokens for the editor (P3-12): with the installed
+/// model's own tokenizer, or the cautious estimate when there is none.
+final instructionTokenCounterProvider = Provider<Future<int> Function(String)>(
+  (ref) => (text) async {
+    try {
+      final path = await ref.read(installedLanguageModelPathProvider.future);
+      if (path != null) {
+        return await LlamaTextGenerationEngine.countTokensIn(path, text);
+      }
+    } on Object {
+      // Fall back to the estimate below.
+    }
+    return instructionTokenEstimate(text);
+  },
+);
+
 /// The default instructions for the active model: compact for a small model,
 /// otherwise the full adviser brief (P3-12). The editor shows this one.
 final effectiveDefaultInstructionsProvider = FutureProvider<String>((

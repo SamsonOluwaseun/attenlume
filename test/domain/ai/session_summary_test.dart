@@ -422,13 +422,15 @@ Some chatter the model added.
     test('instructions at the limit leave every request inside the context, '
         'by the model\'s own count', () async {
       // Spaced digits are a worst case: every digit is its own token.
-      final own = '7 ' * ((maxSummaryInstructionTokens - 1) ~/ 2);
+      final own = ('7 ' * ((maxSummaryInstructionTokens - 1) ~/ 2)).trim();
       expect(
         instructionTokenEstimate(own),
         lessThanOrEqualTo(maxSummaryInstructionTokens),
       );
-      // A tokenizer that finds them even denser than the estimate.
-      const realOwn = 1100;
+      // The worst real count the editor lets through: the real tokenizers
+      // never exceeded the estimate (integration_test/p3_12_...), and spaced
+      // digits matched it exactly.
+      final realOwn = instructionTokenEstimate(own);
       final engine = FakeTextGenerationEngine(
         respond: (_) => 'SUMMARY: x\nPOINT [00:00]: y',
         contextTokens: 2048,
@@ -460,11 +462,31 @@ Some chatter the model added.
         activityId: 'a1',
       );
       expect(engine.requests.length, greaterThan(2)); // split into parts
+      // The real count was asked for and used.
+      expect(engine.counted, [own]);
+      // Denser than the editor allows (1,100 real tokens): told why.
+      final dense = FakeTextGenerationEngine(
+        respond: (_) => 'SUMMARY: x',
+        contextTokens: 2048,
+      )..tokens = (text) => text == own ? 1100 : (text.length / 4).ceil();
+      await expectLater(
+        SessionSummariser(engine: dense, instructions: own).summarise(
+          SessionMaterial.build(
+            title: 'Samlytics Conference 2026',
+            transcripts: [_one()],
+            bookmarks: const [],
+            notesMd: null,
+            cuts: const [],
+          ),
+          activityId: 'a1',
+        ),
+        throwsA(isA<SummaryInstructionsTooLongException>()),
+      );
       final ownExtra = realOwn - estimateTokens(own);
       for (final r in engine.requests) {
         final used =
             estimateTokens(r.system) +
-            (r.system.contains(own) ? ownExtra : 0) +
+            ownExtra +
             estimateTokens(r.prompt) +
             r.maxOutputTokens;
         expect(used, lessThanOrEqualTo(2048));
@@ -741,3 +763,16 @@ Some chatter the model added.
     });
   });
 }
+
+TranscriptDocument _one() => TranscriptDocument(
+  activityId: 'a1',
+  segmentId: 's1',
+  createdAt: DateTime.utc(2026, 11, 7),
+  machineSpans: [
+    TranscriptSpan(
+      start: Duration.zero,
+      end: const Duration(seconds: 5),
+      text: 'Welcome to Samlytics Conference 2026.',
+    ),
+  ],
+);

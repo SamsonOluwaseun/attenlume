@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -44,12 +46,30 @@ class _SummaryInstructionsScreenState
         _text.text = values[0] ?? _default;
         _loading = false;
       });
+      _recount();
     });
   }
 
+  /// Tokens in the text as last counted, or null while counting.
+  int? _tokens;
+  int _countRequest = 0;
+
+  /// Counts with the installed model's tokenizer (or the cautious estimate
+  /// without one); only the latest request's answer is kept.
+  Future<void> _recount() async {
+    final request = ++_countRequest;
+    final text = _text.text.trim();
+    setState(() => _tokens = null);
+    final tokens = await ref.read(instructionTokenCounterProvider)(text);
+    if (!mounted || request != _countRequest) return;
+    setState(() => _tokens = tokens);
+  }
+
   /// Over the token limit the model can take (P3-12); Save is disabled.
-  bool get _tooLong =>
-      instructionTokenEstimate(_text.text.trim()) > maxSummaryInstructionTokens;
+  bool get _tooLong => (_tokens ?? 0) > maxSummaryInstructionTokens;
+
+  /// Save waits for the current count so it never saves unchecked text.
+  bool get _canSave => _tokens != null && !_tooLong;
 
   @override
   void dispose() {
@@ -74,6 +94,7 @@ class _SummaryInstructionsScreenState
     await ref.read(settingsRepositoryProvider).setSummaryInstructions(null);
     if (!mounted) return;
     setState(() => _text.text = _default);
+    unawaited(_recount());
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Back to the default instructions.')),
     );
@@ -105,12 +126,14 @@ class _SummaryInstructionsScreenState
                     minLines: 8,
                     maxLines: 20,
                     maxLength: maxSummaryInstructionsChars,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) => _recount(),
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
                       labelText: 'Instructions',
                       errorText: _tooLong
-                          ? 'Too long for the on-device model. Shorten it.'
+                          ? 'Too long for the on-device model ('
+                                '$_tokens of $maxSummaryInstructionTokens '
+                                'tokens). Shorten it.'
                           : null,
                     ),
                   ),
@@ -128,7 +151,7 @@ class _SummaryInstructionsScreenState
                     children: [
                       FilledButton(
                         key: const Key('summary-instructions-save'),
-                        onPressed: _tooLong ? null : _save,
+                        onPressed: _canSave ? _save : null,
                         child: const Text('Save'),
                       ),
                       OutlinedButton(

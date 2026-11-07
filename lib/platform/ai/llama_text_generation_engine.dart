@@ -129,7 +129,11 @@ class LlamaTextGenerationEngine implements TextGenerationEngine {
 
   @override
   Future<int> countTokens(String text) =>
-      tokenCounter?.call(text) ??
+      tokenCounter?.call(text) ?? countTokensIn(modelPath, text);
+
+  /// Counts [text] with the tokenizer of the model at [modelPath], without
+  /// creating an engine (the tokenizer reads the vocabulary only).
+  static Future<int> countTokensIn(String modelPath, String text) =>
       fllamaTokenize(FllamaTokenizeRequest(input: text, modelPath: modelPath));
 
   bool get isDisposed => _isDisposed;

@@ -41,6 +41,16 @@ class SessionSummariser {
 
   /// Tokens the user's own instructions take beyond the plain estimate.
   int _ownExtraTokens = 0;
+  bool _prepared = false;
+
+  /// Counts the instructions' tokens before [summarise], so a caller can
+  /// check anything that may have changed during the wait (for example a
+  /// recording starting) right before inference. Optional: [summarise]
+  /// prepares itself when this was not called.
+  Future<void> prepare() async {
+    await _countOwnInstructions();
+    _prepared = true;
+  }
 
   /// Counts the user's own instructions with the model's tokenizer (P3-12),
   /// so token-dense text (codes, other scripts, emoji) never crowds the
@@ -69,7 +79,7 @@ class SessionSummariser {
   }) async {
     if (!material.hasSpeech) throw const NoSpeechToSummariseException();
     _cancelled = false;
-    await _countOwnInstructions();
+    if (!_prepared) await prepare();
     final timestamps = material.timestamps;
     final chunks = material.chunks(
       _budget(partSystemPromptFor(99, 99, instructions), partAnswerTokens),

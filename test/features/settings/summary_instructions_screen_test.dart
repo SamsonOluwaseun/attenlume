@@ -28,7 +28,11 @@ void main() {
   setUp(() => data = TestData());
   tearDown(() => data.close());
 
-  Future<_Settings> pump(WidgetTester tester, {String? saved}) async {
+  Future<_Settings> pump(
+    WidgetTester tester, {
+    String? saved,
+    int Function(String text) counter = instructionTokenEstimate,
+  }) async {
     final settings = _Settings(data.db, saved);
     await tester.pumpWidget(
       ProviderScope(
@@ -36,6 +40,9 @@ void main() {
           settingsRepositoryProvider.overrideWithValue(settings),
           effectiveDefaultInstructionsProvider.overrideWith(
             (ref) async => defaultSummaryInstructions,
+          ),
+          instructionTokenCounterProvider.overrideWithValue(
+            (text) async => counter(text),
           ),
         ],
         child: MaterialApp(
@@ -109,6 +116,9 @@ void main() {
           effectiveDefaultInstructionsProvider.overrideWith(
             (ref) async => compactSummaryInstructions,
           ),
+          instructionTokenCounterProvider.overrideWithValue(
+            (text) async => instructionTokenEstimate(text),
+          ),
         ],
         child: MaterialApp(
           theme: AppTheme.light(),
@@ -134,7 +144,7 @@ void main() {
     );
     await tester.pump();
     expect(
-      find.text('Too long for the on-device model. Shorten it.'),
+      find.textContaining('Too long for the on-device model'),
       findsOneWidget,
     );
     final save = tester.widget<FilledButton>(
@@ -142,6 +152,28 @@ void main() {
     );
     expect(save.onPressed, isNull);
     expect(settings.saved, isNull);
+  });
+
+  testWidgets('P3-12 the limit uses the model\'s own count when installed', (
+    tester,
+  ) async {
+    // Long but ordinary English: the estimate is too high, the model's
+    // tokenizer finds it fits, so it can be saved.
+    final longEnglish = 'Write clearly for busy executives. ' * 40;
+    expect(
+      instructionTokenEstimate(longEnglish),
+      greaterThan(maxSummaryInstructionTokens),
+    );
+    final settings = await pump(tester, counter: (text) => 300);
+    await tester.enterText(
+      find.byKey(const Key('summary-instructions-field')),
+      longEnglish,
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Too long'), findsNothing);
+    await tapKey(tester, 'summary-instructions-save');
+    await tester.pumpAndSettle();
+    expect(settings.saved, longEnglish.trim());
   });
 
   test('P3-12 the small model gets the compact default; saved instructions '

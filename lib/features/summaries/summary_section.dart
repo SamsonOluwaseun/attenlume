@@ -163,7 +163,14 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       }
       instructions = await ref.read(summaryInstructionsProvider)();
       if (!current()) return;
-      // A recording may have started while the instructions were read.
+      final summariser = SessionSummariser(
+        engine: engine,
+        instructions: instructions,
+      );
+      await summariser.prepare();
+      if (!current()) return;
+      // A recording may have started while the instructions were read and
+      // counted: check right before inference.
       if (ref.read(summaryBlockedByRecordingProvider)()) {
         _fail(
           'A recording is running. Summaries wait until it stops, so the '
@@ -171,10 +178,6 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
         );
         return;
       }
-      final summariser = SessionSummariser(
-        engine: engine,
-        instructions: instructions,
-      );
       setState(() => _summariser = summariser);
       final summary = await summariser.summarise(
         material,

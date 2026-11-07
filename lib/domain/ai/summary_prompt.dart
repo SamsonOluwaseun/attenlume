@@ -33,8 +33,11 @@ Questions: three questions the talk did not answer, about what it covered least:
 const maxSummaryInstructionsChars = 2000;
 
 /// Most instruction tokens allowed, so the transcript and answer still fit
-/// the model's 2,048-token context. Measured with [instructionTokenEstimate].
-const maxSummaryInstructionTokens = 900;
+/// the model's 2,048-token context: the fixed prompt takes up to 400 tokens,
+/// leaving about 856 in the tightest request (combining parts). Counted
+/// with the model's tokenizer when one is installed, otherwise with the
+/// cautious [instructionTokenEstimate].
+const maxSummaryInstructionTokens = 800;
 
 /// A cautious token count for text the user wrote, used by the editor's
 /// limit (summaries count with the model's own tokenizer): a run of English

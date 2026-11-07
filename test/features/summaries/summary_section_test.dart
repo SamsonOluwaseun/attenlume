@@ -274,6 +274,28 @@ void main() {
     expect(store.saves, 0);
   });
 
+  testWidgets('P3-12 a recording started while instructions are counted stops '
+      'the summary', (tester) async {
+    var recording = false;
+    final engine = FakeTextGenerationEngine(respond: (_) => 'SUMMARY: x')
+      ..tokenGate = Completer<void>();
+    await pump(
+      tester,
+      engine: engine,
+      instructions: 'Write for a CFO.',
+      isRecording: () => recording,
+    );
+    await tester.tap(find.byKey(const Key('summary-create')));
+    await tester.pump();
+    expect(engine.counted, ['Write for a CFO.']);
+    recording = true;
+    engine.tokenGate!.complete();
+    await settle(tester);
+    expect(find.textContaining('A recording is running'), findsOneWidget);
+    expect(engine.requests, isEmpty);
+    expect(store.saves, 0);
+  });
+
   testWidgets('P3-12 instructions too long for the model say how to fix it', (
     tester,
   ) async {
