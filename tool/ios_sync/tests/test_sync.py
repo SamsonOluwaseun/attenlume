@@ -14,6 +14,11 @@ import export_update
 
 
 class SyncTests(unittest.TestCase):
+    def test_p1_43_icon_regeneration_helper_is_transferred(self):
+        self.assertTrue(allowed('tool/brand/prepare_icons.dart'))
+        self.assertFalse(allowed('tool/brand/signing.key'))
+        self.assertFalse(allowed('tool/brand/private.jks'))
+
     def test_p1_43_mac_only_edits_survive(self):
         self.assertEqual(classify(b'base', b'base', b'Mac fix', 'lib/a.dart'),
                          ('preserved_local', None))

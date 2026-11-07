@@ -30,7 +30,8 @@ def allowed(relative):
             or p.suffix.lower() in {'.jks', '.keystore', '.p12', '.mobileprovision', '.pyc', '.pem', '.key', '.secret'}):
         return False
     return (relative in ROOT_FILES or relative == 'docs/IOS_SYNC_NOTES.md' or p.parts[0] in ROOT_DIRS
-            or relative in {'tool/gen_tokens.dart', 'tool/licence_audit.dart'}
+            or relative in {'tool/gen_tokens.dart', 'tool/licence_audit.dart',
+                            'tool/brand/prepare_icons.dart'}
             or relative.startswith('tool/ios_sync/')
             or relative.startswith('docs/user-guide/')
             or (relative.startswith('tool/guide/') and p.suffix in {'.js', '.json', '.md'}))
