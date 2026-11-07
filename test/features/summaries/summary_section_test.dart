@@ -88,6 +88,7 @@ void main() {
     bool recording = false,
     bool Function()? isRecording,
     SummaryModelAccess? model,
+    String? instructions,
   }) async {
     final played = <int>[];
     await tester.pumpWidget(
@@ -98,6 +99,9 @@ void main() {
           ),
           summaryStoreProvider.overrideWithValue(() async => store),
           summaryModelAccessProvider.overrideWithValue(model ?? _Model(engine)),
+          summaryInstructionsProvider.overrideWithValue(
+            () async => instructions,
+          ),
           summaryBlockedByRecordingProvider.overrideWithValue(
             isRecording ?? () => recording,
           ),
@@ -197,6 +201,30 @@ void main() {
     expect(find.text('Saved earlier.'), findsOneWidget);
     expect(find.byKey(const Key('summary-stale')), findsOneWidget);
     expect(find.byKey(const Key('summary-copy')), findsOneWidget);
+  });
+
+  testWidgets('P3-12 the user\'s instructions reach the model; the default '
+      'otherwise', (tester) async {
+    for (final custom in ['Write for a CFO. Ask about cost.', null]) {
+      final engine = FakeTextGenerationEngine(
+        respond: (_) => 'SUMMARY: A talk.\nPOINT [01:30]: Check row counts.',
+      );
+      await pump(tester, engine: engine, instructions: custom);
+      await tester.tap(find.byKey(const Key('summary-create')));
+      await settle(tester);
+      final system = engine.requests.single.system;
+      if (custom != null) {
+        expect(system, contains(custom));
+        expect(system, isNot(contains('executive technology')));
+      } else {
+        expect(system, contains('executive technology and data strategy'));
+      }
+      // The grounding rule and answer format are always there.
+      expect(system, contains('Use only the material given.'));
+      expect(system, contains('exactly 3 QUESTION lines'));
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() => store.delete('a1'));
+    }
   });
 
   testWidgets('P3-02 waits while a recording runs', (tester) async {

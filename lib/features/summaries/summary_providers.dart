@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/ai/summary_store.dart';
 import '../../data/filesystem/app_data_directory.dart';
+import '../../data/repositories/repository_providers.dart';
 import '../../data/transcription/transcript_store.dart';
 import '../../domain/ai/text_generation_engine.dart';
 import '../../domain/transcription/transcript.dart';
@@ -110,6 +111,13 @@ final summaryModelAccessProvider = Provider<SummaryModelAccess>(
     getStore: () => ref.read(languageModelStoreProvider.future),
     getDescriptor: () => ref.read(activeLanguageModelDescriptorProvider.future),
   ),
+);
+
+/// The user's summary instructions, read when a summary starts (P3-12).
+/// Null uses the default.
+final summaryInstructionsProvider = Provider<Future<String?> Function()>(
+  (ref) =>
+      () => ref.read(settingsRepositoryProvider).summaryInstructions(),
 );
 
 final summaryStoreProvider = Provider<Future<SummaryStore> Function()>(

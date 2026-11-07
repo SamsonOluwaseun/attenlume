@@ -160,7 +160,12 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
         );
         return;
       }
-      final summariser = SessionSummariser(engine: engine);
+      final instructions = await ref.read(summaryInstructionsProvider)();
+      if (!current()) return;
+      final summariser = SessionSummariser(
+        engine: engine,
+        instructions: instructions,
+      );
       setState(() => _summariser = summariser);
       final summary = await summariser.summarise(
         material,

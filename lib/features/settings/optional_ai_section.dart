@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/tokens.dart';
 import '../../platform/ai/language_model_descriptor.dart';
 import '../ai/language_model_providers.dart';
+import 'summary_instructions_screen.dart';
 
 /// Optional AI section in Settings (P3-10, FR-AI-01).
 ///
@@ -84,6 +85,16 @@ class OptionalAiSection extends ConsumerWidget {
               locked: controller.busy || controller.state.isDownloading,
             ),
             _OptionalAiCard(controller: controller),
+            ListTile(
+              key: const Key('optional-ai-instructions'),
+              leading: const Icon(Icons.tune),
+              title: const Text('Summary instructions'),
+              subtitle: const Text(
+                'Change how summaries, key points and questions are written',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => SummaryInstructionsScreen.open(context),
+            ),
           ],
         ),
       ),

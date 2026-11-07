@@ -155,4 +155,16 @@ class SettingsRepository {
 
   Future<void> setLanguageModelId(String id) =>
       _db.writeSetting(languageModelKey, id);
+
+  static const summaryInstructionsKey = 'summary_instructions';
+
+  /// The user's own summary instructions (P3-12), or null for the default.
+  Future<String?> summaryInstructions() async {
+    final text = await _db.readSetting(summaryInstructionsKey);
+    return text == null || text.trim().isEmpty ? null : text;
+  }
+
+  /// Saves [text]; null or blank goes back to the default.
+  Future<void> setSummaryInstructions(String? text) =>
+      _db.writeSetting(summaryInstructionsKey, text?.trim() ?? '');
 }

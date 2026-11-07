@@ -244,6 +244,7 @@ void main() {
             ),
             summaryStoreProvider.overrideWithValue(() async => summaryStore),
             summaryModelAccessProvider.overrideWithValue(modelAccess),
+            summaryInstructionsProvider.overrideWithValue(() async => null),
             summaryBlockedByRecordingProvider.overrideWithValue(
               () => recording,
             ),

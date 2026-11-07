@@ -15,10 +15,16 @@ final class NoSpeechToSummariseException implements Exception {
 /// summarised in one request; a longer one part by part, and the parts are
 /// then combined (in rounds when there are many).
 class SessionSummariser {
-  SessionSummariser({required this.engine, DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  SessionSummariser({
+    required this.engine,
+    this.instructions,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   final TextGenerationEngine engine;
+
+  /// The user's summary instructions (P3-12); null uses the default.
+  final String? instructions;
   final DateTime Function() _clock;
 
   /// Tokens kept for the answer of the final request and of each part.
@@ -45,12 +51,12 @@ class SessionSummariser {
     _cancelled = false;
     final timestamps = material.timestamps;
     final chunks = material.chunks(
-      _budget(partSystemPrompt(99, 99), partAnswerTokens),
+      _budget(partSystemPromptFor(99, 99, instructions), partAnswerTokens),
     );
     final fitsOnce =
         chunks.length == 1 &&
         chunks.single.fold<int>(0, (n, l) => n + l.estimatedTokens) <=
-            _budget(summarySystemPrompt, answerTokens);
+            _budget(summarySystemPromptFor(instructions), answerTokens);
 
     var calls = 0;
     final expected = fitsOnce ? 1 : chunks.length + 1;
@@ -80,7 +86,7 @@ class SessionSummariser {
     if (fitsOnce) {
       result = parseSummaryAnswer(
         await ask(
-          summarySystemPrompt,
+          summarySystemPromptFor(instructions),
           materialPrompt(material.title, material.lines),
           answerTokens,
         ),
@@ -91,7 +97,7 @@ class SessionSummariser {
       for (var i = 0; i < chunks.length; i++) {
         final part = parseSummaryAnswer(
           await ask(
-            partSystemPrompt(i + 1, chunks.length),
+            partSystemPromptFor(i + 1, chunks.length, instructions),
             materialPrompt(material.title, chunks[i]),
             partAnswerTokens,
           ),
@@ -101,7 +107,10 @@ class SessionSummariser {
         leftOut += part.leftOut;
         notes.addAll(part.asNotes());
       }
-      final budget = _budget(combineSystemPrompt, answerTokens);
+      final budget = _budget(
+        combineSystemPromptFor(instructions),
+        answerTokens,
+      );
       for (var round = 0; _tokens(notes) > budget; round++) {
         if (round == _maxCombineRounds) {
           notes = _fit(notes, budget);
@@ -111,7 +120,7 @@ class SessionSummariser {
         for (final group in _groups(notes, budget)) {
           final combined = parseSummaryAnswer(
             await ask(
-              combineSystemPrompt,
+              combineSystemPromptFor(instructions),
               combinePrompt(material.title, group),
               partAnswerTokens,
             ),
@@ -125,7 +134,7 @@ class SessionSummariser {
       }
       result = parseSummaryAnswer(
         await ask(
-          combineSystemPrompt,
+          combineSystemPromptFor(instructions),
           combinePrompt(material.title, notes),
           answerTokens,
         ),
