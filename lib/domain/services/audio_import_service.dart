@@ -216,16 +216,16 @@ class AudioImportService {
         final finalRel = rel.toLowerCase().endsWith(importStagingSuffix)
             ? rel.substring(0, rel.length - importStagingSuffix.length)
             : null;
+        // A committed import is never deleted here: its rename is finished,
+        // or, if that fails, it stays for the next start to retry.
         if (finalRel != null && committed.contains(finalRel)) {
           final target = File(
             p.join(root.path, p.joinAll(p.posix.split(finalRel))),
           );
           try {
-            if (!target.existsSync()) {
-              entity.renameSync(target.path);
-              continue;
-            }
+            if (!target.existsSync()) entity.renameSync(target.path);
           } catch (_) {}
+          continue;
         }
         try {
           entity.deleteSync();

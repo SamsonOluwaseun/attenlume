@@ -1474,4 +1474,44 @@ void main() {
       3,
     ]);
   });
+  test('P2-13 FR-TRN-03 a committed import whose rename fails is kept for the next start', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+    final act = await t.activity(conf.id, title: 'Imported lecture');
+    final finalRel = p.posix.join(
+      'conferences',
+      conf.id,
+      'activities',
+      act.id,
+      'audio',
+      'segment-001.wav',
+    );
+    await t.media.addImportedSegment(
+      id: 'imported-seg-2',
+      activityId: act.id,
+      filePath: finalRel,
+      requestedProfile: RecordingProfile.balanced,
+      codec: 'pcm',
+      container: 'wav',
+      channelCount: 1,
+      sampleRateHz: 16000,
+      requestedBitrateBps: 256000,
+      inputRoute: importedInputRoute,
+      startUtc: t.clock.now,
+      endUtc: t.clock.now.add(const Duration(seconds: 5)),
+      durationMs: 5000,
+      bytes: 3,
+      sha256: 'x',
+    );
+    final staging = MediaPaths.resolve(mediaRoot, '$finalRel.importing')
+      ..parent.createSync(recursive: true)
+      ..writeAsBytesSync([4, 5, 6]);
+    // A folder in the way makes the rename fail.
+    Directory(MediaPaths.resolve(mediaRoot, finalRel).path).createSync();
+
+    await AudioImportService.cleanupAbandonedImports(
+      root: mediaRoot,
+      media: t.media,
+    );
+    expect(staging.readAsBytesSync(), [4, 5, 6]);
+  });
 }
