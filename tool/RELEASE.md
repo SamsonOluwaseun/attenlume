@@ -14,7 +14,7 @@ Keep signing configuration private; never commit keys or android/key.properties.
    integration_test. Do not hand-edit generated registrants or remove test deps.
 3. Windows (Flutter, Visual Studio C++ toolchain and Inno Setup6 required):
 
-   powershell -File tool/build_windows_installer.ps1 -DirectSupport -OutDir C:/dev/attenlume-release/v0.1.6
+   powershell -File tool/build_windows_installer.ps1 -DirectSupport -OutDir C:/dev/attenlume-release/v0.1.11
 
    DirectSupport is only for the reviewed directly distributed Windows build.
    Omit it for default builds. Do not enable direct flags for store/iOS packages.
@@ -26,8 +26,8 @@ Keep signing configuration private; never commit keys or android/key.properties.
 6. Write release notes with implemented functions and explicit unverified limits.
    Generate and verify the canonical checksum manifest:
 
-   python tool/verify_release_assets.py generate C:/dev/attenlume-release/v0.1.6
-   python tool/verify_release_assets.py verify C:/dev/attenlume-release/v0.1.6
+   python tool/verify_release_assets.py generate C:/dev/attenlume-release/v0.1.11
+   python tool/verify_release_assets.py verify C:/dev/attenlume-release/v0.1.11
 
 7. Commit source, refresh/check the cumulative iOS update pack and record its path
    in local handover. Mac signing/native changes must be preserved during merge.
@@ -38,3 +38,18 @@ Keep signing configuration private; never commit keys or android/key.properties.
 Local private audio, transcripts, downloaded model weights, logs, credentials and
 Mac handoffs are not GitHub release assets. Device/resource/payment-receipt checks
 must never be recorded as passed unless actually observed.
+
+## Google Play internal-test bundle
+
+Build separately after any Dart tests/build hooks, with normal package restoration:
+
+```powershell
+flutter build appbundle --release --dart-define=ATTENLUME_SUPPORT_DISTRIBUTION=android-play
+```
+
+Copy build/app/outputs/bundle/release/app-release.aab into a separate Play folder.
+Do not enable android-direct for this bundle. Verify its certificate against the
+existing APK/Play app-signing certificate; increment the version code for each
+upload. The direct APK, Windows installer and checksums are GitHub assets; the
+AAB is uploaded separately in Play Console. Keep private signing transfers out
+of release assets. Source publication does not publish the Play release.

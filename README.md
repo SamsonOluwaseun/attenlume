@@ -55,10 +55,9 @@ Open **Settings > Support Attenlume** at any time on eligible direct builds,
 even after dismissing reminders. You can also [support Attenlume on PayPal](https://www.paypal.com/donate/?hosted_button_id=EMQCVQHTPDR2U).
 Choose GBP 5, 10, 20 or a custom amount there; gifts are entirely voluntary.
 
-## Current development source
+## New in 0.1.11
 
-The following changes are in source after the last published test build; they
-require a new build before download links above can provide them:
+The 0.1.11 Android and Windows test builds include the following changes:
 
 - Import external MP3, M4A, WAV and AAC audio into a conference activity, with
   progress and cancellation. Imported MP3/WAV/AAC files support playback,
