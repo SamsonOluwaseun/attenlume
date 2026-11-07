@@ -166,6 +166,8 @@ const _commonWords = {
 String _fold(String word) {
   final out = StringBuffer();
   for (final rune in word.toLowerCase().runes) {
+    // Accents typed as separate combining marks fold the same way.
+    if (rune >= 0x0300 && rune <= 0x036F) continue;
     final c = String.fromCharCode(rune);
     out.write(_plain[c] ?? c);
   }

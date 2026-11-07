@@ -105,6 +105,15 @@ void main() {
         correctNames('Thanks, Francois.', 'François.'),
         'Thanks, François.',
       );
+      // Decomposed accents (c + combining cedilla) in either text.
+      expect(
+        correctNames('Thanks, Francois.', 'François.'),
+        'Thanks, François.',
+      );
+      expect(
+        correctNames('Thanks, François.', 'François.'),
+        'Thanks, François.',
+      );
       expect(
         correctNames('Thanks, Francoise.', 'François.'),
         'Thanks, Francoise.',
