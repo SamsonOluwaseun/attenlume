@@ -208,6 +208,15 @@ class PermanentTrimService {
       await cuts.activeFor(activityId),
     );
     final changes = segmentTrimChanges(timeline, merged, minimumMs: minimumMs);
+    final nonM4aChanges = changes.where((change) {
+      final ext = p.extension(change.segment.filePath).toLowerCase();
+      return ext.isNotEmpty && ext != '.m4a';
+    });
+    if (nonM4aChanges.isNotEmpty) {
+      throw const PermanentTrimException(
+        'Permanent trimming is not supported for imported non-M4A audio files (.mp3, .wav, .aac).',
+      );
+    }
     var removed = 0;
     var kept = 0;
     var bytes = 0;

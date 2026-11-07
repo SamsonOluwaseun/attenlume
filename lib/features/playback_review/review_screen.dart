@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/theme/tokens.dart';
 import '../../data/filesystem/app_data_directory.dart';
@@ -264,8 +265,27 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
     );
   }
 
+  bool get _hasNonM4aAudio {
+    final timeline = _timeline;
+    if (timeline == null) return false;
+    return timeline.segments.any((s) {
+      final ext = p.extension(s.segment.filePath).toLowerCase();
+      return ext.isNotEmpty && ext != '.m4a';
+    });
+  }
+
   Future<void> _addCut(int start, int end, String reason) async {
     if (end <= start) return;
+    if (_hasNonM4aAudio) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cuts and trimming are not supported for imported non-M4A audio (.mp3, .wav, .aac).',
+          ),
+        ),
+      );
+      return;
+    }
     final repo = ref.read(cutRangeRepositoryProvider);
     final cut = await repo.add(
       widget.activityId,
@@ -573,7 +593,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
             positionMs: player.positionMs,
             audioEndMs: timeline.audioEndMs,
             cuts: _cuts,
-            enabled: _editable,
+            enabled: _editable && !_hasNonM4aAudio,
             markedStartMs: _markedStartMs,
             onTrimStart: () => _addCut(0, player.positionMs, 'Trim start'),
             onTrimEnd: () =>
@@ -583,7 +603,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
             onSplit: () => _split(player.positionMs),
             onRemoveCut: _removeCut,
             onSeek: player.seekTo,
-            onApplyPermanently: _applyPermanently,
+            onApplyPermanently: _hasNonM4aAudio ? null : _applyPermanently,
           ),
         ],
       ),

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../../data/filesystem/app_data_directory.dart';
 import '../../data/filesystem/media_paths.dart';
 import '../../data/repositories/repository_providers.dart';
+import '../../domain/services/audio_import_service.dart';
 import '../../domain/services/capture_settings.dart';
 import '../../domain/services/crash_recovery_service.dart';
 import '../../domain/services/foreground_service_coordinator.dart';
@@ -286,7 +287,13 @@ final crashRecoveryServiceProvider = Provider<CrashRecoveryService>(
 );
 
 /// Runs recovery once per app start. The `CrashRecoveryGate` shows the
-/// result.
-final crashRecoveryReportProvider = FutureProvider<RecoveryReport>(
-  (ref) => ref.watch(crashRecoveryServiceProvider).reconcile(),
-);
+/// result. Also cleans up any abandoned partial import files.
+final crashRecoveryReportProvider = FutureProvider<RecoveryReport>((ref) async {
+  try {
+    await AudioImportService.cleanupAbandonedImports(
+      root: await ref.watch(mediaRootProvider)(),
+      media: ref.watch(mediaAssetRepositoryProvider),
+    );
+  } catch (_) {}
+  return ref.watch(crashRecoveryServiceProvider).reconcile();
+});

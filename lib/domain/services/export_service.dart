@@ -572,6 +572,15 @@ class ExportService {
           )) {
             trims[change.segment.id] = change;
           }
+          final nonM4aTrims = trims.values.where((change) {
+            final ext = _ext(change.segment.filePath, '.m4a').toLowerCase();
+            return ext != '.m4a';
+          });
+          if (nonM4aTrims.isNotEmpty) {
+            throw const ExportException(
+              'Trimmed export is not supported for imported non-M4A audio (.mp3, .wav, .aac). Export original audio instead.',
+            );
+          }
         }
         for (final s in playable) {
           final file = MediaPaths.resolve(root, s.filePath);

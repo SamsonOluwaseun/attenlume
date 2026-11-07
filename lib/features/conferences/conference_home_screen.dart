@@ -284,7 +284,11 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen>
     if (created != null && mounted) {
       await _loadConference();
       if (!mounted) return;
-      if (isActivityImported(created)) {
+      final segments = await ref
+          .read(mediaAssetRepositoryProvider)
+          .segmentsFor(created.id);
+      if (!mounted) return;
+      if (isActivityImported(created, segments)) {
         await openReview(context, created.id);
         if (mounted) await _loadConference();
       } else {

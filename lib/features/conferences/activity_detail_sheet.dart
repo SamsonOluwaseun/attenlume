@@ -66,11 +66,23 @@ class ActivityDetailSheet extends ConsumerStatefulWidget {
 
 class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
   late ActivitySummary _summary;
+  bool _isImported = false;
 
   @override
   void initState() {
     super.initState();
     _summary = widget.summary;
+    _checkImported();
+  }
+
+  Future<void> _checkImported() async {
+    final mediaRepo = ref.read(mediaAssetRepositoryProvider);
+    final segments = await mediaRepo.segmentsFor(_summary.activity.id);
+    if (mounted) {
+      setState(
+        () => _isImported = isActivityImported(_summary.activity, segments),
+      );
+    }
   }
 
   Future<void> _refreshSummary() async {
@@ -78,6 +90,7 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
     final fresh = await actRepo.getSummary(_summary.activity.id);
     if (fresh != null && mounted) {
       setState(() => _summary = fresh);
+      await _checkImported();
     }
   }
 
@@ -344,7 +357,7 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                         label: 'Recording profile',
                         value: _summary.effectiveProfile.label,
                       ),
-                      if (isActivityImported(act)) ...[
+                      if (_isImported) ...[
                         const Divider(height: TokenSpace.space3),
                         _buildMetaRow(
                           theme,

@@ -208,6 +208,23 @@ void main() {
           typeId: (await t.activities.types()).first.id,
           tags: ['imported'],
         );
+        await t.media.addImportedSegment(
+          activityId: act.id,
+          filePath:
+              'conferences/${conf.id}/activities/${act.id}/audio/segment-001.m4a',
+          requestedProfile: conf.defaultRecordingProfile,
+          codec: 'aac_lc',
+          container: 'm4a',
+          channelCount: 1,
+          sampleRateHz: 48000,
+          requestedBitrateBps: 96000,
+          inputRoute: importedInputRoute,
+          startUtc: DateTime.utc(2026, 11, 7, 10),
+          endUtc: DateTime.utc(2026, 11, 7, 10, 1),
+          durationMs: 60000,
+          bytes: 1024,
+          sha256: 'deadbeef',
+        );
 
         // 1. Verify ReviewHeader shows 'Imported audio'
         await tester.pumpWidget(

@@ -56,6 +56,11 @@ class DefaultAudioFileInspector implements AudioFileInspector {
             'Audio duration is zero or invalid',
           );
         }
+        if (info.mediaDataBytes <= 0) {
+          throw const AudioInspectionException(
+            'Audio file contains no audio data (mdat box is missing or empty)',
+          );
+        }
         return InspectedAudioInfo(
           duration: Duration(milliseconds: info.durationMs),
           channelCount: info.channelCount,
@@ -67,6 +72,7 @@ class DefaultAudioFileInspector implements AudioFileInspector {
               : null,
         );
       } catch (e) {
+        if (e is AudioInspectionException) rethrow;
         // If M4aInspector fails, try AudioDecoder fallback below
       }
     }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/local_database/database_provider.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/services/audio_import_service.dart';
 import '../../platform/audio_import/audio_file_inspector.dart';
@@ -23,6 +24,7 @@ final audioFileInspectorProvider = Provider<AudioFileInspector>(
 /// Audio import service provider (FR-TRN-03) [P2-13].
 final audioImportServiceProvider = Provider<AudioImportService>((ref) {
   return AudioImportService(
+    db: ref.watch(appDatabaseProvider),
     activities: ref.watch(activityRepositoryProvider),
     conferences: ref.watch(conferenceRepositoryProvider),
     media: ref.watch(mediaAssetRepositoryProvider),
