@@ -22,6 +22,7 @@ import '../../platform/audio_playback/audio_playback_engine.dart';
 import '../../platform/audio_playback/audioplayers_playback_engine.dart';
 import '../../platform/audio_trimmer/mp4_sample_trimmer.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../activities/audio_import_providers.dart' show isActivityImported;
 import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_providers.dart';
 import '../photos/activity_photos_section.dart';
@@ -502,6 +503,9 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
             ? null
             : timeline.segments.first.segment.startUtc) ??
         activity?.plannedStart;
+    final isImported =
+        activity != null &&
+        isActivityImported(activity, timeline.segments.map((s) => s.segment));
     return [
       ReviewHero(photo: reviewHeroPhoto(_photos), root: _root),
       const SizedBox(height: TokenSpace.space4),
@@ -512,6 +516,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen>
             ? null
             : reviewDate(started, conference?.timezone ?? 'UTC'),
         durationMs: timeline.audioDurationMs,
+        isImported: isImported,
       ),
     ];
   }

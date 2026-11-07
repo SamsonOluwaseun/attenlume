@@ -15,6 +15,7 @@ import '../../domain/services/agenda_template.dart';
 import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../../shared/utilities/date_formatters.dart';
+import '../activities/audio_import_providers.dart';
 import '../activities/consent_check_dialog.dart';
 import '../agenda/agenda_import_screen.dart';
 import '../agenda/agenda_providers.dart';
@@ -22,6 +23,7 @@ import '../agenda/agenda_section.dart';
 import '../capture/recording_banner.dart';
 import '../capture/recording_screen.dart';
 import '../export/export_sheet.dart';
+import '../playback_review/review_screen.dart' show openReview;
 import '../storage_manager/storage_manager_screen.dart';
 import 'activity_detail_sheet.dart';
 import 'conference_delete_dialog.dart';
@@ -282,7 +284,35 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen>
     if (created != null && mounted) {
       await _loadConference();
       if (!mounted) return;
-      await _openRecorder(created);
+      if (isActivityImported(created)) {
+        await openReview(context, created.id);
+        if (mounted) await _loadConference();
+      } else {
+        await _openRecorder(created);
+      }
+    }
+  }
+
+  /// Imports an audio file recorded elsewhere into an activity (FR-TRN-03) [P2-13].
+  Future<void> _handleImportAudio() async {
+    final outcome = await ref
+        .read(audioImportServiceProvider)
+        .importAudio(conferenceId: widget.conferenceId);
+    if (!mounted) return;
+    switch (outcome) {
+      case AudioImportSuccess(:final activity):
+        await _loadConference();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported "${activity.title}".')),
+        );
+        await openReview(context, activity.id);
+        if (mounted) await _loadConference();
+      case AudioImportFailure(:final userMessage):
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userMessage)));
+      case AudioImportCancelled():
+        break;
     }
   }
 
@@ -612,6 +642,17 @@ class _ConferenceHomeScreenState extends ConsumerState<ConferenceHomeScreen>
                       label: 'Start activity',
                       leading: const Icon(Icons.mic_rounded, size: 24),
                       onPressed: _openStartActivitySheet,
+                    ),
+
+                    const SizedBox(height: TokenSpace.space2),
+
+                    // Import Audio Action (FR-TRN-03) [P2-13]
+                    AttenlumeButton(
+                      key: const Key('import-audio-button'),
+                      variant: AttenlumeButtonVariant.secondary,
+                      label: 'Import audio',
+                      leading: const Icon(Icons.file_upload_outlined, size: 24),
+                      onPressed: _handleImportAudio,
                     ),
 
                     const SizedBox(height: TokenSpace.space4),

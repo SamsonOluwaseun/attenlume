@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +10,7 @@ import '../../data/filesystem/app_data_directory.dart';
 import '../../domain/transcription/transcript.dart';
 import '../../platform/transcription/transcription_exceptions.dart';
 import '../../platform/transcription/whisper_cpu.dart';
+import '../activities/audio_import_providers.dart';
 import 'transcription_controller.dart';
 import 'transcription_providers.dart';
 
@@ -412,15 +412,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
   Future<List<TranscriptionSource>> _pickAudio() async {
     final picked = widget.pickAudio != null
         ? await widget.pickAudio!()
-        : await openFile(
-            acceptedTypeGroups: [
-              const XTypeGroup(
-                label: 'Audio',
-                extensions: ['m4a', 'mp3', 'wav', 'aac'],
-                uniformTypeIdentifiers: ['public.audio'],
-              ),
-            ],
-          );
+        : await ref.read(audioFilePickerProvider).pickAudio();
     if (picked == null) return [];
     final id = 'import-${DateTime.now().microsecondsSinceEpoch}';
     if (mounted) setState(() => _selectedImportId = id);

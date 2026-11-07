@@ -38,7 +38,9 @@ module.exports = {
           points: [
             'An activity is anything you capture: a keynote, panel, workshop, conversation or your own reflection.',
             'Tap Start activity, add a title if you like, then choose its type.',
-            'Quick start buttons create a Session, Conversation, Exhibit or Reflection in one tap.',          ],
+            'Quick start buttons create a Session, Conversation, Exhibit or Reflection in one tap.',
+            'Recorded audio elsewhere? Tap Import audio to copy an .mp3, .m4a, .wav or .aac file into the activity for playback, transcription and summaries.',
+          ],
         },
       ],
     },

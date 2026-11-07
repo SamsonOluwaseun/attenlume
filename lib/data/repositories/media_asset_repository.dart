@@ -70,6 +70,58 @@ class MediaAssetRepository {
     return _segment(id);
   });
 
+  /// Inserts a finalised recording segment for an imported audio file (FR-TRN-03) [P2-13].
+  Future<RecordingSegment> addImportedSegment({
+    String? id,
+    required String activityId,
+    required String filePath,
+    required RecordingProfile requestedProfile,
+    required String codec,
+    required String container,
+    required int channelCount,
+    required int sampleRateHz,
+    required int requestedBitrateBps,
+    int? observedBitrateBps,
+    String? inputRoute,
+    required DateTime startUtc,
+    required DateTime endUtc,
+    required int durationMs,
+    required int bytes,
+    required String sha256,
+  }) async {
+    final now = _clock();
+    final segmentId = id ?? _newId();
+    final sequence = await nextSegmentSequence(activityId);
+    await _db
+        .into(_db.recordingSegments)
+        .insert(
+          RecordingSegmentsCompanion.insert(
+            id: segmentId,
+            activityId: activityId,
+            sequence: sequence,
+            filePath: filePath,
+            state: SegmentState.finalised,
+            requestedProfile: requestedProfile,
+            codec: codec,
+            container: container,
+            channelCount: channelCount,
+            sampleRateHz: sampleRateHz,
+            requestedBitrateBps: requestedBitrateBps,
+            observedBitrateBps: Value(observedBitrateBps),
+            inputRoute: Value(inputRoute),
+            startUtc: startUtc.toUtc(),
+            endUtc: Value(endUtc.toUtc()),
+            durationMs: Value(durationMs),
+            bytes: Value(bytes),
+            sha256: Value(sha256),
+            endReason: const Value(SegmentEndReason.userStop),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+    return _segment(segmentId);
+  }
+
   Future<void> _onFirstSegment(
     String activityId,
     DateTime start,

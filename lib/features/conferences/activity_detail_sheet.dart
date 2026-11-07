@@ -14,6 +14,7 @@ import '../../presentation/components/attenlume_button.dart';
 import '../../presentation/components/status_pill.dart';
 import '../../shared/utilities/date_formatters.dart';
 import '../activities/activity_editor_screen.dart';
+import '../activities/audio_import_providers.dart' show isActivityImported;
 import '../bookmarks/activity_bookmarks_section.dart';
 import '../bookmarks/activity_notes_section.dart';
 import '../capture/recording_profile_selector.dart';
@@ -343,6 +344,15 @@ class _ActivityDetailSheetState extends ConsumerState<ActivityDetailSheet> {
                         label: 'Recording profile',
                         value: _summary.effectiveProfile.label,
                       ),
+                      if (isActivityImported(act)) ...[
+                        const Divider(height: TokenSpace.space3),
+                        _buildMetaRow(
+                          theme,
+                          icon: Icons.file_download_outlined,
+                          label: 'Source',
+                          value: 'Imported audio',
+                        ),
+                      ],
                       const Divider(height: TokenSpace.space3),
                       _buildMetaRow(
                         theme,

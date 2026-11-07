@@ -11,6 +11,7 @@ import '../../domain/services/agenda_import.dart';
 import '../../presentation/components/activity_card.dart';
 import '../../presentation/components/attenlume_button.dart';
 import '../activities/activity_editor_screen.dart';
+import '../activities/audio_import_providers.dart';
 import '../activities/consent_check_dialog.dart';
 import '../activities/custom_type_dialog.dart';
 import '../agenda/agenda_providers.dart';
@@ -207,6 +208,22 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
     }
   }
 
+  Future<void> _handleImportAudio() async {
+    final outcome = await ref
+        .read(audioImportServiceProvider)
+        .importAudio(conferenceId: widget.conferenceId);
+    if (!mounted) return;
+    switch (outcome) {
+      case AudioImportSuccess(:final activity):
+        Navigator.of(context).pop(activity);
+      case AudioImportFailure(:final userMessage):
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userMessage)));
+      case AudioImportCancelled():
+        break;
+    }
+  }
+
   Widget _buildAgenda(ThemeData theme) {
     final picked = _picked;
     final pickedType = _pickedType;
@@ -398,6 +415,14 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
                 variant: AttenlumeButtonVariant.secondary,
                 leading: const Icon(Icons.tune_rounded),
                 onPressed: _openFullEditor,
+              ),
+              const SizedBox(height: TokenSpace.space2),
+              AttenlumeButton(
+                key: const Key('start-sheet-import-audio-button'),
+                label: 'Import audio',
+                variant: AttenlumeButtonVariant.secondary,
+                leading: const Icon(Icons.file_upload_outlined),
+                onPressed: _isCreating ? null : _handleImportAudio,
               ),
             ],
           ),

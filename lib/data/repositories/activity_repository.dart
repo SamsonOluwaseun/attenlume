@@ -137,6 +137,7 @@ class ActivityRepository {
   ///
   /// Reflections are private by default (FR-UI-05, FR-EXP-10).
   Future<Activity> create({
+    String? id,
     required String conferenceId,
     required String typeId,
     String? title,
@@ -186,12 +187,12 @@ class ActivityRepository {
       );
     }
 
-    final id = _newId();
+    final activityId = id ?? _newId();
     await _db
         .into(_db.activities)
         .insert(
           ActivitiesCompanion.insert(
-            id: id,
+            id: activityId,
             conferenceId: conferenceId,
             typeId: typeId,
             title: resolvedTitle,
@@ -214,7 +215,7 @@ class ActivityRepository {
             updatedAt: now,
           ),
         );
-    return (await get(id))!;
+    return (await get(activityId))!;
   });
 
   Future<Activity?> get(String id) => (_db.select(

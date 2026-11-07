@@ -105,6 +105,7 @@ class ReviewHeader extends StatelessWidget {
     required this.place,
     required this.date,
     required this.durationMs,
+    this.isImported = false,
   });
 
   final String title;
@@ -115,6 +116,9 @@ class ReviewHeader extends StatelessWidget {
   /// Formatted date, or null when unknown.
   final String? date;
   final int durationMs;
+
+  /// Whether the session's audio was imported rather than recorded in Attenlume.
+  final bool isImported;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +161,12 @@ class ReviewHeader extends StatelessWidget {
         if (place.isNotEmpty)
           line(Icons.place_outlined, place, const Key('review-place')),
         line(Icons.event_outlined, when, const Key('review-when')),
+        if (isImported)
+          line(
+            Icons.file_download_outlined,
+            'Imported audio',
+            const Key('review-imported-audio'),
+          ),
       ],
     );
   }
