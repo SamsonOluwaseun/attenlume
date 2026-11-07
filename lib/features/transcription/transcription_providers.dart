@@ -9,6 +9,7 @@ import '../../data/local_database/database_provider.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/transcription/transcript_store.dart';
 import '../../domain/models/enums.dart';
+import '../../domain/transcription/vocabulary_hint.dart';
 import '../capture/recording_providers.dart';
 import 'native_pilot.dart';
 import 'transcription_controller.dart';
@@ -54,6 +55,8 @@ final transcriptionSourcesProvider = FutureProvider.autoDispose
         final cuts = ref.read(cutRangeRepositoryProvider);
         final media = ref.read(mediaAssetRepositoryProvider);
         final resolveRoot = ref.read(mediaRootProvider);
+        final activities = ref.read(activityRepositoryProvider);
+        final conferences = ref.read(conferenceRepositoryProvider);
         if ((await cuts.activeFor(activityId)).isNotEmpty) {
           throw StateError(
             'Audio cuts are not supported by this transcription pilot.',
@@ -71,6 +74,15 @@ final transcriptionSourcesProvider = FutureProvider.autoDispose
               ..sort((a, b) => a.startUtc.compareTo(b.startUtc));
         if (saved.isEmpty) return [];
         final firstStart = await media.firstSegmentStart(activityId);
+        final activity = await activities.get(activityId);
+        final conference = activity == null
+            ? null
+            : await conferences.get(activity.conferenceId);
+        final hint = vocabularyHint(
+          conferenceName: conference?.name,
+          speakerNames: activity?.speakerNames ?? const [],
+          organisation: activity?.organisation,
+        );
         final root = await resolveRoot();
         final resolvedRoot = await root.resolveSymbolicLinks();
         final sources = <TranscriptionSource>[];
@@ -88,6 +100,7 @@ final transcriptionSourcesProvider = FutureProvider.autoDispose
               offset: segment.startUtc.difference(
                 firstStart ?? saved.first.startUtc,
               ),
+              hint: hint,
             ),
           );
         }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:attenlume/domain/transcription/transcription_engine.dart';
+import 'package:attenlume/domain/transcription/vocabulary_hint.dart';
 import 'package:audio_decoder/audio_decoder.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_whisper_ggml/flutter_whisper.dart';
@@ -118,6 +119,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
     required String audioPath,
     required String modelDirectory,
     required void Function(double) onProgress,
+    String? hint,
   }) {
     if (_disposed) {
       throw StateError('WhisperTranscriptionEngine has been disposed.');
@@ -130,7 +132,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
     // Reserve the job before the first metadata/path/loading await.
     _isTranscribing = true;
     _isCancelled = false;
-    final result = _perform(audioPath, modelDirectory, onProgress);
+    final result = _perform(audioPath, modelDirectory, onProgress, hint);
     _active = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
@@ -139,6 +141,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
     String audioPath,
     String selectedModelFile,
     void Function(double) onProgress,
+    String? hint,
   ) async {
     Directory? temp;
     try {
@@ -225,7 +228,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
                       (segment.start.isNegative ? Duration.zero : segment.start)
                   ? (segment.start.isNegative ? Duration.zero : segment.start)
                   : segment.end,
-              text: segment.text.trim(),
+              text: correctNames(segment.text.trim(), hint),
             ),
       ];
     } on Object catch (error) {

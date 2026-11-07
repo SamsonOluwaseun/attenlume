@@ -21,6 +21,8 @@ void main() {
   const allowInstall = bool.fromEnvironment('TRANSCRIPTION_EVALUATION_INSTALL');
   // Compare with and without silence skipping on the same audio [P2-11].
   const useVad = bool.fromEnvironment('TRANSCRIPTION_EVALUATION_VAD');
+  // Session words, as the app passes them from the activity [P2-14].
+  const hint = String.fromEnvironment('TRANSCRIPTION_EVALUATION_HINT');
 
   testWidgets(
     'P2-08 FR-TRN-09 explicitly requested local audio evaluation',
@@ -72,6 +74,7 @@ void main() {
             audioPath: audioPath,
             modelDirectory: model!,
             onProgress: (_) {},
+            hint: hint.isEmpty ? null : hint,
           );
           watch.stop();
           expect(
@@ -97,7 +100,7 @@ void main() {
             reason: 'original sample remains byte-for-byte unchanged',
           );
           debugPrint(
-            'Local evaluation (VAD ${useVad ? 'on' : 'off'}): ${spans.length} spans; ${watch.elapsedMilliseconds} ms. Text saved privately; accuracy not scored.',
+            'Local evaluation (VAD ${useVad ? 'on' : 'off'}, hint ${hint.isEmpty ? 'off' : 'on'}):${spans.length} spans; ${watch.elapsedMilliseconds} ms. Text saved privately; accuracy not scored.',
           );
         } finally {
           await engine.dispose();

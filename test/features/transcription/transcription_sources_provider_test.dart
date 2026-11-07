@@ -58,6 +58,9 @@ void main() {
       await container.pump();
       cuts.gate.complete();
       await assertion;
+      // P2-14: the session's own words travel with the audio.
+      final hint = (await result).single.hint;
+      expect(hint, startsWith('Samlytics Conference 2026.'));
       await container.pump();
       expect(
         container.exists(transcriptionSourcesProvider(activity.id)),

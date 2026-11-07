@@ -46,13 +46,16 @@ class _Models implements PilotModelManager {
 class _Engine implements TranscriptionEngine {
   Completer<List<TranscriptSpan>>? gate;
   int cancellations = 0;
+  final hints = <String?>[];
   int disposals = 0;
   @override
   Future<List<TranscriptSpan>> transcribe({
     required String audioPath,
     required String modelDirectory,
     required void Function(double) onProgress,
+    String? hint,
   }) async {
+    hints.add(hint);
     onProgress(0.5);
     return gate?.future ??
         [
@@ -166,6 +169,30 @@ void main() {
     expect(controller.installed, isTrue);
     expect(created, 0);
   });
+
+  test(
+    'P2-14 FR-TRN-10 each source passes its session words to the engine',
+    () async {
+      await controller.setEnabled(true);
+      await controller.install();
+      await controller.transcribe([
+        const TranscriptionSource(
+          activityId: 'activity',
+          segmentId: 'segment',
+          audioPath: 'original.m4a',
+          hint: 'Samlytics Conference 2026.',
+        ),
+      ]);
+      await controller.transcribe([
+        const TranscriptionSource(
+          activityId: 'activity',
+          segmentId: 'second',
+          audioPath: 'second.m4a',
+        ),
+      ]);
+      expect(engine.hints, ['Samlytics Conference 2026.', null]);
+    },
+  );
 
   test('FR-TRN-04 active recording blocks after-recording work', () async {
     await controller.setEnabled(true);

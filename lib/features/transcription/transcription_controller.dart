@@ -27,11 +27,15 @@ class TranscriptionSource {
     required this.segmentId,
     required this.audioPath,
     this.offset = Duration.zero,
+    this.hint,
   });
   final String activityId;
   final String segmentId;
   final String audioPath;
   final Duration offset;
+
+  /// Session words for Whisper's prompt (see vocabularyHint), or null.
+  final String? hint;
 }
 
 /// Explicit user jobs only. No engine is created by construction or enabling.
@@ -253,6 +257,7 @@ class TranscriptionController extends ChangeNotifier {
           final spans = await engine.transcribe(
             audioPath: source.audioPath,
             modelDirectory: models.directory,
+            hint: source.hint,
             onProgress: (value) =>
                 _progress((index + value) / requested.length),
           );
