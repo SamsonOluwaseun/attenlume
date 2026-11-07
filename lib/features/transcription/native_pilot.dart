@@ -70,13 +70,14 @@ class PilotModels implements PilotModelManager {
     return true;
   }
 
+  /// Looks at the disk, not at verification, so a file whose checksum marker
+  /// is missing or wrong can still be removed.
   @override
-  Future<bool> hasFiles() async {
-    for (final model in _all) {
-      if (await store.installedPath(model) != null) return true;
-    }
-    return false;
-  }
+  Future<bool> hasFiles() async =>
+      _all.any((model) => _file(model).existsSync());
+
+  File _file(VerifiedModelDescriptor model) =>
+      File(p.join(store.baseDirectory.path, model.fileName));
 
   @override
   Future<void> install(void Function(double) onProgress) async {
@@ -109,8 +110,9 @@ class PilotModels implements PilotModelManager {
     for (final model in _all) {
       // A file that was never downloaded (an install from before P2-11, or
       // a cancelled second download) is already removed.
-      final file = File(p.join(store.baseDirectory.path, model.fileName));
-      if (!await store.remove(model) && file.existsSync()) removed = false;
+      if (!await store.remove(model) && _file(model).existsSync()) {
+        removed = false;
+      }
     }
     if (!removed) throw StateError('Model removal did not complete');
   }

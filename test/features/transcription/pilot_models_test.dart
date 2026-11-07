@@ -3,24 +3,40 @@ import 'dart:io';
 import 'package:attenlume/features/transcription/native_pilot.dart';
 import 'package:attenlume/platform/transcription/whisper_model_store.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
+/// Keeps real files in a temporary folder; [verified] stands in for the
+/// checksum marker that makes a file count as installed.
 class _Store extends Fake implements VerifiedModelStore {
-  _Store(this.installed, {Directory? base})
-    : baseDirectory = base ?? Directory('models-not-on-disk');
+  _Store(this.baseDirectory, Set<String> verified) {
+    for (final id in verified) {
+      _write(id);
+      this.verified.add(id);
+    }
+  }
 
-  final Set<String> installed;
+  @override
+  final Directory baseDirectory;
+  final verified = <String>{};
   final installs = <String>[];
   final removals = <String>[];
   final cancels = <String?>[];
 
-  @override
-  final Directory baseDirectory;
+  /// Ids whose removal fails although the file stays on disk.
+  final stuck = <String>{};
+
+  static const _byId = {
+    'tiny.en-q5_1': WhisperModelDescriptor.tinyEnQ5_1,
+    'silero-v6.2.0': WhisperModelDescriptor.sileroVad,
+  };
+
+  File file(String id) => File(p.join(baseDirectory.path, _byId[id]!.fileName));
+
+  void _write(String id) => file(id).writeAsStringSync('weights');
 
   @override
   Future<String?> installedPath(VerifiedModelDescriptor descriptor) async =>
-      installed.contains(descriptor.id)
-      ? 'models/${descriptor.fileName}'
-      : null;
+      verified.contains(descriptor.id) ? file(descriptor.id).path : null;
 
   @override
   Future<String> install(
@@ -30,19 +46,21 @@ class _Store extends Fake implements VerifiedModelStore {
     installs.add(descriptor.id);
     onProgress?.call(0.5);
     onProgress?.call(1);
-    installed.add(descriptor.id);
-    return 'models/${descriptor.fileName}';
+    _write(descriptor.id);
+    verified.add(descriptor.id);
+    return file(descriptor.id).path;
   }
-
-  /// Ids whose removal fails although the file stays on disk.
-  final stuck = <String>{};
 
   @override
   Future<bool> remove(VerifiedModelDescriptor descriptor) async {
     removals.add(descriptor.id);
     if (stuck.contains(descriptor.id)) return false;
+    verified.remove(descriptor.id);
     // Like the real store: false when there was no file to remove.
-    return installed.remove(descriptor.id);
+    final f = file(descriptor.id);
+    if (!f.existsSync()) return false;
+    f.deleteSync();
+    return true;
   }
 
   @override
@@ -52,6 +70,10 @@ class _Store extends Fake implements VerifiedModelStore {
 void main() {
   const speech = WhisperModelDescriptor.tinyEnQ5_1;
   const vad = WhisperModelDescriptor.sileroVad;
+  late Directory dir;
+
+  setUp(() => dir = Directory.systemTemp.createTempSync('pilot_models_'));
+  tearDown(() => dir.deleteSync(recursive: true));
 
   group('P2-11 FR-TRN-10 speech and silence models install together', () {
     test('the silence model is pinned, small and checksummed', () {
@@ -62,9 +84,10 @@ void main() {
     });
 
     test('a fresh install downloads both with one progress bar', () async {
-      final store = _Store({});
+      final store = _Store(dir, {});
       final models = PilotModels(store);
       expect(await models.isInstalled(), isFalse);
+      expect(await models.hasFiles(), isFalse);
       expect(models.downloadBytes, speech.sizeBytes + vad.sizeBytes);
 
       final progress = <double>[];
@@ -76,7 +99,7 @@ void main() {
     });
 
     test('an install from before P2-11 adds only the silence model', () async {
-      final store = _Store({speech.id});
+      final store = _Store(dir, {speech.id});
       final models = PilotModels(store);
       expect(await models.isInstalled(), isFalse);
       await models.install((_) {});
@@ -85,17 +108,18 @@ void main() {
     });
 
     test('remove and cancel cover both models', () async {
-      final store = _Store({speech.id, vad.id});
+      final store = _Store(dir, {speech.id, vad.id});
       final models = PilotModels(store);
       await models.cancelInstall();
       await models.remove();
       expect(store.cancels, [speech.id, vad.id]);
       expect(store.removals, [speech.id, vad.id]);
       expect(await models.isInstalled(), isFalse);
+      expect(await models.hasFiles(), isFalse);
     });
 
     test('an incomplete set reports its files and removes cleanly', () async {
-      final store = _Store({speech.id});
+      final store = _Store(dir, {speech.id});
       final models = PilotModels(store);
       expect(await models.isInstalled(), isFalse);
       expect(await models.hasFiles(), isTrue);
@@ -105,17 +129,29 @@ void main() {
       expect(await models.hasFiles(), isFalse);
     });
 
+    test(
+      'a file without a valid checksum marker can still be removed',
+      () async {
+        // For example the download finished but writing its marker failed.
+        final store = _Store(dir, {})..file(speech.id).writeAsStringSync('w');
+        final models = PilotModels(store);
+        expect(await models.isInstalled(), isFalse);
+        expect(await models.hasFiles(), isTrue);
+        await models.remove();
+        expect(store.file(speech.id).existsSync(), isFalse);
+        expect(await models.hasFiles(), isFalse);
+      },
+    );
+
     test('a file that stays on disk makes removal fail', () async {
-      final dir = Directory.systemTemp.createTempSync('pilot_models_');
-      addTearDown(() => dir.deleteSync(recursive: true));
-      File('${dir.path}/${vad.fileName}').writeAsStringSync('x');
-      final store = _Store({speech.id, vad.id}, base: dir)..stuck.add(vad.id);
+      final store = _Store(dir, {speech.id, vad.id})..stuck.add(vad.id);
       await expectLater(PilotModels(store).remove(), throwsStateError);
       expect(store.removals, [speech.id, vad.id]);
+      expect(await PilotModels(store).hasFiles(), isTrue);
     });
 
     test('the engine loads the speech model file, not the silence model', () {
-      final models = PilotModels(_Store({}));
+      final models = PilotModels(_Store(dir, {}));
       expect(models.directory, endsWith(speech.fileName));
     });
   });
