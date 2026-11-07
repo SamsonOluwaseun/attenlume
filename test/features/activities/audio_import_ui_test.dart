@@ -68,6 +68,8 @@ class _MockPilotModelManager implements PilotModelManager {
   @override
   Future<bool> isInstalled() async => true;
   @override
+  Future<bool> hasFiles() async => true;
+  @override
   Future<void> install(void Function(double) onProgress) async {}
   @override
   Future<void> cancelInstall() async {}
