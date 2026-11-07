@@ -23,6 +23,28 @@ class _Memory implements DeviceMemoryProbe {
   Future<int?> totalBytes() async => bytes;
 }
 
+/// A download that only ends when cancelled, and whose cancel drains only
+/// when [drain] completes.
+class _SlowCancelStore extends LanguageModelStore {
+  _SlowCancelStore(Directory dir) : super(baseDirectory: dir);
+  final download = Completer<String>();
+  final drain = Completer<void>();
+
+  @override
+  Future<String> install(
+    VerifiedModelDescriptor descriptor, {
+    void Function(double)? onProgress,
+  }) => download.future;
+
+  @override
+  Future<void> cancelInstall({String? modelId}) async {
+    await drain.future;
+    if (!download.isCompleted) {
+      download.completeError(const ModelStorageException('Download cancelled'));
+    }
+  }
+}
+
 class _PendingProbe implements FreeSpaceProbe {
   final answer = Completer<FreeSpace?>();
   @override
@@ -233,6 +255,59 @@ void main() {
       probe.answer.complete(const FreeSpace(availableBytes: 1, totalBytes: 2));
       await tester.pumpAndSettle();
       expect(enabled(LanguageModelDescriptor.gemma3_1B), isTrue);
+    });
+
+    testWidgets('the choice stays locked until a cancel has finished', (
+      tester,
+    ) async {
+      final store = _SlowCancelStore(tempDir);
+      final probe = _FakeFreeSpaceProbe(100 * 1024 * 1024 * 1024);
+      final controller = LanguageModelController(
+        store: store,
+        freeSpaceProbe: probe,
+        descriptor: testDescriptor,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        pumpSection(store: store, probe: probe, controller: controller),
+      );
+      await tester.pumpAndSettle();
+      bool enabled() => tester
+          .widget<RadioListTile<String>>(
+            find.byKey(
+              Key('optional-ai-choice-${LanguageModelDescriptor.gemma3_1B.id}'),
+            ),
+          )
+          .enabled!;
+
+      unawaited(controller.startDownload());
+      await tester.pump();
+      expect(controller.state.isDownloading, isTrue);
+      unawaited(controller.cancelDownload());
+      await tester.pump();
+      // Shown as not installed, but the old download is still draining.
+      expect(controller.busy, isTrue);
+      expect(enabled(), isFalse);
+
+      store.drain.complete();
+      await tester.pumpAndSettle();
+      expect(controller.busy, isFalse);
+      expect(enabled(), isTrue);
+    });
+
+    test('a storage shortfall names the chosen model and its size', () async {
+      final controller = LanguageModelController(
+        store: LanguageModelStore(baseDirectory: tempDir),
+        freeSpaceProbe: _FakeFreeSpaceProbe(1024),
+        descriptor: LanguageModelDescriptor.gemma3_1B,
+      );
+      addTearDown(controller.dispose);
+      expect(await controller.startDownload(), isFalse);
+      expect(
+        controller.state.errorMessage,
+        'Not enough storage to download this model. Gemma 3 1B, Small needs '
+        '769 MB plus 1 GB free space.',
+      );
     });
 
     testWidgets(
@@ -453,7 +528,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.textContaining('2.65 GB plus 1 GB free space'),
+          find.textContaining('plus 1 GB free space'),
           findsOneWidget,
         );
       },

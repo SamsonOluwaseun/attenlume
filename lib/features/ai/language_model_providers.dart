@@ -142,10 +142,25 @@ class LanguageModelController extends ChangeNotifier {
 
   LanguageModelState get state => _state;
 
+  bool _disposed = false;
+  bool _busy = false;
+
+  /// True from the start of a download attempt until it has fully ended,
+  /// including a cancel still draining; the model choice stays locked.
+  bool get busy => _busy;
+
   void _setState(LanguageModelState next) {
+    // A controller replaced after a model switch must stay silent.
+    if (_disposed) return;
     _state = next;
     notifyListeners();
     onStateChanged?.call();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   Future<void> refresh() async {
@@ -178,8 +193,17 @@ class LanguageModelController extends ChangeNotifier {
   ///
   /// Returns `true` if download completes successfully, `false` otherwise.
   Future<bool> startDownload() async {
-    if (_state.isDownloading) return false;
+    if (_state.isDownloading || _busy) return false;
+    _busy = true;
+    try {
+      return await _download();
+    } finally {
+      _busy = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
 
+  Future<bool> _download() async {
     _setState(
       const LanguageModelState(status: LanguageModelStatus.checkingSpace),
     );
@@ -189,11 +213,12 @@ class LanguageModelController extends ChangeNotifier {
     final space = await freeSpaceProbe.query(store.baseDirectory.path);
     if (space == null || space.availableBytes < requiredBytes) {
       _setState(
-        const LanguageModelState(
+        LanguageModelState(
           status: LanguageModelStatus.error,
           errorMessage:
-              'Not enough storage to download this model. Gemma 4 E2B needs '
-              '2.65 GB plus 1 GB free space.',
+              'Not enough storage to download this model. ${descriptor.name} '
+              'needs ${descriptor.sizeLabel} plus '
+              '${_gigabytes(store.safetyReserveBytes)} free space.',
         ),
       );
       return false;
@@ -294,3 +319,11 @@ final languageModelControllerProvider = FutureProvider<LanguageModelController>(
     return controller;
   },
 );
+
+/// Whole or one-decimal gigabytes for messages (for example '1 GB').
+String _gigabytes(int bytes) {
+  final gb = bytes / (1024 * 1024 * 1024);
+  return gb == gb.roundToDouble()
+      ? '${gb.round()} GB'
+      : '${gb.toStringAsFixed(1)} GB';
+}

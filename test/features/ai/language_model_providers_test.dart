@@ -138,7 +138,7 @@ void main() {
         expect(controller.state.errorMessage, contains('Not enough storage'));
         expect(
           controller.state.errorMessage,
-          contains('2.65 GB plus 1 GB free space'),
+          contains('plus 1 GB free space'),
         );
       },
     );

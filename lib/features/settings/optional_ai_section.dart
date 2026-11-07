@@ -81,9 +81,7 @@ class OptionalAiSection extends ConsumerWidget {
               active: controller.descriptor,
               // Locked from the free-space check to the end of the download,
               // so the controller doing the work is never replaced.
-              locked:
-                  controller.state.isDownloading ||
-                  controller.state.status == LanguageModelStatus.checkingSpace,
+              locked: controller.busy || controller.state.isDownloading,
             ),
             _OptionalAiCard(controller: controller),
           ],
