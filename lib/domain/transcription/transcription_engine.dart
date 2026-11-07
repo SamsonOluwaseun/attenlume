@@ -12,10 +12,6 @@ abstract interface class TranscriptionEngine {
     required String audioPath,
     required String modelDirectory,
     required void Function(double) onProgress,
-
-    /// Words likely in this audio, such as the session title and speaker
-    /// names, to help recognise them. Null when there is nothing to add.
-    String? hint,
   });
 
   /// Idempotent. Stops the current job; its future throws cancellation below.

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../data/transcription/transcript_store.dart';
 import '../../domain/transcription/transcript.dart';
 import '../../domain/transcription/transcription_engine.dart';
+import '../../domain/transcription/vocabulary_hint.dart';
 
 /// App-owned model management; none of these operations run on app startup.
 abstract interface class PilotModelManager {
@@ -257,7 +258,6 @@ class TranscriptionController extends ChangeNotifier {
           final spans = await engine.transcribe(
             audioPath: source.audioPath,
             modelDirectory: models.directory,
-            hint: source.hint,
             onProgress: (value) =>
                 _progress((index + value) / requested.length),
           );
@@ -274,7 +274,22 @@ class TranscriptionController extends ChangeNotifier {
             segmentOffset: source.offset,
             modelId: models.name,
           );
-          final persisted = await store.saveOriginal(document);
+          var persisted = await store.saveOriginal(document);
+          // Misheard session names are fixed as corrections, so the machine
+          // text stays as heard and reverting a line restores it (FR-TRN-08).
+          final names = {
+            for (final (i, span) in spans.indexed)
+              if (correctNames(span.text, source.hint) case final fixed
+                  when fixed != span.text)
+                i: fixed,
+          };
+          if (names.isNotEmpty && persisted.corrections.isEmpty) {
+            persisted = await store.saveCorrections(
+              activityId: source.activityId,
+              segmentId: source.segmentId,
+              corrections: names,
+            );
+          }
           // A completed atomic write remains visible even if Off arrived during it.
           _upsert([persisted]);
           _checkActive(inference: true);

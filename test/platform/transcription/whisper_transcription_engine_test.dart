@@ -266,38 +266,6 @@ void main() {
       expect(alignToSpeech(plain, [regions.first]), same(plain));
     });
 
-    test(
-      'P2-14 FR-TRN-10 session names correct the text, never the prompt',
-      () async {
-        for (final hint in ['Hellx Services.', null]) {
-          final backend = _FakeWhisperBackend();
-          final engine = WhisperTranscriptionEngine(
-            audioConverter: audioConverter,
-            audioInfoProvider: (_) async => const AudioInfo(
-              duration: Duration(seconds: 30),
-              sampleRate: 16000,
-              channels: 1,
-              bitRate: 256000,
-              format: 'wav',
-            ),
-            whisperLoader: (_) async => FlutterWhisper.withBackend(backend),
-          );
-          final spans = await engine.transcribe(
-            audioPath: sourceAudioFile.path,
-            modelDirectory: modelFile.path,
-            onProgress: (_) {},
-            hint: hint,
-          );
-          // A prompt merged segments and moved timestamps on Windows.
-          expect(backend.lastConfig?.initialPrompt, isNull);
-          expect(spans[0].text, hint == null ? 'Hello world' : 'Hellx world');
-          expect(spans[0].start, Duration.zero);
-          expect(spans[0].end, const Duration(seconds: 2));
-          await engine.dispose();
-        }
-      },
-    );
-
     test('P2-11 FR-TRN-10 without a silence model every sample is '
         'transcribed', () async {
       final engine = createEngine();

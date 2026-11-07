@@ -73,6 +73,44 @@ void main() {
       );
     });
 
+    test('real words close to a name stay as heard (review cases)', () {
+      expect(correctNames('a grade', 'Grace.'), 'a grade');
+      expect(correctNames('we serviced it', 'Services.'), 'we serviced it');
+      // Start of a sentence: an ordinary capital is not a name.
+      expect(correctNames('Grade two passed.', 'Grace.'), 'Grade two passed.');
+      // Joined to a digit or apostrophe: never rewritten.
+      expect(
+        correctNames('Grade2 and Grade’s', 'Grace.'),
+        'Grade2 and Grade’s',
+      );
+    });
+
+    test('accents and close misspellings of a name are fixed', () {
+      expect(
+        correctNames('Thanks, Francois.', 'François.'),
+        'Thanks, François.',
+      );
+      expect(
+        correctNames('Thanks, Francoise.', 'François.'),
+        'Thanks, François.',
+      );
+      expect(
+        correctNames('at Samlytic today', 'Samlytics.'),
+        'at Samlytics today',
+      );
+      expect(
+        correctNames('at Samlyticss today', 'Samlytics.'),
+        'at Samlytics today',
+      );
+      // Odd inner capital at a sentence start is still a mishearing.
+      expect(
+        correctNames('SamlyTix is here.', 'Samlytics.'),
+        'Samlytics is here.',
+      );
+      // A plural of a name is a real word.
+      expect(correctNames('two Conferences', 'Conference.'), 'two Conferences');
+    });
+
     test('without a hint the text is unchanged', () {
       expect(correctNames('SamlyTix', null), 'SamlyTix');
       expect(correctNames('SamlyTix', 'a b c.'), 'SamlyTix');

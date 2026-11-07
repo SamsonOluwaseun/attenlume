@@ -46,23 +46,21 @@ class _Models implements PilotModelManager {
 class _Engine implements TranscriptionEngine {
   Completer<List<TranscriptSpan>>? gate;
   int cancellations = 0;
-  final hints = <String?>[];
   int disposals = 0;
+  String text = 'Samlytics Data Services';
   @override
   Future<List<TranscriptSpan>> transcribe({
     required String audioPath,
     required String modelDirectory,
     required void Function(double) onProgress,
-    String? hint,
   }) async {
-    hints.add(hint);
     onProgress(0.5);
     return gate?.future ??
         [
           TranscriptSpan(
             start: Duration.zero,
             end: const Duration(seconds: 1),
-            text: 'Samlytics Data Services',
+            text: text,
           ),
         ];
   }
@@ -171,10 +169,11 @@ void main() {
   });
 
   test(
-    'P2-14 FR-TRN-10 each source passes its session words to the engine',
+    'P2-14 FR-TRN-08 misheard names become corrections; machine text kept',
     () async {
       await controller.setEnabled(true);
       await controller.install();
+      engine.text = 'Welcome to SamlyTix Data Services';
       await controller.transcribe([
         const TranscriptionSource(
           activityId: 'activity',
@@ -190,7 +189,21 @@ void main() {
           audioPath: 'second.m4a',
         ),
       ]);
-      expect(engine.hints, ['Samlytics Conference 2026.', null]);
+      final store = TranscriptStore(directory);
+      final hinted = (await store.load(
+        activityId: 'activity',
+        segmentId: 'segment',
+      )).document!;
+      expect(
+        hinted.machineSpans.single.text,
+        'Welcome to SamlyTix Data Services',
+      );
+      expect(hinted.corrections, {0: 'Welcome to Samlytics Data Services'});
+      final plain = (await store.load(
+        activityId: 'activity',
+        segmentId: 'second',
+      )).document!;
+      expect(plain.corrections, isEmpty);
     },
   );
 

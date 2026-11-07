@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:attenlume/domain/transcription/transcript.dart';
+import 'package:attenlume/domain/transcription/vocabulary_hint.dart';
 import 'package:attenlume/platform/transcription/whisper_model_store.dart';
 import 'package:attenlume/platform/transcription/whisper_transcription_engine.dart';
 import 'package:audio_decoder/audio_decoder.dart';
@@ -21,7 +22,7 @@ void main() {
   const allowInstall = bool.fromEnvironment('TRANSCRIPTION_EVALUATION_INSTALL');
   // Compare with and without silence skipping on the same audio [P2-11].
   const useVad = bool.fromEnvironment('TRANSCRIPTION_EVALUATION_VAD');
-  // Session words, as the app passes them from the activity [P2-14].
+  // Session names, applied as corrections like the app does [P2-14].
   const hint = String.fromEnvironment('TRANSCRIPTION_EVALUATION_HINT');
 
   testWidgets(
@@ -74,7 +75,6 @@ void main() {
             audioPath: audioPath,
             modelDirectory: model!,
             onProgress: (_) {},
-            hint: hint.isEmpty ? null : hint,
           );
           watch.stop();
           expect(
@@ -88,6 +88,12 @@ void main() {
             machineSpans: spans,
             createdAt: DateTime.now().toUtc(),
             modelId: descriptor.id,
+            corrections: {
+              for (final (i, span) in spans.indexed)
+                if (correctNames(span.text, hint.isEmpty ? null : hint)
+                    case final fixed when fixed != span.text)
+                  i: fixed,
+            },
           );
           await File(p.join(output.path, 'transcript.txt'))
               .writeAsString(renderTranscriptText(document), flush: true);
@@ -100,7 +106,7 @@ void main() {
             reason: 'original sample remains byte-for-byte unchanged',
           );
           debugPrint(
-            'Local evaluation (VAD ${useVad ? 'on' : 'off'}, hint ${hint.isEmpty ? 'off' : 'on'}):${spans.length} spans; ${watch.elapsedMilliseconds} ms. Text saved privately; accuracy not scored.',
+            'Local evaluation (VAD ${useVad ? 'on' : 'off'}): ${spans.length} spans; ${watch.elapsedMilliseconds} ms. Text saved privately; accuracy not scored.',
           );
         } finally {
           await engine.dispose();
