@@ -35,6 +35,22 @@ List<WhisperSegment> alignToSpeech(
   List<WhisperVadSegment> regions,
 ) {
   if (regions.length < 2) return segments;
+  // Continuous speech is split into back-to-back regions (at most 30 s each);
+  // only a real skipped pause separates two regions here.
+  final sorted = [...regions]..sort((a, b) => a.start.compareTo(b.start));
+  final speech = <WhisperVadSegment>[sorted.first];
+  for (final r in sorted.skip(1)) {
+    final last = speech.last;
+    if (r.start - last.end < const Duration(milliseconds: 500)) {
+      speech.last = WhisperVadSegment(
+        start: last.start,
+        end: r.end > last.end ? r.end : last.end,
+      );
+    } else {
+      speech.add(r);
+    }
+  }
+  if (speech.length < 2) return segments;
   Duration overlap(WhisperSegment s, WhisperVadSegment r) {
     final start = s.start > r.start ? s.start : r.start;
     final end = s.end < r.end ? s.end : r.end;
@@ -45,12 +61,14 @@ List<WhisperSegment> alignToSpeech(
     for (final segment in segments)
       () {
         final touched = [
-          for (final r in regions)
+          for (final r in speech)
             if (overlap(segment, r) > Duration.zero) r,
         ];
         if (touched.length < 2) return segment;
+        // On a tie the later speech wins: text after a long pause is the
+        // usual case.
         final best = touched.reduce(
-          (a, b) => overlap(segment, b) > overlap(segment, a) ? b : a,
+          (a, b) => overlap(segment, b) >= overlap(segment, a) ? b : a,
         );
         return WhisperSegment(
           text: segment.text,

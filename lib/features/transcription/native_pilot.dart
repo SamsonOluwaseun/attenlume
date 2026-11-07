@@ -37,7 +37,8 @@ Future<NativeTranscriptionPilot> createNativePilot(
     PilotModels(store),
     () => WhisperTranscriptionEngine(
       cpu: cpu,
-      vadModelPath: () => store.installedPath(PilotModels.vad),
+      // Full checksum before each use; the file is under 1 MB.
+      vadModelPath: () => store.verifyInstalledPath(PilotModels.vad),
     ),
   );
 }
@@ -70,6 +71,14 @@ class PilotModels implements PilotModelManager {
   }
 
   @override
+  Future<bool> hasFiles() async {
+    for (final model in _all) {
+      if (await store.installedPath(model) != null) return true;
+    }
+    return false;
+  }
+
+  @override
   Future<void> install(void Function(double) onProgress) async {
     final missing = [
       for (final model in _all)
@@ -98,7 +107,10 @@ class PilotModels implements PilotModelManager {
   Future<void> remove() async {
     var removed = true;
     for (final model in _all) {
-      removed = await store.remove(model) && removed;
+      // A file that was never downloaded (an install from before P2-11, or
+      // a cancelled second download) is already removed.
+      final file = File(p.join(store.baseDirectory.path, model.fileName));
+      if (!await store.remove(model) && file.existsSync()) removed = false;
     }
     if (!removed) throw StateError('Model removal did not complete');
   }

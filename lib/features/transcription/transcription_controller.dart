@@ -12,6 +12,10 @@ abstract interface class PilotModelManager {
   int get downloadBytes;
   String get directory;
   Future<bool> isInstalled();
+
+  /// True when any model file is on disk, even if the set is incomplete, so
+  /// the user can always remove what was downloaded [P2-11].
+  Future<bool> hasFiles();
   Future<void> install(void Function(double) onProgress);
   Future<void> cancelInstall();
   Future<void> remove();
@@ -48,6 +52,9 @@ class TranscriptionController extends ChangeNotifier {
   final bool Function() recordingHeld;
   bool enabled;
   bool installed = false;
+
+  /// Some model files are present (possibly not all of them).
+  bool hasModelFiles = false;
   bool busy = false;
   double progress = 0;
   String? message;
@@ -105,9 +112,11 @@ class TranscriptionController extends ChangeNotifier {
 
   Future<void> refresh() async {
     final present = await models.isInstalled();
+    final files = await models.hasFiles();
     final saved = await store.listDocuments();
     if (_disposed) return;
     installed = present;
+    hasModelFiles = files;
     _upsert(saved);
   }
 
@@ -167,15 +176,24 @@ class TranscriptionController extends ChangeNotifier {
 
   Future<void> install() async {
     if (!_canStart || !enabled) return;
-    await _run(() async {
-      _checkActive();
-      await models.install(_progress);
-      _checkActive();
-      final present = await models.isInstalled();
-      _checkActive();
-      installed = present;
-      message = 'Model installed. Choose a recording to transcribe.';
-    });
+    try {
+      await _run(() async {
+        _checkActive();
+        await models.install(_progress);
+        _checkActive();
+        final present = await models.isInstalled();
+        _checkActive();
+        installed = present;
+        message = 'Model installed. Choose a recording to transcribe.';
+      });
+    } finally {
+      // A failed or cancelled second download can leave the first file.
+      final files = await models.hasFiles();
+      if (!_disposed) {
+        hasModelFiles = files;
+        _notify();
+      }
+    }
   }
 
   Future<void> removeModel() async {
@@ -186,6 +204,7 @@ class TranscriptionController extends ChangeNotifier {
       await setEnabled(false);
       await models.remove();
       installed = false;
+      hasModelFiles = false;
       message = 'Model removed. Saved transcripts and recordings are kept.';
     } finally {
       _removing = false;

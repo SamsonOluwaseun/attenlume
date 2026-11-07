@@ -246,7 +246,7 @@ class _TranscriptionScreenState extends ConsumerState<TranscriptionScreen> {
                         icon: const Icon(Icons.download),
                         label: const Text('Download model'),
                       ),
-                    if (controller.installed)
+                    if (controller.installed || controller.hasModelFiles)
                       OutlinedButton(
                         onPressed: controller.busy
                             ? null

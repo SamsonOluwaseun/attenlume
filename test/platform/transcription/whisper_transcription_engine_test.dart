@@ -239,6 +239,27 @@ void main() {
       // A segment within one region is never moved.
       expect(aligned[2].start, s(55));
       expect(aligned[2].end, s(70));
+      // Continuous speech split into back-to-back regions is one speech
+      // run: a segment across the join keeps its full span.
+      final adjacent = alignToSpeech(
+        [WhisperSegment(text: 'Join.', start: s(28), end: s(32))],
+        [
+          WhisperVadSegment(start: s(30), end: s(60)),
+          WhisperVadSegment(start: s(0), end: s(30.2)),
+        ],
+      );
+      expect(adjacent.single.start, s(28));
+      expect(adjacent.single.end, s(32));
+      // Equal overlap either side of a real pause: the later speech wins.
+      final tie = alignToSpeech(
+        [WhisperSegment(text: 'Tie.', start: s(8), end: s(22))],
+        [
+          WhisperVadSegment(start: s(0), end: s(10)),
+          WhisperVadSegment(start: s(20), end: s(30)),
+        ],
+      );
+      expect(tie.single.start, s(20));
+      expect(tie.single.end, s(22));
       // Without VAD regions, or with one, nothing changes.
       final plain = [WhisperSegment(text: 'x', start: s(1), end: s(30))];
       expect(alignToSpeech(plain, const []), same(plain));

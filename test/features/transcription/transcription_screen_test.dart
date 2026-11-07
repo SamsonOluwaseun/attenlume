@@ -29,6 +29,9 @@ class _Model implements PilotModelManager {
   String get directory => 'unused';
   @override
   Future<bool> isInstalled() async => false;
+  bool files = false;
+  @override
+  Future<bool> hasFiles() async => files;
   @override
   Future<void> install(void Function(double) onProgress) async {}
   @override
@@ -40,10 +43,12 @@ class _Model implements PilotModelManager {
 void main() {
   late Directory temp;
   late TranscriptionController controller;
+  late _Model model;
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('transcription-ui-');
+    model = _Model();
     controller = TranscriptionController(
-      models: _Model(),
+      models: model,
       store: TranscriptStore(temp),
       createEngine: () => throw StateError('UI must not create an engine'),
       writeEnabled: (_) async {},
@@ -95,6 +100,18 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('P2-11 FR-TRN-07 an incomplete model set can still be removed', (
+    tester,
+  ) async {
+    // For example an install from before P2-11 has the speech model only.
+    model.files = true;
+    await tester.runAsync(controller.refresh);
+    await pump(tester);
+    expect(find.text('Download model'), findsOneWidget);
+    expect(find.text('Switch off and remove model'), findsOneWidget);
+    expect(find.textContaining('Not installed'), findsOneWidget);
+  });
 
   testWidgets(
     'FR-TRN-01/02 first visit is off and consent cancellation downloads nothing',

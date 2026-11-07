@@ -5,7 +5,8 @@ import 'package:attenlume/platform/transcription/whisper_model_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Store extends Fake implements VerifiedModelStore {
-  _Store(this.installed);
+  _Store(this.installed, {Directory? base})
+    : baseDirectory = base ?? Directory('models-not-on-disk');
 
   final Set<String> installed;
   final installs = <String>[];
@@ -13,7 +14,7 @@ class _Store extends Fake implements VerifiedModelStore {
   final cancels = <String?>[];
 
   @override
-  Directory get baseDirectory => Directory('models');
+  final Directory baseDirectory;
 
   @override
   Future<String?> installedPath(VerifiedModelDescriptor descriptor) async =>
@@ -33,11 +34,15 @@ class _Store extends Fake implements VerifiedModelStore {
     return 'models/${descriptor.fileName}';
   }
 
+  /// Ids whose removal fails although the file stays on disk.
+  final stuck = <String>{};
+
   @override
   Future<bool> remove(VerifiedModelDescriptor descriptor) async {
     removals.add(descriptor.id);
-    installed.remove(descriptor.id);
-    return true;
+    if (stuck.contains(descriptor.id)) return false;
+    // Like the real store: false when there was no file to remove.
+    return installed.remove(descriptor.id);
   }
 
   @override
@@ -87,6 +92,26 @@ void main() {
       expect(store.cancels, [speech.id, vad.id]);
       expect(store.removals, [speech.id, vad.id]);
       expect(await models.isInstalled(), isFalse);
+    });
+
+    test('an incomplete set reports its files and removes cleanly', () async {
+      final store = _Store({speech.id});
+      final models = PilotModels(store);
+      expect(await models.isInstalled(), isFalse);
+      expect(await models.hasFiles(), isTrue);
+      // The silence model was never downloaded: that is not a failure.
+      await models.remove();
+      expect(store.removals, [speech.id, vad.id]);
+      expect(await models.hasFiles(), isFalse);
+    });
+
+    test('a file that stays on disk makes removal fail', () async {
+      final dir = Directory.systemTemp.createTempSync('pilot_models_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      File('${dir.path}/${vad.fileName}').writeAsStringSync('x');
+      final store = _Store({speech.id, vad.id}, base: dir)..stuck.add(vad.id);
+      await expectLater(PilotModels(store).remove(), throwsStateError);
+      expect(store.removals, [speech.id, vad.id]);
     });
 
     test('the engine loads the speech model file, not the silence model', () {

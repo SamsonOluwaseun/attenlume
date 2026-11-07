@@ -22,6 +22,8 @@ class _Models implements PilotModelManager {
   @override
   Future<bool> isInstalled() async => installed;
   @override
+  Future<bool> hasFiles() async => installed;
+  @override
   Future<void> install(void Function(double) onProgress) async {
     downloads++;
     onProgress(1);
