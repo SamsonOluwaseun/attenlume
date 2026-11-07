@@ -527,10 +527,7 @@ void main() {
           find.textContaining('Not enough storage to download this model'),
           findsOneWidget,
         );
-        expect(
-          find.textContaining('plus 1 GB free space'),
-          findsOneWidget,
-        );
+        expect(find.textContaining('plus 1 GB free space'), findsOneWidget);
       },
     );
 

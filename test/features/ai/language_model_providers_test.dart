@@ -136,10 +136,7 @@ void main() {
         expect(result, isFalse);
         expect(controller.state.status, LanguageModelStatus.error);
         expect(controller.state.errorMessage, contains('Not enough storage'));
-        expect(
-          controller.state.errorMessage,
-          contains('plus 1 GB free space'),
-        );
+        expect(controller.state.errorMessage, contains('plus 1 GB free space'));
       },
     );
 

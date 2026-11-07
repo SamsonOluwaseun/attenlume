@@ -199,6 +199,9 @@ class AudioImportService {
     if (!conferencesDir.existsSync()) return 0;
 
     final activePaths = activeStagingPaths ?? _activeStagingRelativePaths;
+    // Final paths saved segments point at: a staging file for one of these
+    // was committed but not yet renamed when the app stopped.
+    final committed = await media?.segmentPaths() ?? const <String>{};
     var cleaned = 0;
 
     final entities = conferencesDir.listSync(recursive: true);
@@ -210,6 +213,20 @@ class AudioImportService {
       if (activePaths.contains(rel)) continue;
 
       if (isImportStagingPath(rel)) {
+        final finalRel = rel.toLowerCase().endsWith(importStagingSuffix)
+            ? rel.substring(0, rel.length - importStagingSuffix.length)
+            : null;
+        if (finalRel != null && committed.contains(finalRel)) {
+          final target = File(
+            p.join(root.path, p.joinAll(p.posix.split(finalRel))),
+          );
+          try {
+            if (!target.existsSync()) {
+              entity.renameSync(target.path);
+              continue;
+            }
+          } catch (_) {}
+        }
         try {
           entity.deleteSync();
           cleaned++;
@@ -520,15 +537,22 @@ class AudioImportService {
                 bytes: fileBytes,
                 sha256: sha256Hex,
               );
-
-              // Atomic rename of staging file to target file once inserts succeed
-              stagingFile.renameSync(targetFile.path);
             }
 
             if (db != null) {
               await db!.transaction(performInserts);
             } else {
               await performInserts();
+            }
+
+            // Rename only after the rows are committed. A kill between the
+            // two leaves a staging file whose final path a segment names;
+            // cleanupAbandonedImports finishes that rename at next start.
+            try {
+              stagingFile.renameSync(targetFile.path);
+            } on FileSystemException {
+              await activities.delete(activityId);
+              rethrow;
             }
 
             return AudioImportSuccess(activity: activity!, segment: segment!);

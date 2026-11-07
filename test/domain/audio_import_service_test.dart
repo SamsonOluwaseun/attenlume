@@ -1428,4 +1428,50 @@ void main() {
     expect(updatedSeg2.state, SegmentState.recovered);
     expect(updatedSeg2.filePath, seg2RelPath);
   });
+  test('P2-13 FR-TRN-03 an import committed but not renamed before a kill is completed at next start', () async {
+    final conf = await t.conference(name: 'Samlytics Conference 2026');
+    final act = await t.activity(conf.id, title: 'Imported lecture');
+    final finalRel = p.posix.join(
+      'conferences',
+      conf.id,
+      'activities',
+      act.id,
+      'audio',
+      'segment-001.mp3',
+    );
+    // The database committed the segment at its final path...
+    await t.media.addImportedSegment(
+      id: 'imported-seg',
+      activityId: act.id,
+      filePath: finalRel,
+      requestedProfile: RecordingProfile.balanced,
+      codec: 'mp3',
+      container: 'mp3',
+      channelCount: 1,
+      sampleRateHz: 44100,
+      requestedBitrateBps: 128000,
+      inputRoute: importedInputRoute,
+      startUtc: t.clock.now,
+      endUtc: t.clock.now.add(const Duration(seconds: 5)),
+      durationMs: 5000,
+      bytes: 3,
+      sha256: 'x',
+    );
+    // ...but the app stopped before the staging file was renamed.
+    final staging = MediaPaths.resolve(mediaRoot, '$finalRel.importing')
+      ..parent.createSync(recursive: true)
+      ..writeAsBytesSync([1, 2, 3]);
+
+    final cleaned = await AudioImportService.cleanupAbandonedImports(
+      root: mediaRoot,
+      media: t.media,
+    );
+    expect(cleaned, 0);
+    expect(staging.existsSync(), isFalse);
+    expect(MediaPaths.resolve(mediaRoot, finalRel).readAsBytesSync(), [
+      1,
+      2,
+      3,
+    ]);
+  });
 }
