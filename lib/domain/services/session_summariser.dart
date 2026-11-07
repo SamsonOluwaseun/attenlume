@@ -168,13 +168,19 @@ class SessionSummariser {
   }
 
   int _budget(String system, int answer) {
+    // The system prompt holds the user's instructions (P3-12), which may be
+    // token-dense (other scripts, emoji): count it the cautious way, as the
+    // editor's limit does, so the transcript never crowds the context.
+    final systemTokens = [
+      estimateTokens(system),
+      instructionTokenEstimate(system),
+    ].reduce((a, b) => a > b ? a : b);
     final budget =
-        engine.contextTokens -
-        estimateTokens(system) -
-        answer -
-        _overheadTokens;
+        engine.contextTokens - systemTokens - answer - _overheadTokens;
     if (budget < 128) {
-      throw StateError('The model context is too small for a summary');
+      throw instructions == null
+          ? StateError('The model context is too small for a summary')
+          : const SummaryInstructionsTooLongException();
     }
     return budget;
   }

@@ -32,7 +32,12 @@ void main() {
     final settings = _Settings(data.db, saved);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [settingsRepositoryProvider.overrideWithValue(settings)],
+        overrides: [
+          settingsRepositoryProvider.overrideWithValue(settings),
+          effectiveDefaultInstructionsProvider.overrideWith(
+            (ref) async => defaultSummaryInstructions,
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.light(),
           home: Builder(
@@ -89,6 +94,31 @@ void main() {
   testWidgets('P3-12 saving the unchanged default keeps following the '
       'default', (tester) async {
     final settings = await pump(tester);
+    await tapKey(tester, 'summary-instructions-save');
+    await tester.pumpAndSettle();
+    expect(settings.saved, isNull);
+  });
+
+  testWidgets('P3-12 with the small model the editor shows its compact '
+      'default', (tester) async {
+    final settings = _Settings(data.db);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsRepositoryProvider.overrideWithValue(settings),
+          effectiveDefaultInstructionsProvider.overrideWith(
+            (ref) async => compactSummaryInstructions,
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const SummaryInstructionsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(field(tester), compactSummaryInstructions);
+    // Saving it unchanged keeps following the default.
     await tapKey(tester, 'summary-instructions-save');
     await tester.pumpAndSettle();
     expect(settings.saved, isNull);

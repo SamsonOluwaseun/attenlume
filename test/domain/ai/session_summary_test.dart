@@ -366,6 +366,72 @@ Some chatter the model added.
       );
     });
 
+    test('token-dense instructions are counted cautiously when fitting the '
+        'transcript', () async {
+      // 280 Chinese characters pass the editor (560 of 600 tokens) but leave
+      // too little room in a small context, so the user is told why.
+      final dense = '数' * 280;
+      expect(
+        instructionTokenEstimate(dense),
+        lessThanOrEqualTo(maxSummaryInstructionTokens),
+      );
+      final engine = FakeTextGenerationEngine(
+        respond: (_) => 'SUMMARY: x',
+        // Room for the default prompt, the answer and some transcript.
+        contextTokens:
+            instructionTokenEstimate(summarySystemPromptFor(null)) +
+            SessionSummariser.answerTokens +
+            64 +
+            160,
+      );
+      final material = SessionMaterial.build(
+        title: 'Samlytics Conference 2026',
+        transcripts: [
+          TranscriptDocument(
+            activityId: 'a1',
+            segmentId: 's1',
+            createdAt: DateTime.utc(2026, 11, 7),
+            machineSpans: [
+              TranscriptSpan(
+                start: Duration.zero,
+                end: const Duration(seconds: 5),
+                text: 'Welcome to Samlytics Conference 2026.',
+              ),
+            ],
+          ),
+        ],
+        bookmarks: const [],
+        notesMd: null,
+        cuts: const [],
+      );
+      await expectLater(
+        SessionSummariser(
+          engine: engine,
+          instructions: dense,
+        ).summarise(material, activityId: 'a1'),
+        throwsA(isA<SummaryInstructionsTooLongException>()),
+      );
+      expect(engine.requests, isEmpty);
+      // The same context still fits the default.
+      await SessionSummariser(engine: engine)
+          .summarise(material, activityId: 'a1');
+      expect(engine.requests, hasLength(1));
+    });
+
+    test('the compact default keeps the adviser angle and the dimensions', () {
+      for (final phrase in [
+        'adviser',
+        'business value',
+        'who owns it',
+        'real-world problems and costs',
+        'fit with existing systems',
+        'long-term lock-in',
+        'help solve the problem',
+      ]) {
+        expect(compactSummaryInstructions, contains(phrase), reason: phrase);
+      }
+    });
+
     test('the summariser sends the user\'s instructions', () async {
       final engine = FakeTextGenerationEngine(
         respond: (_) => 'SUMMARY: A talk.\nPOINT [00:00]: Welcome.',

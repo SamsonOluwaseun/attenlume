@@ -21,10 +21,11 @@ Questions: three sharp questions the listener could ask in Q&A or networking. Fi
 /// The default for small models (Gemma 3 1B), which lose the answer format
 /// when given the full adviser brief: the same aims in a few lines.
 const compactSummaryInstructions = '''
+You are a technology and data strategy adviser at this session.
 Summary: two or three short sentences on the main message.
 Key points: the main ideas in your own words, one short sentence each.
 Follow-ups: actions someone said they would take.
-Questions: three questions the talk did not answer, using the speaker's examples; one should help solve the problem discussed.''';
+Questions: three questions the talk did not answer, about what it covered least: business value, who owns it, real-world problems and costs, fit with existing systems, or long-term lock-in. Use the speaker's examples; one should help solve the problem discussed.''';
 
 /// Longest instructions the editor accepts, in characters.
 const maxSummaryInstructionsChars = 2000;

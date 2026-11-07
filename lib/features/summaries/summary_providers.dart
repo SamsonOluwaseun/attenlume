@@ -114,6 +114,21 @@ final summaryModelAccessProvider = Provider<SummaryModelAccess>(
   ),
 );
 
+/// The default instructions for the active model: compact for a small model,
+/// otherwise the full adviser brief (P3-12). The editor shows this one.
+final effectiveDefaultInstructionsProvider = FutureProvider<String>((
+  ref,
+) async {
+  try {
+    final model = await ref.watch(activeLanguageModelDescriptorProvider.future);
+    return model.compactPrompt
+        ? compactSummaryInstructions
+        : defaultSummaryInstructions;
+  } on Object {
+    return defaultSummaryInstructions;
+  }
+});
+
 /// The instructions for the next summary (P3-12): the user's own, else the
 /// compact default for a small model, else null for the full default.
 final summaryInstructionsProvider = Provider<Future<String?> Function()>(

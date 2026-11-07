@@ -132,6 +132,7 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       return;
     }
     TextGenerationEngine? engine;
+    String? instructions;
     final run = ++_run;
     bool current() => mounted && run == _run;
     final opening = _opening ??= ref.read(summaryModelAccessProvider).open();
@@ -160,7 +161,7 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
         );
         return;
       }
-      final instructions = await ref.read(summaryInstructionsProvider)();
+      instructions = await ref.read(summaryInstructionsProvider)();
       if (!current()) return;
       // A recording may have started while the instructions were read.
       if (ref.read(summaryBlockedByRecordingProvider)()) {
@@ -198,9 +199,14 @@ class _SummarySectionState extends ConsumerState<SummarySection> {
       }
     } on Object {
       if (current()) {
+        // Own instructions may be what the model could not take.
+        final custom =
+            instructions != null && instructions != compactSummaryInstructions;
         _fail(
           'The summary could not be made. The recording and transcript are '
-          'unchanged.',
+          'unchanged.'
+          '${custom ? ' If you changed the summary instructions, try shorter '
+                    'ones or Reset to default.' : ''}',
         );
       }
     } finally {

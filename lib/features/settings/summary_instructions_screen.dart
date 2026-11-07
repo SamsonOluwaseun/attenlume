@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/tokens.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../domain/ai/summary_prompt.dart';
+import '../summaries/summary_providers.dart';
 
 /// Lets the user change how the on-device model writes summaries (P3-12).
 ///
@@ -27,13 +28,20 @@ class _SummaryInstructionsScreenState
   final _text = TextEditingController();
   bool _loading = true;
 
+  /// The default for the active model (compact for a small model).
+  String _default = defaultSummaryInstructions;
+
   @override
   void initState() {
     super.initState();
-    ref.read(settingsRepositoryProvider).summaryInstructions().then((saved) {
+    Future.wait([
+      ref.read(settingsRepositoryProvider).summaryInstructions(),
+      ref.read(effectiveDefaultInstructionsProvider.future),
+    ]).then((values) {
       if (!mounted) return;
       setState(() {
-        _text.text = saved ?? defaultSummaryInstructions;
+        _default = values[1]!;
+        _text.text = values[0] ?? _default;
         _loading = false;
       });
     });
@@ -54,9 +62,7 @@ class _SummaryInstructionsScreenState
     // Saving the default text unchanged keeps following future defaults.
     await ref
         .read(settingsRepositoryProvider)
-        .setSummaryInstructions(
-          text == defaultSummaryInstructions.trim() ? null : text,
-        );
+        .setSummaryInstructions(text == _default.trim() ? null : text);
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Summary instructions saved.')),
@@ -67,7 +73,7 @@ class _SummaryInstructionsScreenState
   Future<void> _reset() async {
     await ref.read(settingsRepositoryProvider).setSummaryInstructions(null);
     if (!mounted) return;
-    setState(() => _text.text = defaultSummaryInstructions);
+    setState(() => _text.text = _default);
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Back to the default instructions.')),
     );
