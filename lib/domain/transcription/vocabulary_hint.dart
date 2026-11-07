@@ -49,14 +49,13 @@ final _word = RegExp(
 /// as heard (FR-TRN-08).
 ///
 /// Conservative by design. Names are capitalised hint words of 5+ letters.
-/// Only a capitalised transcript word can change, so ordinary lower-case
-/// words ("a grade", "serviced") never do; at the start of a sentence it
-/// must also have an odd inner capital ("SamlyTix"). It must start with the
-/// same letter, differ in length by at most 2 and be at least 75% similar,
-/// ignoring accents ("Francois" becomes "François"). Names under 7 letters
-/// need an odd inner capital too, since they sit close to real words
-/// ("Grace", "Grade"). Singulars, plurals and common organisation words
-/// ("Service", "Conferences") are left as heard.
+/// A word that differs from a name only by accents is fixed ("Francois"
+/// becomes "François"). Otherwise only a word with mixed case inside it,
+/// the way Whisper writes a name it did not know ("SamlyTix"), can change:
+/// it must start with the same letter, differ in length by at most 2 and be
+/// at least 75% similar. Plain and all-capital words never change, so real
+/// words near a name ("Grade", "Reading", "serviced") stay as heard, as do
+/// singulars, plurals and common organisation words.
 String correctNames(String text, String? hint) {
   if (hint == null) return text;
   final names = {
@@ -70,11 +69,10 @@ String correctNames(String text, String? hint) {
   return text.replaceAllMapped(_word, (m) {
     final word = m[0]!;
     if (word.length < 4 || !_isCapital(word)) return word;
-    final innerCapital = word.substring(1) != word.substring(1).toLowerCase();
-    final before = text.substring(0, m.start).trimRight();
-    final sentenceStart =
-        before.isEmpty || RegExp(r'[.!?:"“]$').hasMatch(before);
-    if (sentenceStart && !innerCapital) return word;
+    // Mixed case inside the word ("SamlyTix") is how Whisper writes a name
+    // it did not know. All capitals ("GRADE") and plain words do not count.
+    final rest = word.substring(1);
+    final oddCase = rest != rest.toLowerCase() && rest != rest.toUpperCase();
     final heard = _fold(word);
     String? best;
     var bestScore = 0.75;
@@ -85,9 +83,9 @@ String correctNames(String text, String? hint) {
       // A singular or plural of a name is a real word ("Service" for
       // "Services", "Conferences" for "Conference"), never a mishearing.
       if (_inflects(heard, target) || _inflects(target, heard)) continue;
-      // Short names sit close to many real words ("Grace" and "Grade"), so
-      // they are only matched when the heard word looks misheard.
-      if (target.length < 7 && !innerCapital) continue;
+      // Any spelling match on a plain word can hit a real one ("Reading"
+      // for a speaker called Redding), so only odd-case words are matched.
+      if (!oddCase) continue;
       if (target[0] != heard[0] || (target.length - heard.length).abs() > 2) {
         continue;
       }

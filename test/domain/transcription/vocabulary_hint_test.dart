@@ -64,6 +64,15 @@ void main() {
         correctNames('Select the Grade column.', 'Grace.'),
         'Select the Grade column.',
       );
+      // Round 4: long names and all capitals never rewrite real words.
+      expect(
+        correctNames('Select the Reading column.', 'Redding.'),
+        'Select the Reading column.',
+      );
+      expect(
+        correctNames('Select the GRADE column.', 'Grace.'),
+        'Select the GRADE column.',
+      );
     });
 
     test('ordinary words and forms of a name are left as heard', () {
@@ -98,7 +107,7 @@ void main() {
       );
       expect(
         correctNames('Thanks, Francoise.', 'François.'),
-        'Thanks, François.',
+        'Thanks, Francoise.',
       );
       // Odd inner capital at a sentence start is still a mishearing.
       expect(
