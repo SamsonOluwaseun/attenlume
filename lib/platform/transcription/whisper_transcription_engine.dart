@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:attenlume/domain/transcription/transcription_engine.dart';
 import 'package:audio_decoder/audio_decoder.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_whisper_ggml/flutter_whisper.dart';
 
 import 'audio_to_wav_converter.dart';
@@ -14,6 +15,52 @@ const Duration kMaxPilotTranscriptionDuration = Duration(minutes: 10);
 const int kMaxPilotPcmBytes = 10 * 60 * 16000 * 2;
 const int kMaxPilotWavBytes = kMaxPilotPcmBytes + 65536;
 
+/// Silence skipping before Whisper [P2-11, FR-TRN-10]. Tuned to keep speech:
+/// only pauses of a second or more are skipped, and each speech region keeps
+/// padding either side. whisper.cpp maps timestamps back to the original audio.
+WhisperVadConfig speechDetection(String modelPath) => WhisperVadConfig(
+  modelPath: modelPath,
+  minimumSilenceDuration: const Duration(seconds: 1),
+  speechPadding: const Duration(milliseconds: 300),
+);
+
+/// whisper.cpp maps a segment that straddles a skipped pause onto both
+/// sides of it, so a sentence after a long gap could start back in the
+/// earlier speech. Such a segment is snapped to the speech region that holds
+/// most of it, so tapping it plays its words, not the silence [P2-11].
+/// [regions] are in original audio time; without them nothing changes.
+@visibleForTesting
+List<WhisperSegment> alignToSpeech(
+  List<WhisperSegment> segments,
+  List<WhisperVadSegment> regions,
+) {
+  if (regions.length < 2) return segments;
+  Duration overlap(WhisperSegment s, WhisperVadSegment r) {
+    final start = s.start > r.start ? s.start : r.start;
+    final end = s.end < r.end ? s.end : r.end;
+    return end > start ? end - start : Duration.zero;
+  }
+
+  return [
+    for (final segment in segments)
+      () {
+        final touched = [
+          for (final r in regions)
+            if (overlap(segment, r) > Duration.zero) r,
+        ];
+        if (touched.length < 2) return segment;
+        final best = touched.reduce(
+          (a, b) => overlap(segment, b) > overlap(segment, a) ? b : a,
+        );
+        return WhisperSegment(
+          text: segment.text,
+          start: segment.start > best.start ? segment.start : best.start,
+          end: segment.end < best.end ? segment.end : best.end,
+        );
+      }(),
+  ];
+}
+
 /// Explicit, offline after-recording inference with bounded PCM decoding.
 /// Native conversion/model loading cannot be interrupted by their APIs: cancel
 /// requests inference cancellation immediately, then drains them before cleanup.
@@ -23,6 +70,7 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
     Future<AudioInfo> Function(String path)? audioInfoProvider,
     Future<FlutterWhisper> Function(String modelPath)? whisperLoader,
     this.cpu = const PlatformWhisperCpu(),
+    this.vadModelPath,
   }) : _audioConverter = audioConverter ?? const NativeAudioToWavConverter(),
        _audioInfoProvider = audioInfoProvider ?? AudioDecoder.getAudioInfo,
        _whisperLoader =
@@ -34,6 +82,9 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
 
   final AudioToWavConverter _audioConverter;
   final WhisperCpu cpu;
+
+  /// The verified Silero model, or null to transcribe every sample as before.
+  final Future<String?> Function()? vadModelPath;
   final Future<AudioInfo> Function(String path) _audioInfoProvider;
   final Future<FlutterWhisper> Function(String modelPath) _whisperLoader;
   bool _isTranscribing = false;
@@ -125,12 +176,15 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
         throw const TranscriptionCancelledException();
       }
       _currentWhisper = loaded;
+      final vadPath = await vadModelPath?.call();
+      _checkCancelled();
       final result = await loaded.transcribeFile(
         wav.path,
-        config: const WhisperTranscribeConfig(
+        config: WhisperTranscribeConfig(
           language: 'en',
           threads: 2,
           noContext: true,
+          vad: vadPath == null ? null : speechDetection(vadPath),
         ),
         onProgress: (percent) {
           if (!_isCancelled && !_disposed) {
@@ -141,7 +195,10 @@ class WhisperTranscriptionEngine implements TranscriptionEngine {
       _checkCancelled();
       onProgress(1);
       return [
-        for (final segment in result.segments)
+        for (final segment in alignToSpeech(
+          result.segments,
+          result.vadSegments,
+        ))
           if (segment.text.trim().isNotEmpty)
             TranscriptSpan(
               start: segment.start.isNegative ? Duration.zero : segment.start,

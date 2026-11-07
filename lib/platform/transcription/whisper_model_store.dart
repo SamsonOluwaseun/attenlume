@@ -46,6 +46,18 @@ class WhisperModelDescriptor extends VerifiedModelDescriptor {
     downloadUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin',
   );
 
+  /// Silero voice activity detection model (~0.84 MiB, MIT), installed with
+  /// the speech model so Whisper skips long silences [P2-11, FR-TRN-10].
+  /// Pinned to one Hugging Face revision of ggml-org/whisper-vad.
+  static const sileroVad = WhisperModelDescriptor(
+    id: 'silero-v6.2.0',
+    name: 'Silero voice activity detection v6.2.0',
+    sizeBytes: 885098,
+    language: 'none',
+    sha256: '2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987',
+    downloadUrl: 'https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin',
+  );
+
   /// Default model for speech transcription.
   static const defaultModel = tinyEnQ5_1;
 

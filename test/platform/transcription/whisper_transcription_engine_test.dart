@@ -216,6 +216,83 @@ void main() {
         await engine.dispose();
       },
     );
+    test('P2-11 FR-TRN-10 a segment straddling a skipped pause moves to the '
+        'speech that holds most of it', () {
+      Duration s(num seconds) =>
+          Duration(milliseconds: (seconds * 1000).round());
+      // The second "Welcome" came back as 25.84-49.97 s on Windows; the
+      // regions model speech at 15-26.3 s and 46.3-57.6 s plus padding.
+      final regions = [
+        WhisperVadSegment(start: s(14.7), end: s(26.6)),
+        WhisperVadSegment(start: s(46.0), end: s(57.6)),
+      ];
+      final aligned = alignToSpeech([
+        WhisperSegment(text: 'Welcome.', start: s(14.84), end: s(18.84)),
+        WhisperSegment(text: 'Welcome again.', start: s(25.84), end: s(49.97)),
+        WhisperSegment(text: 'Tail.', start: s(55), end: s(70)),
+      ], regions);
+      expect(aligned[0].start, s(14.84));
+      expect(aligned[0].end, s(18.84));
+      expect(aligned[1].start, s(46.0));
+      expect(aligned[1].end, s(49.97));
+      expect(aligned[1].text, 'Welcome again.');
+      // A segment within one region is never moved.
+      expect(aligned[2].start, s(55));
+      expect(aligned[2].end, s(70));
+      // Without VAD regions, or with one, nothing changes.
+      final plain = [WhisperSegment(text: 'x', start: s(1), end: s(30))];
+      expect(alignToSpeech(plain, const []), same(plain));
+      expect(alignToSpeech(plain, [regions.first]), same(plain));
+    });
+
+    test('P2-11 FR-TRN-10 without a silence model every sample is '
+        'transcribed', () async {
+      final engine = createEngine();
+      await engine.transcribe(
+        audioPath: sourceAudioFile.path,
+        modelDirectory: modelFile.path,
+        onProgress: (_) {},
+      );
+      expect(whisperBackend.lastConfig?.vad, isNull);
+      await engine.dispose();
+    });
+
+    test('P2-11 FR-TRN-10 an installed silence model turns on conservative '
+        'silence skipping', () async {
+      for (final path in ['models/ggml-silero-v6.2.0.bin', null]) {
+        final backend = _FakeWhisperBackend();
+        final engine = WhisperTranscriptionEngine(
+          audioConverter: audioConverter,
+          audioInfoProvider: (_) async => const AudioInfo(
+            duration: Duration(seconds: 30),
+            sampleRate: 16000,
+            channels: 1,
+            bitRate: 256000,
+            format: 'wav',
+          ),
+          whisperLoader: (_) async => FlutterWhisper.withBackend(backend),
+          vadModelPath: () async => path,
+        );
+        await engine.transcribe(
+          audioPath: sourceAudioFile.path,
+          modelDirectory: modelFile.path,
+          onProgress: (_) {},
+        );
+        final vad = backend.lastConfig?.vad;
+        if (path == null) {
+          expect(vad, isNull);
+        } else {
+          expect(vad?.modelPath, path);
+          // Never shorter pauses than a second; padding keeps word edges.
+          expect(vad?.minimumSilenceDuration, const Duration(seconds: 1));
+          expect(vad?.speechPadding, const Duration(milliseconds: 300));
+          expect(vad?.threshold, 0.5);
+        }
+        expect(backend.lastConfig?.language, 'en');
+        await engine.dispose();
+      }
+    });
+
     test(
       'transcribe successfully produces segment-relative TranscriptSpans',
       () async {

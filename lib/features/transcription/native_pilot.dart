@@ -1,6 +1,7 @@
 import 'dart:ffi' as ffi;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import '../../domain/transcription/transcription_engine.dart';
@@ -33,37 +34,72 @@ Future<NativeTranscriptionPilot> createNativePilot(
     baseDirectory: Directory(p.join(canonicalRoot, 'transcription-models-v1')),
   );
   return NativeTranscriptionPilot(
-    _PilotModels(store),
-    () => WhisperTranscriptionEngine(cpu: cpu),
+    PilotModels(store),
+    () => WhisperTranscriptionEngine(
+      cpu: cpu,
+      vadModelPath: () => store.installedPath(PilotModels.vad),
+    ),
   );
 }
 
-class _PilotModels implements PilotModelManager {
-  _PilotModels(this.store);
-  final WhisperModelStore store;
+/// The speech model plus the small Silero model that skips silence
+/// [P2-11]. Both are one explicit download, removed together.
+@visibleForTesting
+class PilotModels implements PilotModelManager {
+  PilotModels(this.store);
+  final VerifiedModelStore store;
   static const descriptor = WhisperModelDescriptor.tinyEnQ5_1;
+  static const vad = WhisperModelDescriptor.sileroVad;
+  static const _all = [descriptor, vad];
   @override
   String get name => descriptor.name;
   @override
-  int get downloadBytes => descriptor.sizeBytes;
+  int get downloadBytes => descriptor.sizeBytes + vad.sizeBytes;
   // Restrict native loading to the selected, explicitly installed model file.
   @override
-  String get directory =>
-      p.join(store.modelDirectory.path, descriptor.fileName);
+  String get directory => p.join(store.baseDirectory.path, descriptor.fileName);
+
+  /// Installs made before P2-11 have the speech model only, so they show as
+  /// not installed and the next Download adds the missing silence model.
   @override
-  Future<bool> isInstalled() async =>
-      await store.installedPath(descriptor) != null;
-  @override
-  Future<void> install(void Function(double) onProgress) async {
-    await store.install(descriptor, onProgress: onProgress);
+  Future<bool> isInstalled() async {
+    for (final model in _all) {
+      if (await store.installedPath(model) == null) return false;
+    }
+    return true;
   }
 
   @override
-  Future<void> cancelInstall() => store.cancelInstall(modelId: descriptor.id);
+  Future<void> install(void Function(double) onProgress) async {
+    final missing = [
+      for (final model in _all)
+        if (await store.installedPath(model) == null) model,
+    ];
+    final total = missing.fold<int>(0, (sum, m) => sum + m.sizeBytes);
+    var done = 0;
+    for (final model in missing) {
+      await store.install(
+        model,
+        onProgress: (p) =>
+            onProgress(total == 0 ? 1 : (done + p * model.sizeBytes) / total),
+      );
+      done += model.sizeBytes;
+    }
+  }
+
+  @override
+  Future<void> cancelInstall() async {
+    for (final model in _all) {
+      await store.cancelInstall(modelId: model.id);
+    }
+  }
+
   @override
   Future<void> remove() async {
-    if (!await store.remove(descriptor)) {
-      throw StateError('Model removal did not complete');
+    var removed = true;
+    for (final model in _all) {
+      removed = await store.remove(model) && removed;
     }
+    if (!removed) throw StateError('Model removal did not complete');
   }
 }

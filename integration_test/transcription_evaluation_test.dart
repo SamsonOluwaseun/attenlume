@@ -19,6 +19,8 @@ void main() {
   const audioPath = String.fromEnvironment('TRANSCRIPTION_EVALUATION_AUDIO');
   const outputPath = String.fromEnvironment('TRANSCRIPTION_EVALUATION_OUTPUT');
   const allowInstall = bool.fromEnvironment('TRANSCRIPTION_EVALUATION_INSTALL');
+  // Compare with and without silence skipping on the same audio [P2-11].
+  const useVad = bool.fromEnvironment('TRANSCRIPTION_EVALUATION_VAD');
 
   testWidgets(
     'P2-08 FR-TRN-09 explicitly requested local audio evaluation',
@@ -40,7 +42,19 @@ void main() {
           isNotNull,
           reason: 'explicit installation or existing verified model required',
         );
-        final engine = WhisperTranscriptionEngine();
+        const vad = WhisperModelDescriptor.sileroVad;
+        if (useVad && allowInstall && await store.installedPath(vad) == null) {
+          await store.install(vad);
+        }
+        final vadPath = useVad ? await store.installedPath(vad) : null;
+        expect(
+          useVad ? vadPath : null,
+          useVad ? isNotNull : isNull,
+          reason: 'VAD comparison needs an installed silence model',
+        );
+        final engine = WhisperTranscriptionEngine(
+          vadModelPath: useVad ? () async => vadPath : null,
+        );
         final info = await AudioDecoder.getAudioInfo(audioPath);
         await AudioDecoder.convertToWav(
           audioPath,
@@ -83,7 +97,7 @@ void main() {
             reason: 'original sample remains byte-for-byte unchanged',
           );
           debugPrint(
-            'Local evaluation: ${spans.length} spans; ${watch.elapsedMilliseconds} ms. Text saved privately; accuracy not scored.',
+            'Local evaluation (VAD ${useVad ? 'on' : 'off'}): ${spans.length} spans; ${watch.elapsedMilliseconds} ms. Text saved privately; accuracy not scored.',
           );
         } finally {
           await engine.dispose();
